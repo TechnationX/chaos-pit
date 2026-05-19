@@ -1,5 +1,4 @@
 // PlayerDataManager.cs
-// Place in: Assets/_Project/Scripts/Player/
 // Owns local save/load of player profile.
 // Loaded first in Bootstrap. Not networked.
 
@@ -37,7 +36,7 @@ public class PlayerDataManager : SingletonBehaviour<PlayerDataManager>
         {
             string json = File.ReadAllText(SavePath);
             Data = JsonUtility.FromJson<PlayerData>(json);
-            Debug.Log($"[PlayerDataManager] Profile loaded: {Data.displayName}");
+            //Debug.Log($"[PlayerDataManager] Profile loaded: {Data.displayName}");
         }
         else
         {

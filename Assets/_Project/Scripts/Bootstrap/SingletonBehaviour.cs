@@ -1,5 +1,4 @@
 // SingletonBehaviour.cs
-// Place in: Assets/_Project/Scripts/Bootstrap/
 // Generic base class for all persistent manager singletons.
 
 using UnityEngine;
@@ -30,6 +29,14 @@ public class SingletonBehaviour<T> : MonoBehaviour where T : MonoBehaviour
         }
 
         _instance = this as T;
-        DontDestroyOnLoad(gameObject);
+
+        if (transform.parent != null)
+        {
+            DontDestroyOnLoad(transform.root.gameObject);
+        }
+        else
+        {
+            DontDestroyOnLoad(gameObject);
+        }
     }
 }

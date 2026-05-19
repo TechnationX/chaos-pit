@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fa3fa20cd04abc146bb287b4b18aa707, type: 3}
+  m_Name: FurnitureSpawnConfig
+  m_EditorClassIdentifier: Assembly-CSharp::FurnitureSpawnConfig
+  Entries:
+  - Label: Couch_01
+    Prefab: {fileID: 334569156917715922, guid: cc5a888bde444244a854e3847cb114cf, type: 3}
+    Position: {x: 0, y: 0, z: 8}
+    Rotation: {x: 0, y: 180, z: 0}
+    Scale: {x: 4, y: 4, z: 4}
+  - Label: Small_Table_01
+    Prefab: {fileID: 8180459787196399639, guid: db60947f7e4a342449ce30609657471b, type: 3}
+    Position: {x: 8, y: 0, z: 5}
+    Rotation: {x: 0, y: 90, z: 0}
+    Scale: {x: 4, y: 4, z: 4}
+  - Label: Arm_Chair_01
+    Prefab: {fileID: 1250258544513006647, guid: 70ab780d8d83431468f70f4cbbf91820, type: 3}
+    Position: {x: -8, y: 0, z: 0}
+    Rotation: {x: 0, y: 90, z: 0}
+    Scale: {x: 4, y: 4, z: 4}
+  - Label: Large_Table_01
+    Prefab: {fileID: 5914605485070678643, guid: 91dd1e587877893479c1d9b7bf40c784, type: 3}
+    Position: {x: 8, y: 0, z: 0}
+    Rotation: {x: 0, y: 90, z: 0}
+    Scale: {x: 4, y: 4, z: 4}

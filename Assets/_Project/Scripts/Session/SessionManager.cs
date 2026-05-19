@@ -1,33 +1,35 @@
 // SessionManager.cs
 // Place in: Assets/_Project/Scripts/Session/
-// Owns: session state, join code display, host tracking, player count.
-// Communicates with: NetworkManager (FishNet), LobbyManager, UIManager.
-// Attach to a new GameObject named "SessionManager" in the Bootstrap scene under _Managers.
+// Owns: session state, join code, host tracking, player count.
+// Communicates with: RelayManager, LobbyManager, UIManager.
+// Attach to: SessionManager GameObject in Bootstrap scene under _Managers.
 
 using UnityEngine;
 using FishNet;
-using FishNet.Managing;
 using FishNet.Connection;
 using System.Collections.Generic;
 
 public class SessionManager : SingletonBehaviour<SessionManager>
 {
+    // ─── Config ───────────────────────────────────────────────────────────────
+
+    [Header("Session Settings")]
+    [SerializeField] private int maxPlayers = 16;
+
     // ─── Session State ────────────────────────────────────────────────────────
 
     public enum SessionState
     {
-        Idle,       // No session active
-        Waiting,    // Session created, waiting for players
-        Active,     // Game is running
-        Ending      // Session is wrapping up
+        Idle,
+        Waiting,
+        Active,
+        Ending
     }
 
     public SessionState CurrentState { get; private set; } = SessionState.Idle;
 
     // ─── Join Code ────────────────────────────────────────────────────────────
 
-    // Set by Relay when a host creates a session.
-    // Placeholder until Unity Relay is integrated.
     public string JoinCode { get; private set; } = string.Empty;
 
     // ─── Host Tracking ────────────────────────────────────────────────────────
@@ -36,13 +38,11 @@ public class SessionManager : SingletonBehaviour<SessionManager>
 
     // ─── Player Tracking ─────────────────────────────────────────────────────
 
-    // Populated by FishNet connection callbacks
     private List<NetworkConnection> _connectedPlayers = new List<NetworkConnection>();
     public int PlayerCount => _connectedPlayers.Count;
 
     // ─── Events ───────────────────────────────────────────────────────────────
 
-    // UIManager and LobbyManager listen to these
     public event System.Action<SessionState> OnSessionStateChanged;
     public event System.Action<string> OnJoinCodeReady;
     public event System.Action<int> OnPlayerCountChanged;
@@ -56,7 +56,6 @@ public class SessionManager : SingletonBehaviour<SessionManager>
 
     private void OnEnable()
     {
-        // Subscribe to FishNet server connection events
         InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
     }
 
@@ -70,8 +69,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
 
     // ─── Session Control ──────────────────────────────────────────────────────
 
-    // Called when local player creates a new session as host
-    public void StartHostSession()
+    public async void StartHostSession()
     {
         if (CurrentState != SessionState.Idle)
         {
@@ -79,20 +77,35 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             return;
         }
 
-        InstanceFinder.ServerManager.StartConnection();
-        InstanceFinder.ClientManager.StartConnection();
-
-        // TODO: Replace with real Relay join code once Unity Relay is integrated
-        JoinCode = GeneratePlaceholderCode();
-
-        Debug.Log($"[SessionManager] Host session started. Join code: {JoinCode}");
+        if (RelayManager.Instance == null)
+        {
+            Debug.LogError("[SessionManager] RelayManager not found.");
+            return;
+        }
 
         SetState(SessionState.Waiting);
-        OnJoinCodeReady?.Invoke(JoinCode);
+
+        try
+        {
+            // Allocate Relay and get join code
+            string joinCode = await RelayManager.Instance.CreateRelaySessionAsync(maxPlayers);
+            JoinCode = joinCode;
+
+            // Start FishNet host after Relay is configured
+            InstanceFinder.ServerManager.StartConnection();
+            InstanceFinder.ClientManager.StartConnection();
+
+            Debug.Log($"[SessionManager] Host session started. Join code: {JoinCode}");
+            OnJoinCodeReady?.Invoke(JoinCode);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[SessionManager] StartHostSession failed: {e.Message}");
+            SetState(SessionState.Idle);
+        }
     }
 
-    // Called when local player joins an existing session as client
-    public void JoinSession(string joinCode)
+    public async void JoinSession(string joinCode)
     {
         if (CurrentState != SessionState.Idle)
         {
@@ -100,18 +113,32 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             return;
         }
 
-        JoinCode = joinCode;
-
-        // TODO: Pass join code to Unity Relay to resolve host address
-        // For now, connects to localhost for local testing
-        InstanceFinder.ClientManager.StartConnection();
-
-        Debug.Log($"[SessionManager] Joining session with code: {joinCode}");
+        if (RelayManager.Instance == null)
+        {
+            Debug.LogError("[SessionManager] RelayManager not found.");
+            return;
+        }
 
         SetState(SessionState.Waiting);
+
+        try
+        {
+            // Resolve join code via Relay and configure transport
+            await RelayManager.Instance.JoinRelaySessionAsync(joinCode);
+            JoinCode = joinCode;
+
+            // Connect client after Relay is configured
+            InstanceFinder.ClientManager.StartConnection();
+
+            Debug.Log($"[SessionManager] Joined session with code: {joinCode}");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[SessionManager] JoinSession failed: {e.Message}");
+            SetState(SessionState.Idle);
+        }
     }
 
-    // Called when host ends the session
     public void EndSession()
     {
         SetState(SessionState.Ending);
@@ -123,7 +150,6 @@ public class SessionManager : SingletonBehaviour<SessionManager>
         JoinCode = string.Empty;
 
         Debug.Log("[SessionManager] Session ended.");
-
         SetState(SessionState.Idle);
     }
 
@@ -147,9 +173,6 @@ public class SessionManager : SingletonBehaviour<SessionManager>
                 _connectedPlayers.Remove(conn);
                 Debug.Log($"[SessionManager] Player disconnected. Total: {PlayerCount}");
                 OnPlayerCountChanged?.Invoke(PlayerCount);
-
-                // Per design doc: session ends if host disconnects
-                // Host loss is handled by FishNet — clients will receive disconnect event
             }
         }
     }
@@ -161,13 +184,5 @@ public class SessionManager : SingletonBehaviour<SessionManager>
         CurrentState = newState;
         Debug.Log($"[SessionManager] State → {newState}");
         OnSessionStateChanged?.Invoke(newState);
-    }
-
-    // ─── Placeholder Utilities ────────────────────────────────────────────────
-
-    // Temporary — replaced by Unity Relay join code on integration
-    private string GeneratePlaceholderCode()
-    {
-        return Random.Range(1000, 9999).ToString();
     }
 }

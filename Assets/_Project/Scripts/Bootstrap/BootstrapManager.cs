@@ -1,7 +1,5 @@
 // BootstrapManager.cs
-// Place in: Assets/_Project/Scripts/Bootstrap/
 // Controls startup initialization order.
-// Attach to a GameObject named "BootstrapManager" in the Bootstrap scene.
 // This is NOT a singleton — it runs once and hands off to Main Menu.
 
 using UnityEngine;
@@ -11,7 +9,7 @@ using System.Collections;
 public class BootstrapManager : MonoBehaviour
 {
     [Header("Scene Names")]
-    [SerializeField] private string mainMenuSceneName = "MainMenu";
+    [SerializeField] private string splashSceneName = "Splash";
 
     [Header("Startup Delay (optional)")]
     [SerializeField] private float delayBeforeMainMenu = 0.5f;
@@ -23,7 +21,7 @@ public class BootstrapManager : MonoBehaviour
 
     private IEnumerator Initialize()
     {
-        Debug.Log("[BootstrapManager] Starting initialization...");
+        // Debug.Log("[BootstrapManager] Starting initialization...");
 
         // Step 1: PlayerDataManager loads itself in Awake via singleton.
         // Verify it's ready before proceeding.
@@ -32,7 +30,8 @@ public class BootstrapManager : MonoBehaviour
             Debug.LogError("[BootstrapManager] PlayerDataManager not found. Is it in the Bootstrap scene?");
             yield break;
         }
-        Debug.Log("[BootstrapManager] PlayerDataManager ready.");
+        // Debug.Log("[BootstrapManager] PlayerDataManager ready.");
+        // Debug.Log($"[BootstrapManager] Save path: {Application.persistentDataPath}");
 
         // Step 2: AudioManager initializes itself in Awake via singleton.
         if (AudioManager.Instance == null)
@@ -40,7 +39,7 @@ public class BootstrapManager : MonoBehaviour
             Debug.LogError("[BootstrapManager] AudioManager not found. Is it in the Bootstrap scene?");
             yield break;
         }
-        Debug.Log("[BootstrapManager] AudioManager ready.");
+        //Debug.Log("[BootstrapManager] AudioManager ready.");
 
         // Step 3: FishNet NetworkManager initializes itself — no manual call needed.
         // It will be verified here once FishNet is imported.
@@ -50,7 +49,7 @@ public class BootstrapManager : MonoBehaviour
         // Brief pause before scene transition (optional — remove if not needed)
         yield return new WaitForSeconds(delayBeforeMainMenu);
 
-        Debug.Log($"[BootstrapManager] Loading {mainMenuSceneName}...");
-        SceneManager.LoadScene(mainMenuSceneName);
+        // Debug.Log($"[BootstrapManager] Loading {mainMenuSceneName}...");
+        SceneManager.LoadScene(splashSceneName);
     }
 }

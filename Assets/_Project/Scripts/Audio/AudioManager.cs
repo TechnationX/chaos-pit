@@ -37,7 +37,7 @@ public class AudioManager : SingletonBehaviour<AudioManager>
         SetMusicVolume(defaultMusicVolume);
         SetSFXVolume(defaultSFXVolume);
 
-        Debug.Log("[AudioManager] Initialized.");
+        // Debug.Log("[AudioManager] Initialized.");
     }
 
     // Play a music track. Stops current track first.

@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d39b279c825806a46968dc6c9ec10805, type: 3}
+  m_Name: PropSpawnConfig
+  m_EditorClassIdentifier: Assembly-CSharp::PropSpawnConfig
+  Entries:
+  - Label: Mug_01
+    Prefab: {fileID: 2874803351628251934, guid: 3c2c233a42fca22408c36d449e63c401, type: 3}
+    Type: 1
+    Position: {x: 8, y: 2, z: 0}
+    Rotation: {x: 0, y: 0, z: 0}
+    Scale: {x: 3, y: 3, z: 3}
+  - Label: Box
+    Prefab: {fileID: 203720986700967546, guid: 8e04c86257c06964cb1331d4b8dd6c55, type: 3}
+    Type: 1
+    Position: {x: 8, y: 2, z: 0.5}
+    Rotation: {x: 0, y: 0, z: 0}
+    Scale: {x: 1, y: 1, z: 1}
+  - Label: Clock
+    Prefab: {fileID: 7332523258936348311, guid: e602718ffafe40047b703ce23b2ec169, type: 3}
+    Type: 1
+    Position: {x: 8, y: 2, z: -0.5}
+    Rotation: {x: 0, y: 0, z: 0}
+    Scale: {x: 3, y: 3, z: 3}
