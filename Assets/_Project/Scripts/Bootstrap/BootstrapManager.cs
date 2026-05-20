@@ -41,10 +41,15 @@ public class BootstrapManager : MonoBehaviour
         }
         //Debug.Log("[BootstrapManager] AudioManager ready.");
 
-        // Step 3: FishNet NetworkManager initializes itself — no manual call needed.
-        // It will be verified here once FishNet is imported.
-        // TODO: Add FishNet NetworkManager check after import.
-        Debug.Log("[BootstrapManager] NetworkManager check placeholder — add after FishNet import.");
+        // Step 3: Verify FishNet NetworkManager is present
+        var networkManager = FindFirstObjectByType<FishNet.Managing.NetworkManager>();
+        if (networkManager == null)
+        {
+            Debug.LogError("[BootstrapManager] FishNet NetworkManager not found. Is it in the Bootstrap scene?");
+            Application.Quit();
+            yield break;
+        }
+        Debug.Log("[BootstrapManager] FishNet NetworkManager ready.");
 
         // Brief pause before scene transition (optional — remove if not needed)
         yield return new WaitForSeconds(delayBeforeMainMenu);

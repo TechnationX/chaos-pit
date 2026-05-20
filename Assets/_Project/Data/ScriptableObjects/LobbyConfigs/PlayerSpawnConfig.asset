@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7d7c57c98476d2f4aa50706bc967d6ac, type: 3}
   m_Name: PlayerSpawnConfig
   m_EditorClassIdentifier: Assembly-CSharp::PlayerSpawnConfig
+  PlayerPrefab: {fileID: 3076198636859094392, guid: c866a980a6f755241ab9b21bf6e296fe, type: 3}
   SpawnPoints:
   - Label: SpawnA
     Position: {x: 3, y: 0, z: 3}

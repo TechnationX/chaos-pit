@@ -6,75 +6,101 @@ using FishNet.Object;
 public class Sittable : NetworkBehaviour, IInteractable
 {
     [Header("Sittable Settings")]
-    [SerializeField] private Transform _sitPoint;
+    [SerializeField] private Transform[] _sitPoints;
     [SerializeField] private string _promptLabel = "Sit";
 
-    private PlayerObject _occupyingPlayer;
-    private bool _isOccupied;
+    private PlayerObject[] _occupyingPlayers;
+    private bool[] _occupiedSlots;
 
-    public string PromptLabel => _isOccupied ? "" : _promptLabel;
+    private void Awake()
+    {
+        _occupyingPlayers = new PlayerObject[_sitPoints.Length];
+        _occupiedSlots = new bool[_sitPoints.Length];
+    }
+
+    public string PromptLabel => AllSlotsFull() ? "" : _promptLabel;
+
+    private bool AllSlotsFull()
+    {
+        foreach (var slot in _occupiedSlots)
+            if (!slot) return false;
+        return true;
+    }
+
+    private int GetAvailableSlot()
+    {
+        for (int i = 0; i < _occupiedSlots.Length; i++)
+            if (!_occupiedSlots[i]) return i;
+        return -1;
+    }
+
+    private int GetPlayerSlot(PlayerObject player)
+    {
+        for (int i = 0; i < _occupyingPlayers.Length; i++)
+            if (_occupyingPlayers[i] == player) return i;
+        return -1;
+    }
 
     public void OnInteract(PlayerObject player)
     {
-        Debug.Log($"Sittable OnInteract called. IsServerInitialized: {IsServerInitialized}, IsOccupied: {_isOccupied}");
         if (!IsServerInitialized) return;
 
-        if (_isOccupied)
+        int playerSlot = GetPlayerSlot(player);
+        if (playerSlot >= 0)
         {
-            if (_occupyingPlayer == player)
-                ServerStand(player.NetworkObject);
+            ServerStand(player.NetworkObject, playerSlot);
             return;
         }
 
-        ServerSit(player.NetworkObject);
+        int availableSlot = GetAvailableSlot();
+        if (availableSlot < 0) return;
+
+        ServerSit(player.NetworkObject, availableSlot);
     }
 
     [ServerRpc(RequireOwnership = false)]
-    private void ServerSit(NetworkObject playerNetObj)
+    private void ServerSit(NetworkObject playerNetObj, int slotIndex)
     {
         PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
-        if (player == null || _isOccupied) return;
+        if (player == null || _occupiedSlots[slotIndex]) return;
 
-        _isOccupied = true;
-        _occupyingPlayer = player;
+        _occupiedSlots[slotIndex] = true;
+        _occupyingPlayers[slotIndex] = player;
 
-        ObserversSit(playerNetObj, _sitPoint.position, _sitPoint.rotation);
+        ObserversSit(playerNetObj, _sitPoints[slotIndex].position, _sitPoints[slotIndex].rotation, slotIndex);
     }
 
     [ServerRpc(RequireOwnership = false)]
-    private void ServerStand(NetworkObject playerNetObj)
+    private void ServerStand(NetworkObject playerNetObj, int slotIndex)
     {
         PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
-        if (player == null || _occupyingPlayer != player) return;
+        if (player == null || _occupyingPlayers[slotIndex] != player) return;
 
-        _isOccupied = false;
-        _occupyingPlayer = null;
+        _occupiedSlots[slotIndex] = false;
+        _occupyingPlayers[slotIndex] = null;
 
-        ObserversStand(playerNetObj);
+        ObserversStand(playerNetObj, slotIndex);
     }
 
     [ObserversRpc]
-    private void ObserversSit(NetworkObject playerNetObj, Vector3 position, Quaternion rotation)
+    private void ObserversSit(NetworkObject playerNetObj, Vector3 position, Quaternion rotation, int slotIndex)
     {
         PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
-        Debug.Log($"ObserversSit called. Player null: {player == null}");
         if (player == null) return;
 
         player.Movement.SetMovementLocked(true);
         player.Movement.SetCurrentSeat(this);
-        Debug.Log($"SetCurrentSeat called on {player.name}");
-
         player.transform.position = position;
         player.transform.rotation = rotation;
 
         if (player.IsOwner)
             player.Camera.SwitchTo(PlayerCamera.CameraMode.ThirdPerson);
 
-        // player.Animator.SetTrigger("Sit"); — hook when Animator ready
+        player.CharacterAnimator.SetBool("IsSitting", true);
     }
 
     [ObserversRpc]
-    private void ObserversStand(NetworkObject playerNetObj)
+    private void ObserversStand(NetworkObject playerNetObj, int slotIndex)
     {
         PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
         if (player == null) return;
@@ -85,12 +111,13 @@ public class Sittable : NetworkBehaviour, IInteractable
         if (player.IsOwner)
             player.Camera.SwitchTo(PlayerCamera.CameraMode.FirstPerson);
 
-        // player.Animator.SetTrigger("Stand"); — hook when Animator ready
+        player.CharacterAnimator.SetBool("IsSitting", false);
     }
 
     public void ForceStand(PlayerObject player)
     {
-        if (_occupyingPlayer != player) return;
-        ServerStand(player.NetworkObject);
+        int slot = GetPlayerSlot(player);
+        if (slot < 0) return;
+        ServerStand(player.NetworkObject, slot);
     }
 }

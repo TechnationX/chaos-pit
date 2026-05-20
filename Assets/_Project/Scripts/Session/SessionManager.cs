@@ -97,6 +97,9 @@ public class SessionManager : SingletonBehaviour<SessionManager>
 
             Debug.Log($"[SessionManager] Host session started. Join code: {JoinCode}");
             OnJoinCodeReady?.Invoke(JoinCode);
+
+            // Host is up — session is now active
+            SetState(SessionState.Active);
         }
         catch (System.Exception e)
         {
@@ -131,6 +134,9 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             InstanceFinder.ClientManager.StartConnection();
 
             Debug.Log($"[SessionManager] Joined session with code: {joinCode}");
+
+            // Connected — session is now active
+            SetState(SessionState.Active);
         }
         catch (System.Exception e)
         {

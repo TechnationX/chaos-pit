@@ -30,7 +30,7 @@ public class Grabbable : NetworkBehaviour, IInteractable
 
     public virtual void OnInteract(PlayerObject player)
     {
-        Debug.Log($"OnInteract called on {gameObject.name}, IsHeld: {_isHeld}");
+        //Debug.Log($"OnInteract called on {gameObject.name}, IsHeld: {_isHeld}");
         if (!IsServerInitialized) return;
 
         if (_isHeld)
@@ -47,7 +47,7 @@ public class Grabbable : NetworkBehaviour, IInteractable
     [ServerRpc(RequireOwnership = false)]
     protected virtual void ServerGrab(PlayerObject player)
     {
-        Debug.Log($"ServerGrab called for {gameObject.name}");
+        //Debug.Log($"ServerGrab called for {gameObject.name}");
         if (_isHeld) return;
 
         _isHeld = true;
@@ -90,7 +90,7 @@ public class Grabbable : NetworkBehaviour, IInteractable
         }
 
         player.SetHeldObject(this);
-        Debug.Log($"ObserversGrab called, SetHeldObject on {player.name}");
+        //Debug.Log($"ObserversGrab called, SetHeldObject on {player.name}");
     }
 
     [ObserversRpc]
@@ -102,7 +102,7 @@ public class Grabbable : NetworkBehaviour, IInteractable
         _rigidbody.isKinematic = false;
         transform.SetParent(null);
         player.SetHeldObject(null);
-        Debug.Log($"ObserversDrop called, cleared held object");
+        //Debug.Log($"ObserversDrop called, cleared held object");
     }
 
     // Called by lobby bounds system if object leaves play area

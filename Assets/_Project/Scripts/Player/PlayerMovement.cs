@@ -40,8 +40,8 @@ public class PlayerMovement : NetworkBehaviour
     private Sittable _currentSeat;
     private bool _isMoving;
     public bool IsCrouching => _isCrouching;
-    private bool _isStrafingLeft;
-    private bool _isStrafingRight;
+    private float _moveX;
+    private float _moveY;
 
     public bool IsMovementLocked => _movementLocked;
     public bool IsSprinting => _isSprinting;
@@ -61,7 +61,7 @@ public class PlayerMovement : NetworkBehaviour
         if (_animator == null)
             _animator = player.CharacterModel.GetComponentInChildren<Animator>();
 
-        Debug.Log($"Animator found: {_animator != null}");
+        //Debug.Log($"Animator found: {_animator != null}");
     }
 
     private void Update()
@@ -104,17 +104,13 @@ public class PlayerMovement : NetworkBehaviour
 
         if (_animator == null) return;
 
-        float speed = 0f;
-        if (_isSprinting) speed = 1f;
-        else if (_isMoving) speed = 0.5f;
 
         // Debug.Log($"Speed: {speed}, IsSprinting: {_isSprinting}, IsMoving: {_isMoving}");
 
-        _animator.SetFloat("Speed", speed);
+        _animator.SetFloat("MoveX", _moveX);
+        _animator.SetFloat("MoveY", _moveY);
         _animator.SetBool("IsCrouching", _isCrouching);
         _animator.SetBool("IsGrounded", _isGrounded);
-        _animator.SetBool("IsStrafingLeft", _isStrafingLeft);
-        _animator.SetBool("IsStrafingRight", _isStrafingRight);
     }
 
     private void HandleGroundCheck()
@@ -205,17 +201,15 @@ public class PlayerMovement : NetworkBehaviour
         if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed) v += 1f;
         if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) v -= 1f;
 
-        // Strafe detection — horizontal only, no forward input, or sprinting
-        _isStrafingLeft = h < 0 && (v == 0 || _isSprinting);
-        _isStrafingRight = h > 0 && (v == 0 || _isSprinting);
+        _isSprinting = keyboard.leftShiftKey.isPressed && v > 0 && h == 0 && !_isCrouching;
 
-        // Sprint becomes strafe when moving sideways
-        _isSprinting = keyboard.leftShiftKey.isPressed && v > 0 && !_isCrouching;
+        // Set blend values
+        _moveX = h;
+        _moveY = _isSprinting ? v : v * 0.5f;
 
-        // Pick speed based on state
+        // Cap speed when strafing while sprinting
         float speed = _isCrouching ? _crouchSpeed :
-                      (_isStrafingLeft || _isStrafingRight) && _isSprinting ? _walkSpeed :
-                      _isSprinting ? _sprintSpeed : _walkSpeed;
+                      _isSprinting && h == 0 ? _sprintSpeed : _walkSpeed;
 
         Vector3 move = transform.right * h + transform.forward * v;
         _controller.Move(move * speed * Time.deltaTime);

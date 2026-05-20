@@ -13,6 +13,9 @@ public class PlayerSpawnConfig : ScriptableObject
         public Vector3 Rotation;
     }
 
+    [Header("Player Prefab")]
+    public GameObject PlayerPrefab;
+
     [Header("Player Spawn Points")]
     public SpawnPoint[] SpawnPoints = new SpawnPoint[]
     {

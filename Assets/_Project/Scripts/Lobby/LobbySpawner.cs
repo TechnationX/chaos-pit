@@ -1,9 +1,10 @@
 ﻿// LobbySpawner.cs
 
-using UnityEngine;
-using System.Collections.Generic;
 using FishNet;
 using FishNet.Object;
+using FishNet.Transporting;
+using System.Collections.Generic;
+using UnityEngine;
 
 public class LobbySpawner : MonoBehaviour
 {
@@ -19,10 +20,21 @@ public class LobbySpawner : MonoBehaviour
     private List<Vector3> _availableSpawnPoints = new List<Vector3>();
     private List<Quaternion> _availableSpawnRotations = new List<Quaternion>();
 
-    private void Awake()
+    private void Start()
     {
-        InstanceFinder.ServerManager.OnServerConnectionState += OnServerStarted;
-        //Debug.Log("LobbySpawner: Subscribed in Awake");
+        if (InstanceFinder.ServerManager.Started)
+        {
+            // Server already running — spawn directly
+            RegisterSpawnPoints();
+            SpawnFurniture();
+            SpawnProps();
+            InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
+        }
+        else
+        {
+            // Server not yet started — wait for it
+            InstanceFinder.ServerManager.OnServerConnectionState += OnServerStarted;
+        }
     }
 
     private void OnServerStarted(FishNet.Transporting.ServerConnectionStateArgs args)
@@ -34,12 +46,40 @@ public class LobbySpawner : MonoBehaviour
         RegisterSpawnPoints();
         SpawnFurniture();
         SpawnProps();
+
+        // Subscribe to player connections after server is up
+        InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
+    }
+
+    private void OnRemoteConnectionState(FishNet.Connection.NetworkConnection conn, FishNet.Transporting.RemoteConnectionStateArgs args)
+    {
+        if (args.ConnectionState != FishNet.Transporting.RemoteConnectionState.Started) return;
+
+        if (_playerSpawnConfig.PlayerPrefab == null)
+        {
+            Debug.LogError("[LobbySpawner] PlayerPrefab not assigned in PlayerSpawnConfig.");
+            return;
+        }
+
+        if (!TryGetSpawnPoint(out Vector3 position, out Quaternion rotation))
+        {
+            Debug.LogWarning("[LobbySpawner] No spawn points available. Spawning at origin.");
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+        }
+
+        GameObject player = Instantiate(_playerSpawnConfig.PlayerPrefab, position, rotation);
+        NetworkObject netObj = player.GetComponent<NetworkObject>();
+        InstanceFinder.ServerManager.Spawn(netObj, conn);
     }
 
     private void OnDestroy()
     {
         if (InstanceFinder.ServerManager != null)
+        {
             InstanceFinder.ServerManager.OnServerConnectionState -= OnServerStarted;
+            InstanceFinder.ServerManager.OnRemoteConnectionState -= OnRemoteConnectionState;
+        }
     }
 
     // --- Player Spawn Points ---

@@ -33,6 +33,10 @@ public class PlayerObject : NetworkBehaviour
     public InteractionManager Interaction => _interactionManager;
     public GameObject CharacterModel => _characterModel;
 
+    [Header("Animation")]
+    [SerializeField] private Animator _animator;
+    public Animator CharacterAnimator => _animator;
+
     private bool _initialized = false;
 
     private Grabbable _heldObject;
@@ -68,6 +72,7 @@ public class PlayerObject : NetworkBehaviour
     private void Initialize()
     {
         // Debug.Log("Initialize called on PlayerObject");
+        _animator = _characterModel.GetComponentInChildren<Animator>();
         _playerMovement.Initialize(this);
         _playerCamera.Initialize(this);
         _interactionManager.Initialize(this);

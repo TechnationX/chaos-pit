@@ -46,7 +46,7 @@ public class CreateSessionScreen : UIScreenBase
     public override void OnShow()
     {
         // Always start in loading state when screen opens
-        Debug.Log("[CreateSessionScreen] OnShow fired.");
+        //Debug.Log("[CreateSessionScreen] OnShow fired.");
         ShowLoadingState();
         StartSession();
     }
@@ -87,7 +87,13 @@ public class CreateSessionScreen : UIScreenBase
         joinCodeText.text = joinCode;
         ShowCodeState();
 
-        // Listen for session to become active then auto-transition to Lobby
+        // Check if already active before subscribing
+        if (SessionManager.Instance.CurrentState == SessionManager.SessionState.Active)
+        {
+            LoadLobby();
+            return;
+        }
+
         SessionManager.Instance.OnSessionStateChanged += HandleSessionStateChanged;
     }
 
@@ -121,12 +127,12 @@ public class CreateSessionScreen : UIScreenBase
     {
         if (string.IsNullOrEmpty(joinCodeText.text)) return;
         GUIUtility.systemCopyBuffer = joinCodeText.text;
-        Debug.Log($"[CreateSessionScreen] Join code copied: {joinCodeText.text}");
+        //Debug.Log($"[CreateSessionScreen] Join code copied: {joinCodeText.text}");
 
         // TODO: Show brief "Copied!" confirmation tooltip
     }
 
-    private void OnBackPressed()
+    protected override void OnBackPressed()
     {
         // Clean up session if player backs out before anyone joins
         if (SessionManager.Instance != null)
