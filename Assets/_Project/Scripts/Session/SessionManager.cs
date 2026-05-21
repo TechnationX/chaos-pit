@@ -47,6 +47,8 @@ public class SessionManager : SingletonBehaviour<SessionManager>
     public event System.Action<string> OnJoinCodeReady;
     public event System.Action<int> OnPlayerCountChanged;
 
+    public event System.Action<string> OnDisconnectedWithReason;
+
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
     protected override void Awake()
@@ -57,6 +59,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
     private void OnEnable()
     {
         InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
+        InstanceFinder.ClientManager.OnClientConnectionState += OnClientConnectionState;
     }
 
     private void OnDisable()
@@ -65,6 +68,9 @@ public class SessionManager : SingletonBehaviour<SessionManager>
         {
             InstanceFinder.ServerManager.OnRemoteConnectionState -= OnRemoteConnectionState;
         }
+
+        if (InstanceFinder.ClientManager != null)
+            InstanceFinder.ClientManager.OnClientConnectionState -= OnClientConnectionState;
     }
 
     // ─── Session Control ──────────────────────────────────────────────────────
@@ -95,7 +101,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             InstanceFinder.ServerManager.StartConnection();
             InstanceFinder.ClientManager.StartConnection();
 
-            Debug.Log($"[SessionManager] Host session started. Join code: {JoinCode}");
+            //Debug.Log($"[SessionManager] Host session started. Join code: {JoinCode}");
             OnJoinCodeReady?.Invoke(JoinCode);
 
             // Host is up — session is now active
@@ -133,7 +139,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             // Connect client after Relay is configured
             InstanceFinder.ClientManager.StartConnection();
 
-            Debug.Log($"[SessionManager] Joined session with code: {joinCode}");
+           // Debug.Log($"[SessionManager] Joined session with code: {joinCode}");
 
             // Connected — session is now active
             SetState(SessionState.Active);
@@ -155,7 +161,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
         _connectedPlayers.Clear();
         JoinCode = string.Empty;
 
-        Debug.Log("[SessionManager] Session ended.");
+        //Debug.Log("[SessionManager] Session ended.");
         SetState(SessionState.Idle);
     }
 
@@ -168,7 +174,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             if (!_connectedPlayers.Contains(conn))
             {
                 _connectedPlayers.Add(conn);
-                Debug.Log($"[SessionManager] Player connected. Total: {PlayerCount}");
+                //Debug.Log($"[SessionManager] Player connected. Total: {PlayerCount}");
                 OnPlayerCountChanged?.Invoke(PlayerCount);
             }
         }
@@ -177,7 +183,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             if (_connectedPlayers.Contains(conn))
             {
                 _connectedPlayers.Remove(conn);
-                Debug.Log($"[SessionManager] Player disconnected. Total: {PlayerCount}");
+                //Debug.Log($"[SessionManager] Player disconnected. Total: {PlayerCount}");
                 OnPlayerCountChanged?.Invoke(PlayerCount);
             }
         }
@@ -188,7 +194,22 @@ public class SessionManager : SingletonBehaviour<SessionManager>
     private void SetState(SessionState newState)
     {
         CurrentState = newState;
-        Debug.Log($"[SessionManager] State → {newState}");
+        //Debug.Log($"[SessionManager] State → {newState}");
         OnSessionStateChanged?.Invoke(newState);
+    }
+
+    private void OnClientConnectionState(FishNet.Transporting.ClientConnectionStateArgs args)
+    {
+        if (args.ConnectionState == FishNet.Transporting.LocalConnectionState.Stopped && CurrentState == SessionState.Active)
+        {
+            Debug.LogWarning("[SessionManager] Client connection stopped unexpectedly.");
+            //Debug.Log($"[SessionManager] ClientConnectionState: {args.ConnectionState}, CurrentState: {CurrentState}");
+            string reason = IsHost ? "Session lost — Relay connection failed." : "Disconnected — host session ended.";
+            _connectedPlayers.Clear();
+            JoinCode = string.Empty;
+            SetState(SessionState.Idle);
+            DisconnectReason.Instance.Set(reason);
+            UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
+        }
     }
 }

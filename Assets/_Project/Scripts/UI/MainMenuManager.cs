@@ -32,6 +32,11 @@ public class MainMenuManager : MonoBehaviour
     [SerializeField] private Button settingsButton;
     [SerializeField] private Button quitButton;
 
+    [Header("Disconnect Popup")]
+    [SerializeField] private GameObject disconnectPopup;
+    [SerializeField] private TMP_Text disconnectMessageText;
+    [SerializeField] private float popupDuration = 4f;
+
     // ─── State ────────────────────────────────────────────────────────────────
 
     private UIScreenBase _currentScreen;
@@ -43,6 +48,15 @@ public class MainMenuManager : MonoBehaviour
         WireButtons();
         LoadPlayerInfo();
         ShowScreen(mainMenuScreen);
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        if (DisconnectReason.Instance != null)
+        {
+            string reason = DisconnectReason.Instance.Consume();
+            if (!string.IsNullOrEmpty(reason))
+                ShowDisconnectPopup(reason);
+        }
     }
 
     // ─── Button Wiring ────────────────────────────────────────────────────────
@@ -75,7 +89,7 @@ public class MainMenuManager : MonoBehaviour
 
     public void ShowScreen(UIScreenBase screen)
     {
-        Debug.Log($"[MainMenuManager] ShowScreen called with: {(screen == null ? "NULL" : screen.gameObject.name)}");
+        //Debug.Log($"[MainMenuManager] ShowScreen called with: {(screen == null ? "NULL" : screen.gameObject.name)}");
 
         if (screen == null)
         {
@@ -95,7 +109,7 @@ public class MainMenuManager : MonoBehaviour
         _currentScreen.Show();
         _currentScreen.OnShow();
 
-        Debug.Log($"[MainMenuManager] Showing screen: {screen.gameObject.name}");
+        //Debug.Log($"[MainMenuManager] Showing screen: {screen.gameObject.name}");
     }
 
     // Back button — called by child screens to return to Main Menu
@@ -108,11 +122,40 @@ public class MainMenuManager : MonoBehaviour
 
     private void QuitGame()
     {
-        Debug.Log("[MainMenuManager] Quitting application.");
+        //Debug.Log("[MainMenuManager] Quitting application.");
         #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
         #else
             Application.Quit();
         #endif
+    }
+
+    public void ShowDisconnectPopup(string message)
+    {
+        if (disconnectPopup == null) return;
+        disconnectMessageText.text = message;
+        disconnectPopup.SetActive(true);
+        StartCoroutine(FadeOutPopup());
+    }
+
+    private System.Collections.IEnumerator FadeOutPopup()
+    {
+        CanvasGroup cg = disconnectPopup.GetComponent<CanvasGroup>();
+        if (cg == null) cg = disconnectPopup.AddComponent<CanvasGroup>();
+
+        cg.alpha = 1f;
+        yield return new WaitForSeconds(popupDuration * 0.6f);
+
+        float elapsed = 0f;
+        float fadeDuration = popupDuration * 0.4f;
+        while (elapsed < fadeDuration)
+        {
+            elapsed += Time.deltaTime;
+            cg.alpha = Mathf.Lerp(1f, 0f, elapsed / fadeDuration);
+            yield return null;
+        }
+
+        disconnectPopup.SetActive(false);
+        cg.alpha = 1f;
     }
 }

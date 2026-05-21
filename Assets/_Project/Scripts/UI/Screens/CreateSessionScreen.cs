@@ -82,7 +82,7 @@ public class CreateSessionScreen : UIScreenBase
         // Unsubscribe immediately — only need this once
         SessionManager.Instance.OnJoinCodeReady -= HandleJoinCodeReady;
 
-        Debug.Log($"[CreateSessionScreen] Join code received: {joinCode}");
+        //Debug.Log($"[CreateSessionScreen] Join code received: {joinCode}");
 
         joinCodeText.text = joinCode;
         ShowCodeState();
@@ -147,7 +147,7 @@ public class CreateSessionScreen : UIScreenBase
 
     private void LoadLobby()
     {
-        Debug.Log("[CreateSessionScreen] Session active. Loading Lobby.");
+        //Debug.Log("[CreateSessionScreen] Session active. Loading Lobby.");
         SceneManager.LoadScene(lobbySceneName);
     }
 }

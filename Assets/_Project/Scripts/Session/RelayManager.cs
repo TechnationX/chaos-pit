@@ -40,11 +40,11 @@ public class RelayManager : SingletonBehaviour<RelayManager>
             if (!AuthenticationService.Instance.IsSignedIn)
             {
                 await AuthenticationService.Instance.SignInAnonymouslyAsync();
-                Debug.Log($"[RelayManager] Signed in. Player ID: {AuthenticationService.Instance.PlayerId}");
+                //Debug.Log($"[RelayManager] Signed in. Player ID: {AuthenticationService.Instance.PlayerId}");
             }
 
             IsInitialized = true;
-            Debug.Log("[RelayManager] Initialized.");
+            //Debug.Log("[RelayManager] Initialized.");
         }
         catch (System.Exception e)
         {
@@ -67,7 +67,7 @@ public class RelayManager : SingletonBehaviour<RelayManager>
             Allocation allocation = await RelayService.Instance.CreateAllocationAsync(maxPlayers - 1);
 
             string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
-            Debug.Log($"[RelayManager] Relay allocated. Join code: {joinCode}");
+            //Debug.Log($"[RelayManager] Relay allocated. Join code: {joinCode}");
 
             // Configure FishNet transport to use Relay
             SetRelayHostData(allocation);
@@ -91,7 +91,7 @@ public class RelayManager : SingletonBehaviour<RelayManager>
         try
         {
             JoinAllocation joinAllocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
-            Debug.Log($"[RelayManager] Joined Relay allocation with code: {joinCode}");
+            //Debug.Log($"[RelayManager] Joined Relay allocation with code: {joinCode}");
 
             // Configure FishNet transport to use Relay
             SetRelayClientData(joinAllocation);
@@ -125,7 +125,7 @@ public class RelayManager : SingletonBehaviour<RelayManager>
             true
         );
 
-        Debug.Log("[RelayManager] FishNet transport configured for host.");
+        //Debug.Log("[RelayManager] FishNet transport configured for host.");
     }
 
     private void SetRelayClientData(JoinAllocation joinAllocation)
@@ -148,7 +148,7 @@ public class RelayManager : SingletonBehaviour<RelayManager>
             true
         );
 
-        Debug.Log("[RelayManager] FishNet transport configured for client.");
+        //Debug.Log("[RelayManager] FishNet transport configured for client.");
     }
 
     // ─── Utilities ────────────────────────────────────────────────────────────

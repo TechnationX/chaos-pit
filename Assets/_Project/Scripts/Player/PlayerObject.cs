@@ -87,7 +87,7 @@ public class PlayerObject : NetworkBehaviour
 
     public void SetHeldObject(Grabbable obj)
     {
-        Debug.Log($"SetHeldObject called: {obj?.name ?? "null"}");
+        //Debug.Log($"SetHeldObject called: {obj?.name ?? "null"}");
         _heldObject = obj;
     }
 }

@@ -49,7 +49,7 @@ public class BootstrapManager : MonoBehaviour
             Application.Quit();
             yield break;
         }
-        Debug.Log("[BootstrapManager] FishNet NetworkManager ready.");
+        //Debug.Log("[BootstrapManager] FishNet NetworkManager ready.");
 
         // Brief pause before scene transition (optional — remove if not needed)
         yield return new WaitForSeconds(delayBeforeMainMenu);

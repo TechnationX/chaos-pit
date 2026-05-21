@@ -34,6 +34,7 @@ public class PlayerCamera : NetworkBehaviour
     private const int PRIORITY_INACTIVE = 0;
 
     public CameraMode CurrentMode => _currentMode;
+    private bool _isPaused = false;
 
     public void Initialize(PlayerObject player)
     {
@@ -53,6 +54,10 @@ public class PlayerCamera : NetworkBehaviour
     {
         if (!IsOwner) return;
         // Debug.Log($"Camera mode: {_currentMode}, FP Priority: {_vcamFirstPerson.Priority}, TP Priority: {_vcamThirdPerson.Priority}");
+
+        if (Keyboard.current.escapeKey.wasPressedThisFrame)
+            TogglePause();
+
         if (_currentMode == CameraMode.FirstPerson)
             HandleFirstPersonLook();
     }
@@ -151,5 +156,31 @@ public class PlayerCamera : NetworkBehaviour
     {
         _activeMiniGameCam = null;
         SwitchTo(CameraMode.FirstPerson);
+    }
+
+    private void TogglePause()
+    {
+        _isPaused = !_isPaused;
+
+        if (_isPaused)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+            _player.Movement.SetMovementLocked(true);
+        }
+        else
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+            _player.Movement.SetMovementLocked(false);
+        }
+
+        // Tell the pause menu to show/hide
+        PauseMenuUI.Instance?.SetVisible(_isPaused);
+    }
+
+    public void Unpause()
+    {
+        if (_isPaused) TogglePause();
     }
 }

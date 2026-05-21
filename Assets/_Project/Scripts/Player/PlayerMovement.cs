@@ -92,7 +92,7 @@ public class PlayerMovement : NetworkBehaviour
 
         if (_currentSeat != null && keyboard.spaceKey.wasPressedThisFrame)
         {
-            Debug.Log("Standing from seat");
+            // Debug.Log("Standing from seat");
             _currentSeat.ForceStand(_player);
             _currentSeat = null;
         }
@@ -202,10 +202,11 @@ public class PlayerMovement : NetworkBehaviour
         if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) v -= 1f;
 
         _isSprinting = keyboard.leftShiftKey.isPressed && v > 0 && h == 0 && !_isCrouching;
+        //Debug.Log($"isSprinting: {_isSprinting}, v: {v}, h: {h}, isCrouching: {_isCrouching}, shift: {keyboard.leftShiftKey.isPressed}");
 
         // Set blend values
         _moveX = h;
-        _moveY = _isSprinting ? v : v * 0.5f;
+        _moveY = _isSprinting ? v : v * 0.5f; ;
 
         // Cap speed when strafing while sprinting
         float speed = _isCrouching ? _crouchSpeed :
