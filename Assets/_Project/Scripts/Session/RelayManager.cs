@@ -18,6 +18,7 @@ public class RelayManager : SingletonBehaviour<RelayManager>
     // ─── State ────────────────────────────────────────────────────────────────
 
     public bool IsInitialized { get; private set; } = false;
+    private System.Guid _allocationId;
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -28,7 +29,6 @@ public class RelayManager : SingletonBehaviour<RelayManager>
 
     // ─── Initialization ───────────────────────────────────────────────────────
 
-    // Called once at startup by SessionManager before any Relay calls
     public async Task InitializeAsync()
     {
         if (IsInitialized) return;
@@ -38,13 +38,9 @@ public class RelayManager : SingletonBehaviour<RelayManager>
             await UnityServices.InitializeAsync();
 
             if (!AuthenticationService.Instance.IsSignedIn)
-            {
                 await AuthenticationService.Instance.SignInAnonymouslyAsync();
-                //Debug.Log($"[RelayManager] Signed in. Player ID: {AuthenticationService.Instance.PlayerId}");
-            }
 
             IsInitialized = true;
-            //Debug.Log("[RelayManager] Initialized.");
         }
         catch (System.Exception e)
         {
@@ -55,23 +51,22 @@ public class RelayManager : SingletonBehaviour<RelayManager>
 
     // ─── Host ─────────────────────────────────────────────────────────────────
 
-    // Allocates a Relay server and returns the join code.
-    // maxPlayers does not include the host — pass total players minus 1.
     public async Task<string> CreateRelaySessionAsync(int maxPlayers)
     {
         await EnsureInitialized();
 
         try
         {
-            // Relay maxConnections = max clients (excludes host)
-            Allocation allocation = await RelayService.Instance.CreateAllocationAsync(maxPlayers - 1);
+            Allocation allocation = await RelayService.Instance.CreateAllocationAsync(maxPlayers - 1, "us-west2");
+            _allocationId = allocation.AllocationId;
+
+            Debug.Log($"[RelayManager] Allocation created at time: {Time.realtimeSinceStartup}, region: {allocation.Region}");
 
             string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
-            //Debug.Log($"[RelayManager] Relay allocated. Join code: {joinCode}");
 
-            // Configure FishNet transport to use Relay
             SetRelayHostData(allocation);
 
+            Debug.Log($"[RelayManager.CreateRelaySession] Join code: {joinCode} at time: {Time.realtimeSinceStartup}");
             return joinCode;
         }
         catch (System.Exception e)
@@ -81,19 +76,25 @@ public class RelayManager : SingletonBehaviour<RelayManager>
         }
     }
 
+    // ─── Heartbeat ────────────────────────────────────────────────────────────
+
+
+
+    public void ClearAllocation()
+    {
+        _allocationId = System.Guid.Empty;
+    }
+
     // ─── Client ───────────────────────────────────────────────────────────────
 
-    // Resolves a join code and configures FishNet transport for client connection.
     public async Task JoinRelaySessionAsync(string joinCode)
     {
         await EnsureInitialized();
 
         try
         {
+            Debug.Log($"[RelayManager.JoinRelaySession] Attempting to join with code: {joinCode} at time: {Time.realtimeSinceStartup}");
             JoinAllocation joinAllocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
-            //Debug.Log($"[RelayManager] Joined Relay allocation with code: {joinCode}");
-
-            // Configure FishNet transport to use Relay
             SetRelayClientData(joinAllocation);
         }
         catch (System.Exception e)
@@ -115,17 +116,8 @@ public class RelayManager : SingletonBehaviour<RelayManager>
             return;
         }
 
-        utpTransport.SetRelayServerData(
-            allocation.RelayServer.IpV4,
-            (ushort)allocation.RelayServer.Port,
-            allocation.AllocationIdBytes,
-            allocation.Key,
-            allocation.ConnectionData,
-            allocation.ConnectionData,
-            true
-        );
-
-        //Debug.Log("[RelayManager] FishNet transport configured for host.");
+        utpTransport.SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "dtls"));
+        Debug.Log($"[RelayManager] Protocol type after set: {utpTransport.Protocol}");
     }
 
     private void SetRelayClientData(JoinAllocation joinAllocation)
@@ -138,17 +130,7 @@ public class RelayManager : SingletonBehaviour<RelayManager>
             return;
         }
 
-        utpTransport.SetRelayServerData(
-            joinAllocation.RelayServer.IpV4,
-            (ushort)joinAllocation.RelayServer.Port,
-            joinAllocation.AllocationIdBytes,
-            joinAllocation.Key,
-            joinAllocation.ConnectionData,
-            joinAllocation.HostConnectionData,
-            true
-        );
-
-        //Debug.Log("[RelayManager] FishNet transport configured for client.");
+        utpTransport.SetRelayServerData(AllocationUtils.ToRelayServerData(joinAllocation, "dtls"));
     }
 
     // ─── Utilities ────────────────────────────────────────────────────────────
@@ -156,8 +138,6 @@ public class RelayManager : SingletonBehaviour<RelayManager>
     private async Task EnsureInitialized()
     {
         if (!IsInitialized)
-        {
             await InitializeAsync();
-        }
     }
 }

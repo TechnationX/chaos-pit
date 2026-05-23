@@ -19,41 +19,46 @@ public class LobbySpawner : MonoBehaviour
 
     private List<Vector3> _availableSpawnPoints = new List<Vector3>();
     private List<Quaternion> _availableSpawnRotations = new List<Quaternion>();
+    private bool _spawnListenerRegistered = false;
 
     private void Start()
     {
         if (InstanceFinder.ServerManager.Started)
         {
-            // Server already running — spawn directly
             RegisterSpawnPoints();
             SpawnFurniture();
             SpawnProps();
-            InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
+            RegisterSpawnListener();
         }
         else
         {
-            // Server not yet started — wait for it
             InstanceFinder.ServerManager.OnServerConnectionState += OnServerStarted;
         }
     }
 
-    private void OnServerStarted(FishNet.Transporting.ServerConnectionStateArgs args)
+    private void OnServerStarted(ServerConnectionStateArgs args)
     {
-        //Debug.Log($"LobbySpawner: OnServerStarted fired: {args.ConnectionState}");
-        if (args.ConnectionState != FishNet.Transporting.LocalConnectionState.Started) return;
+        if (args.ConnectionState != LocalConnectionState.Started) return;
         InstanceFinder.ServerManager.OnServerConnectionState -= OnServerStarted;
 
         RegisterSpawnPoints();
         SpawnFurniture();
         SpawnProps();
-
-        // Subscribe to player connections after server is up
-        InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
+        RegisterSpawnListener();
     }
 
-    private void OnRemoteConnectionState(FishNet.Connection.NetworkConnection conn, FishNet.Transporting.RemoteConnectionStateArgs args)
+    private void RegisterSpawnListener()
     {
-        if (args.ConnectionState != FishNet.Transporting.RemoteConnectionState.Started) return;
+        //Debug.Log($"[LobbySpawner] RegisterSpawnListener called. AlreadyRegistered: {_spawnListenerRegistered}");
+        if (_spawnListenerRegistered) return;
+        _spawnListenerRegistered = true;
+        InstanceFinder.SceneManager.OnClientLoadedStartScenes += OnClientLoadedStartScenes;
+    }
+
+    private void OnClientLoadedStartScenes(FishNet.Connection.NetworkConnection conn, bool asServer)
+    {
+        //Debug.Log($"[LobbySpawner] Fired — ConnId: {conn.ClientId}, asServer: {asServer}, HostConnId: {InstanceFinder.ClientManager.Connection?.ClientId}, IsHost: {conn == InstanceFinder.ClientManager.Connection}");
+        if (!asServer) return;
 
         if (_playerSpawnConfig.PlayerPrefab == null)
         {
@@ -76,10 +81,9 @@ public class LobbySpawner : MonoBehaviour
     private void OnDestroy()
     {
         if (InstanceFinder.ServerManager != null)
-        {
             InstanceFinder.ServerManager.OnServerConnectionState -= OnServerStarted;
-            InstanceFinder.ServerManager.OnRemoteConnectionState -= OnRemoteConnectionState;
-        }
+        if (InstanceFinder.SceneManager != null)
+            InstanceFinder.SceneManager.OnClientLoadedStartScenes -= OnClientLoadedStartScenes;
     }
 
     // --- Player Spawn Points ---
@@ -95,10 +99,7 @@ public class LobbySpawner : MonoBehaviour
             _availableSpawnRotations.Add(Quaternion.Euler(point.Rotation));
         }
 
-        // Shuffle for random assignment
         ShuffleSpawnPoints();
-
-        //Debug.Log($"LobbySpawner: Registered {_availableSpawnPoints.Count} player spawn points");
     }
 
     public bool TryGetSpawnPoint(out Vector3 position, out Quaternion rotation)
@@ -137,39 +138,23 @@ public class LobbySpawner : MonoBehaviour
 
     private void SpawnFurniture()
     {
-        //Debug.Log($"LobbySpawner: SpawnFurniture called. Config null: {_furnitureSpawnConfig == null}");
         if (_furnitureSpawnConfig == null) return;
-        //Debug.Log($"LobbySpawner: Furniture entries count: {_furnitureSpawnConfig.Entries.Length}");
 
         foreach (var entry in _furnitureSpawnConfig.Entries)
         {
             if (entry.Prefab == null)
             {
-                Debug.LogWarning($"LobbySpawner: Furniture entry '{entry.Label}' has no prefab assigned");
+                Debug.LogWarning($"[LobbySpawner] Furniture entry '{entry.Label}' has no prefab assigned.");
                 continue;
             }
 
-            GameObject obj = Instantiate(
-                entry.Prefab,
-                entry.Position,
-                Quaternion.Euler(entry.Rotation),
-                _furnitureParent
-            );
-
-            //Debug.Log($"LobbySpawner: '{entry.Label}' active after Instantiate: {obj.activeSelf}");
+            GameObject obj = Instantiate(entry.Prefab, entry.Position, Quaternion.Euler(entry.Rotation), _furnitureParent);
             obj.transform.localScale = entry.Scale;
             obj.name = entry.Label;
-            //Debug.Log($"LobbySpawner: '{entry.Label}' active after scale/name: {obj.activeSelf}");
-
-            //Debug.Log($"LobbySpawner: Placed furniture '{entry.Label}'");
 
             NetworkObject netObj = obj.GetComponent<NetworkObject>();
             if (netObj != null)
-            {
-                //Debug.Log($"LobbySpawner: '{entry.Label}' has NetworkObject, spawning through Fish-Net");
                 InstanceFinder.ServerManager.Spawn(netObj);
-                //Debug.Log($"LobbySpawner: '{entry.Label}' active after Fish-Net spawn: {obj.activeSelf}");
-            }
         }
     }
 
@@ -177,40 +162,23 @@ public class LobbySpawner : MonoBehaviour
 
     private void SpawnProps()
     {
-        //Debug.Log($"LobbySpawner: SpawnProps called. Config null: {_propSpawnConfig == null}");
         if (_propSpawnConfig == null) return;
-        //Debug.Log($"LobbySpawner: Prop entries count: {_propSpawnConfig.Entries.Length}");
 
         foreach (var entry in _propSpawnConfig.Entries)
         {
             if (entry.Prefab == null)
             {
-                Debug.LogWarning($"LobbySpawner: Prop entry '{entry.Label}' has no prefab assigned");
+                Debug.LogWarning($"[LobbySpawner] Prop entry '{entry.Label}' has no prefab assigned.");
                 continue;
             }
 
-            GameObject obj = Instantiate(
-                entry.Prefab,
-                entry.Position,
-                Quaternion.Euler(entry.Rotation),
-                _propParent
-            );
-
+            GameObject obj = Instantiate(entry.Prefab, entry.Position, Quaternion.Euler(entry.Rotation), _propParent);
             obj.transform.localScale = entry.Scale;
             obj.name = entry.Label;
 
-            // Spawn networked props through Fish-Net
             NetworkObject netObj = obj.GetComponent<NetworkObject>();
             if (netObj != null)
-            {
-                //Debug.Log($"LobbySpawner: '{entry.Label}' has NetworkObject, spawning through Fish-Net");
                 InstanceFinder.ServerManager.Spawn(netObj);
-                //Debug.Log($"LobbySpawner: '{entry.Label}' active after Fish-Net spawn: {obj.activeSelf}");
-            }
-            else
-            {
-                Debug.Log($"LobbySpawner: Spawned prop '{entry.Label}' as {entry.Type}");
-            }
         }
     }
 }

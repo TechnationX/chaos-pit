@@ -19,7 +19,7 @@ public class UIScreenBase : MonoBehaviour
     [SerializeField] private float fadeDuration = 0.25f;
 
     [Header("Navigation")]
-    [SerializeField] private Button backButton;  // Assign in Inspector on each screen
+    [SerializeField] protected Button backButton;  // Assign in Inspector on each screen
 
     // ─── State ────────────────────────────────────────────────────────────────
 

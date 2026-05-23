@@ -20,9 +20,6 @@ public class CreateSessionScreen : UIScreenBase
     [SerializeField] private TMP_Text joinCodeText;
     [SerializeField] private Button copyCodeButton;
 
-    [Header("Navigation")]
-    [SerializeField] private Button backButton;
-
     [Header("Scene")]
     [SerializeField] private string lobbySceneName = "Lobby";
 
@@ -38,7 +35,6 @@ public class CreateSessionScreen : UIScreenBase
         _mainMenuManager = FindFirstObjectByType<MainMenuManager>();
 
         copyCodeButton.onClick.AddListener(CopyCodeToClipboard);
-        backButton.onClick.AddListener(OnBackPressed);
     }
 
     // ─── UIScreenBase Hooks ───────────────────────────────────────────────────

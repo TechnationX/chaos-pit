@@ -30,6 +30,7 @@ public class PlayerMovement : NetworkBehaviour
 
     private bool _isCrouching;
     private float _targetHeight;
+    private bool _isJumping;
 
     private PlayerObject _player;
     private CharacterController _controller;
@@ -40,6 +41,7 @@ public class PlayerMovement : NetworkBehaviour
     private Sittable _currentSeat;
     private bool _isMoving;
     public bool IsCrouching => _isCrouching;
+    public bool IsJumping => _isJumping;
     private float _moveX;
     private float _moveY;
 
@@ -55,13 +57,14 @@ public class PlayerMovement : NetworkBehaviour
         _targetHeight = _standHeight;
         _isGrounded = true;
         _animator?.SetBool("IsGrounded", true);
+        _animator?.SetBool("IsJumping", false);
 
         // Find animator immediately on the CharacterModel
         _animator = player.CharacterModel.GetComponent<Animator>();
         if (_animator == null)
             _animator = player.CharacterModel.GetComponentInChildren<Animator>();
 
-        //Debug.Log($"Animator found: {_animator != null}");
+        Debug.Log($"[PlayerObject] Animator found: {_animator != null}, GameObject: {_animator?.gameObject.name}");
     }
 
     private void Update()
@@ -111,6 +114,7 @@ public class PlayerMovement : NetworkBehaviour
         _animator.SetFloat("MoveY", _moveY);
         _animator.SetBool("IsCrouching", _isCrouching);
         _animator.SetBool("IsGrounded", _isGrounded);
+        _animator.SetBool("IsJumping", _isJumping);
     }
 
     private void HandleGroundCheck()
@@ -130,7 +134,7 @@ public class PlayerMovement : NetworkBehaviour
 
         // Just landed — reset jump trigger
         if (!wasGrounded && _isGrounded)
-            _animator?.ResetTrigger("Jump");
+            _isJumping = false;
     }
 
     private void HandleCrouch()
@@ -228,7 +232,9 @@ public class PlayerMovement : NetworkBehaviour
         if (keyboard.spaceKey.wasPressedThisFrame && _isGrounded)
         {
             _velocity.y = Mathf.Sqrt(_jumpHeight * -2f * _gravity);
-            _animator?.SetTrigger("Jump");
+            Debug.Log($"[PlayerMovement] Jump — animator null: {_animator == null}");
+            _isJumping = true;
+            Debug.Log($"[PlayerMovement] IsJumping value after set: {_animator.GetBool("IsJumping")}");
         }
     }
 

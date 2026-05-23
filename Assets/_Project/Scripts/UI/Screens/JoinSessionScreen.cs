@@ -19,9 +19,6 @@ public class JoinSessionScreen : UIScreenBase
     [Header("Error")]
     [SerializeField] private TMP_Text errorText;
 
-    [Header("Navigation")]
-    [SerializeField] private Button backButton;
-
     [Header("Scene")]
     [SerializeField] private string lobbySceneName = "Lobby";
 
@@ -38,7 +35,6 @@ public class JoinSessionScreen : UIScreenBase
         _mainMenuManager = FindFirstObjectByType<MainMenuManager>();
 
         connectButton.onClick.AddListener(OnConnectPressed);
-        backButton.onClick.AddListener(OnBackPressed);
 
         // Allow pressing Enter to connect
         joinCodeInput.onSubmit.AddListener(_ => OnConnectPressed());
@@ -128,9 +124,8 @@ public class JoinSessionScreen : UIScreenBase
             return false;
         }
 
-        // Placeholder validation — 4 digit numeric code
-        // TODO: Update validation rules when Unity Relay codes are integrated
-        if (code.Length < 4)
+        // Placeholder validation — 6 digit numeric code
+        if (code.Length < 6)
         {
             ShowError("Join code is too short.");
             return false;
@@ -168,7 +163,7 @@ public class JoinSessionScreen : UIScreenBase
 
     // ─── Navigation ───────────────────────────────────────────────────────────
 
-    private void OnBackPressed()
+    protected override void OnBackPressed()
     {
         if (_isConnecting) return;
         _mainMenuManager?.ShowMainMenu();

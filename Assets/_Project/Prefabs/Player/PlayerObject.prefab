@@ -361,6 +361,8 @@ GameObject:
   - component: {fileID: 4406292158570597787}
   - component: {fileID: 1576687685634962087}
   - component: {fileID: 4571975280494835051}
+  - component: {fileID: 874502198733245546}
+  - component: {fileID: 779472604848160562}
   m_Layer: 0
   m_Name: PlayerObject
   m_TagString: Untagged
@@ -471,7 +473,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584232123520249601
+  _initializedTimestamp: -8584220923419114332
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
@@ -490,7 +492,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 13
+  <PrefabId>k__BackingField: 16
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 15683617269898855715
   SceneId: 0
@@ -520,6 +522,7 @@ MonoBehaviour:
   _characterModel: {fileID: 10508792203387683}
   _handSocket: {fileID: 2841485608747275214}
   _cameraRoot: {fileID: 1696979339290945896}
+  _animator: {fileID: 0}
 --- !u!114 &4406292158570597787
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -592,6 +595,74 @@ MonoBehaviour:
     m_Bits: 128
   _interactionPromptUI: {fileID: 0}
   _promptLabel: {fileID: 0}
+--- !u!114 &874502198733245546
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3076198636859094392}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a2836e36774ca1c4bbbee976e17b649c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Component.Transforming.NetworkTransform
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4854047822952305378}
+  _networkObjectCache: {fileID: 0}
+  _componentConfiguration: 0
+  _synchronizeParent: 0
+  _packing:
+    Position: 1
+    Rotation: 1
+    Scale: 0
+  _useScaledTime: 1
+  _interpolation: 2
+  _extrapolation: 2
+  _enableTeleport: 0
+  _teleportThreshold: 1
+  _clientAuthoritative: 1
+  _sendToOwner: 1
+  _interval: 1
+  _synchronizePosition: 1
+  _positionSensitivity: 0.001
+  _positionSnapping:
+    X: 0
+    Y: 0
+    Z: 0
+  _synchronizeRotation: 1
+  _rotationSnapping:
+    X: 0
+    Y: 0
+    Z: 0
+  _synchronizeScale: 1
+  _scaleSensitivity: 0.001
+  _scaleSnapping:
+    X: 0
+    Y: 0
+    Z: 0
+--- !u!114 &779472604848160562
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3076198636859094392}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e8cac635f24954048aad3a6ff9110beb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Component.Animating.NetworkAnimator
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4854047822952305378}
+  _networkObjectCache: {fileID: 0}
+  IgnoredParameters: []
+  _animator: {fileID: 6741512371992306659}
+  _synchronizeWhenDisabled: 0
+  _smoothFloats: 1
+  _interpolation: 2
+  _clientAuthoritative: 1
+  _sendToOwner: 0
 --- !u!1 &4462422390393396489
 GameObject:
   m_ObjectHideFlags: 0
@@ -778,13 +849,7 @@ PrefabInstance:
       objectReference: {fileID: 9100000, guid: edc4d27c7fe940f46b23652447ac0998, type: 2}
     - target: {fileID: 5866666021909216657, guid: 6559463f97c79574fa133866745b9d60, type: 3}
       propertyPath: m_WarningMessage
-      value: "\nBinding warning: Some generic clip(s) animate transforms that are
-        already bound by a Humanoid avatar. These transforms can only be changed
-        by Humanoid clips.\n\tTransform 'mixamorig:Hips'\n\tTransform 'mixamorig:LeftFoot'\n\tTransform
-        'mixamorig:LeftHandIndex1'\n\tTransform 'mixamorig:LeftHandPinky2'\n\tTransform
-        'mixamorig:RightHandRing2'\n\tTransform 'mixamorig:Spine1'\n\tTransform 'mixamorig:LeftToeBase'\n\tTransform
-        'mixamorig:RightArm'\n\tTransform 'mixamorig:LeftLeg'\n\tTransform 'mixamorig:LeftShoulder'\n\tand
-        more ...\n\tFrom animation clip 'Run'"
+      value: 
       objectReference: {fileID: 0}
     - target: {fileID: 5866666021909216657, guid: 6559463f97c79574fa133866745b9d60, type: 3}
       propertyPath: m_ApplyRootMotion
@@ -806,5 +871,10 @@ GameObject:
 --- !u!4 &823742138251311513 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 6559463f97c79574fa133866745b9d60, type: 3}
+  m_PrefabInstance: {fileID: 928933811499048562}
+  m_PrefabAsset: {fileID: 0}
+--- !u!95 &6741512371992306659 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 5866666021909216657, guid: 6559463f97c79574fa133866745b9d60, type: 3}
   m_PrefabInstance: {fileID: 928933811499048562}
   m_PrefabAsset: {fileID: 0}

@@ -4,10 +4,13 @@
 // Communicates with: RelayManager, LobbyManager, UIManager.
 // Attach to: SessionManager GameObject in Bootstrap scene under _Managers.
 
-using UnityEngine;
 using FishNet;
 using FishNet.Connection;
+using System.Collections;
 using System.Collections.Generic;
+using UnityEngine;
+using System.Threading.Tasks;
+
 
 public class SessionManager : SingletonBehaviour<SessionManager>
 {
@@ -48,6 +51,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
     public event System.Action<int> OnPlayerCountChanged;
 
     public event System.Action<string> OnDisconnectedWithReason;
+
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -99,9 +103,10 @@ public class SessionManager : SingletonBehaviour<SessionManager>
 
             // Start FishNet host after Relay is configured
             InstanceFinder.ServerManager.StartConnection();
+            await Task.Delay(100);
             InstanceFinder.ClientManager.StartConnection();
 
-            //Debug.Log($"[SessionManager] Host session started. Join code: {JoinCode}");
+            Debug.Log($"[SessionManager] Host session started. Join code: {JoinCode}");
             OnJoinCodeReady?.Invoke(JoinCode);
 
             // Host is up — session is now active
@@ -139,7 +144,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             // Connect client after Relay is configured
             InstanceFinder.ClientManager.StartConnection();
 
-           // Debug.Log($"[SessionManager] Joined session with code: {joinCode}");
+            Debug.Log($"[SessionManager] Joined session with code: {joinCode}");
 
             // Connected — session is now active
             SetState(SessionState.Active);
@@ -161,6 +166,8 @@ public class SessionManager : SingletonBehaviour<SessionManager>
         _connectedPlayers.Clear();
         JoinCode = string.Empty;
 
+        RelayManager.Instance?.ClearAllocation();
+
         //Debug.Log("[SessionManager] Session ended.");
         SetState(SessionState.Idle);
     }
@@ -174,7 +181,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             if (!_connectedPlayers.Contains(conn))
             {
                 _connectedPlayers.Add(conn);
-                //Debug.Log($"[SessionManager] Player connected. Total: {PlayerCount}");
+                Debug.Log($"[SessionManager] Player connected. Total: {PlayerCount}");
                 OnPlayerCountChanged?.Invoke(PlayerCount);
             }
         }
@@ -183,7 +190,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             if (_connectedPlayers.Contains(conn))
             {
                 _connectedPlayers.Remove(conn);
-                //Debug.Log($"[SessionManager] Player disconnected. Total: {PlayerCount}");
+                Debug.Log($"[SessionManager] Player disconnected. Total: {PlayerCount}");
                 OnPlayerCountChanged?.Invoke(PlayerCount);
             }
         }
@@ -212,4 +219,5 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
         }
     }
+
 }
