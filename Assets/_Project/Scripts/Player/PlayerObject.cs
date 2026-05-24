@@ -34,12 +34,14 @@ public class PlayerObject : NetworkBehaviour
     public GameObject CharacterModel => _characterModel;
 
     [Header("Animation")]
-    [SerializeField] private Animator _animator;
+    private Animator _animator;
     public Animator CharacterAnimator => _animator;
 
     private bool _initialized = false;
 
     private Grabbable _heldObject;
+    private Grabbable _serverHeldObject;
+    public bool ServerIsHoldingObject => _serverHeldObject != null;
     public bool IsHoldingObject => _heldObject != null;
     public Grabbable HeldObject => _heldObject;
 
@@ -89,5 +91,10 @@ public class PlayerObject : NetworkBehaviour
     {
         //Debug.Log($"SetHeldObject called: {obj?.name ?? "null"}");
         _heldObject = obj;
+    }
+
+    public void SetServerHeldObject(Grabbable obj)
+    {
+        _serverHeldObject = obj;
     }
 }

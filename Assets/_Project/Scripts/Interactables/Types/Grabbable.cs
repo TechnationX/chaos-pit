@@ -1,8 +1,9 @@
 // Grabbable.cs
 
-using UnityEngine;
-using FishNet.Object;
+using FishNet.Component.Transforming;
 using FishNet.Connection;
+using FishNet.Object;
+using UnityEngine;
 
 public class Grabbable : NetworkBehaviour, IInteractable
 {
@@ -12,7 +13,13 @@ public class Grabbable : NetworkBehaviour, IInteractable
 
     protected Rigidbody _rigidbody;
     protected PlayerObject _holdingPlayer;
-    protected bool _isHeld;
+
+    private readonly FishNet.Object.Synchronizing.SyncVar<bool> _isHeldSync = new FishNet.Object.Synchronizing.SyncVar<bool>();
+    protected bool _isHeld
+    {
+        get => _isHeldSync.Value;
+        set => _isHeldSync.Value = value;
+    }
 
     private Vector3 _originalPosition;
     private Quaternion _originalRotation;
@@ -30,56 +37,84 @@ public class Grabbable : NetworkBehaviour, IInteractable
 
     public virtual void OnInteract(PlayerObject player)
     {
-        //Debug.Log($"OnInteract called on {gameObject.name}, IsHeld: {_isHeld}");
-        if (!IsServerInitialized) return;
+        Debug.Log($"[Grabbable] OnInteract — IsServer: {IsServerInitialized}, IsClient: {IsClientInitialized}, IsHeld: {_isHeld}");
 
         if (_isHeld)
         {
-            if (_holdingPlayer == player)
-                ServerDrop();
+            if (player.IsHoldingObject && player.HeldObject == this)
+            {
+                ServerDropRpc(player);
+                Debug.Log($"[Grabbable] OnInteract DropRpc");
+            }
             return;
         }
 
+
         // Only one object held at a time — check player hand
+        if (player.IsHoldingObject) return;
         ServerGrab(player);
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    protected virtual void ServerDropRpc(PlayerObject player)
+    {
+        if (!_isHeld || _holdingPlayer != player) return;
+        ServerDrop();
     }
 
     [ServerRpc(RequireOwnership = false)]
     protected virtual void ServerGrab(PlayerObject player)
     {
-        //Debug.Log($"ServerGrab called for {gameObject.name}");
+        Debug.Log($"[Grabbable] ServerGrab called — IsHeld: {_isHeld}, Player: {player?.name}");
         if (_isHeld) return;
+        if (player.ServerIsHoldingObject) return;
 
         _isHeld = true;
         _holdingPlayer = player;
+        player.SetServerHeldObject(this);
 
-        GiveOwnership(player.Owner);
+        foreach (var conn in NetworkObject.Observers)
+        {
+            Debug.Log($"[Grabbable] Observer: {conn.ClientId}");
+        }
+        Debug.Log($"[Grabbable] Grabbing player connection: {player.Owner?.ClientId}");
+
         ObserversGrab(player.NetworkObject);
     }
 
     [Server]
     protected virtual void ServerDrop()
     {
+        Debug.Log($"[Grabbable] ServerDrop — IsHeld before: {_isHeld}");
         if (!_isHeld) return;
 
         _isHeld = false;
+        Debug.Log($"[Grabbable] ServerDrop — IsHeld after: {_isHeld}");
+
         PlayerObject prevPlayer = _holdingPlayer;
         _holdingPlayer = null;
-
-        // Return ownership to server
-        RemoveOwnership();
+        prevPlayer.SetServerHeldObject(null);
 
         ObserversDrop(prevPlayer.NetworkObject);
     }
 
     [ObserversRpc]
-    protected virtual void ObserversGrab(NetworkObject playerNetObj)
+    protected void ObserversGrab(NetworkObject playerNetObj)  // NOT virtual
     {
+        OnObserversGrab(playerNetObj);  // call virtual hook
+    }
+
+    protected virtual void OnObserversGrab(NetworkObject playerNetObj)
+    {
+        Debug.Log($"[Grabbable] ObserversGrab fired on client");
         PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
         if (player == null) return;
 
         _holdingPlayer = player;
         _rigidbody.isKinematic = true;
+
+        var nt = GetComponent<NetworkTransform>();
+        if (nt != null) nt.enabled = false;
 
         Transform handSocket = player.HandSocket;
         if (handSocket != null)
@@ -94,10 +129,20 @@ public class Grabbable : NetworkBehaviour, IInteractable
     }
 
     [ObserversRpc]
-    protected virtual void ObserversDrop(NetworkObject playerNetObj)
+    protected void ObserversDrop(NetworkObject playerNetObj)  // NOT virtual
+    {
+        OnObserversDrop(playerNetObj);
+    }
+
+    protected virtual void OnObserversDrop(NetworkObject playerNetObj)
     {
         PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
         if (player == null) return;
+
+        _holdingPlayer = player;
+
+        var nt = GetComponent<NetworkTransform>();
+        if (nt != null) nt.enabled = true;
 
         _rigidbody.isKinematic = false;
         transform.SetParent(null);

@@ -1,4 +1,4 @@
-// Sittable.cs
+// Sittable.cs 
 
 using UnityEngine;
 using FishNet.Object;
@@ -43,8 +43,6 @@ public class Sittable : NetworkBehaviour, IInteractable
 
     public void OnInteract(PlayerObject player)
     {
-        if (!IsServerInitialized) return;
-
         int playerSlot = GetPlayerSlot(player);
         if (playerSlot >= 0)
         {
@@ -61,7 +59,7 @@ public class Sittable : NetworkBehaviour, IInteractable
     [ServerRpc(RequireOwnership = false)]
     private void ServerSit(NetworkObject playerNetObj, int slotIndex)
     {
-        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        PlayerObject player = playerNetObj?.GetComponent<PlayerObject>();
         if (player == null || _occupiedSlots[slotIndex]) return;
 
         _occupiedSlots[slotIndex] = true;
@@ -73,7 +71,7 @@ public class Sittable : NetworkBehaviour, IInteractable
     [ServerRpc(RequireOwnership = false)]
     private void ServerStand(NetworkObject playerNetObj, int slotIndex)
     {
-        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        PlayerObject player = playerNetObj?.GetComponent<PlayerObject>();
         if (player == null || _occupyingPlayers[slotIndex] != player) return;
 
         _occupiedSlots[slotIndex] = false;
@@ -85,33 +83,50 @@ public class Sittable : NetworkBehaviour, IInteractable
     [ObserversRpc]
     private void ObserversSit(NetworkObject playerNetObj, Vector3 position, Quaternion rotation, int slotIndex)
     {
-        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        PlayerObject player = playerNetObj?.GetComponent<PlayerObject>();
         if (player == null) return;
 
-        player.Movement.SetMovementLocked(true);
-        player.Movement.SetCurrentSeat(this);
+        // Sync local state so GetPlayerSlot works on all clients
+        _occupiedSlots[slotIndex] = true;
+        _occupyingPlayers[slotIndex] = player;
+
+        if (player.CharacterAnimator != null)
+            player.CharacterAnimator.SetBool("IsSitting", true);
+
+        if (player.Movement != null)
+        {
+            player.Movement.SetMovementLocked(true);
+            player.Movement.SetCurrentSeat(this);
+        }
+
         player.transform.position = position;
         player.transform.rotation = rotation;
 
-        if (player.IsOwner)
+        if (player.IsOwner && player.Camera != null)
             player.Camera.SwitchTo(PlayerCamera.CameraMode.ThirdPerson);
-
-        player.CharacterAnimator.SetBool("IsSitting", true);
     }
 
     [ObserversRpc]
     private void ObserversStand(NetworkObject playerNetObj, int slotIndex)
     {
-        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        PlayerObject player = playerNetObj?.GetComponent<PlayerObject>();
         if (player == null) return;
 
-        player.Movement.SetMovementLocked(false);
-        player.Movement.SetCurrentSeat(null);
+        // Sync local state
+        _occupiedSlots[slotIndex] = false;
+        _occupyingPlayers[slotIndex] = null;
 
-        if (player.IsOwner)
+        if (player.CharacterAnimator != null)
+            player.CharacterAnimator.SetBool("IsSitting", false);
+
+        if (player.Movement != null)
+        {
+            player.Movement.SetMovementLocked(false);
+            player.Movement.SetCurrentSeat(null);
+        }
+
+        if (player.IsOwner && player.Camera != null)
             player.Camera.SwitchTo(PlayerCamera.CameraMode.FirstPerson);
-
-        player.CharacterAnimator.SetBool("IsSitting", false);
     }
 
     public void ForceStand(PlayerObject player)

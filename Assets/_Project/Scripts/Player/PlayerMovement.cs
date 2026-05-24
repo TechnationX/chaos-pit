@@ -42,6 +42,8 @@ public class PlayerMovement : NetworkBehaviour
     private bool _isMoving;
     public bool IsCrouching => _isCrouching;
     public bool IsJumping => _isJumping;
+    private float _jumpCooldown = 0f;
+    private const float JumpCooldownDuration = 0.2f;
     private float _moveX;
     private float _moveY;
 
@@ -122,17 +124,26 @@ public class PlayerMovement : NetworkBehaviour
         bool wasGrounded = _isGrounded;
 
         //Debug.Log($"IsGrounded: {_isGrounded}");
-        _isGrounded = Physics.Raycast(
-            transform.position + Vector3.up * 0.1f,
-            Vector3.down,
-            _groundCheckDistance + 0.1f,
-            _groundLayer
-        );
+        if (_jumpCooldown > 0f)
+        {
+            _isGrounded = false;
+        }
+        else
+        {
+            _isGrounded = Physics.Raycast(
+                transform.position + Vector3.up * 0.1f,
+                Vector3.down,
+                _groundCheckDistance + 0.1f,
+                _groundLayer
+            );
+        }
 
         if (_isGrounded && _velocity.y < 0)
             _velocity.y = -2f;
 
-        // Just landed — reset jump trigger
+        if (wasGrounded && !_isGrounded)
+            _isJumping = true;
+
         if (!wasGrounded && _isGrounded)
             _isJumping = false;
     }
@@ -229,12 +240,16 @@ public class PlayerMovement : NetworkBehaviour
 
         // Debug.Log($"HandleJump — CurrentSeat: {_currentSeat?.name ?? "null"}, IsGrounded: {_isGrounded}");
 
+        if (_jumpCooldown > 0f)
+        {
+            _jumpCooldown -= Time.deltaTime;
+            return;
+        }
+
         if (keyboard.spaceKey.wasPressedThisFrame && _isGrounded)
         {
             _velocity.y = Mathf.Sqrt(_jumpHeight * -2f * _gravity);
-            Debug.Log($"[PlayerMovement] Jump — animator null: {_animator == null}");
-            _isJumping = true;
-            Debug.Log($"[PlayerMovement] IsJumping value after set: {_animator.GetBool("IsJumping")}");
+            _jumpCooldown = JumpCooldownDuration;
         }
     }
 

@@ -1,5 +1,6 @@
 // Throwable.cs
 
+using FishNet.Component.Transforming;
 using FishNet.Object;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -14,22 +15,24 @@ public class Throwable : Grabbable
 
     public override void OnInteract(PlayerObject player)
     {
-        if (!IsServerInitialized) return;
-
-        if (_isHeld && _holdingPlayer == player)
+        if (_isHeld)
         {
-            // Already held — drop on left click
-            ServerDrop();
+            if (player.IsHoldingObject && player.HeldObject == this)
+            {
+                ServerDropRpc(player);
+                Debug.Log($"[Throwabble] OnInteract Drop");
+            }
             return;
         }
 
-        if (!_isHeld)
+        if (!_isHeld && !player.IsHoldingObject)
             ServerGrab(player);
     }
 
     private void Update()
     {
         if (!_isHeld || _holdingPlayer == null) return;
+        Debug.Log($"[Throwable] Update — IsOwner: {IsOwner}, holdingPlayer.IsOwner: {_holdingPlayer.IsOwner}");
         if (!_holdingPlayer.IsOwner) return;
 
         // Right click to throw while held
@@ -38,24 +41,75 @@ public class Throwable : Grabbable
     }
 
     [ServerRpc(RequireOwnership = false)]
-    private void ServerThrow(PlayerObject player)
+    protected override void ServerGrab(PlayerObject player)
+    {
+        if (_isHeld) return;
+        if (player.ServerIsHoldingObject) return;
+
+        _isHeld = true;
+        _holdingPlayer = player;
+        player.SetServerHeldObject(this);
+
+        foreach (var conn in NetworkObject.Observers)
+        {
+            Debug.Log($"[Throwable] Observer clientId: {conn.ClientId}");
+        }
+
+        ObserversGrab(player.NetworkObject);
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    protected override void ServerDropRpc(PlayerObject player)
     {
         if (!_isHeld || _holdingPlayer != player) return;
+        ServerDrop();
+    }
+
+    [Server]
+    protected override void ServerDrop()
+    {
+        if (!_isHeld) return;
 
         _isHeld = false;
         PlayerObject prevPlayer = _holdingPlayer;
         _holdingPlayer = null;
+        prevPlayer.SetServerHeldObject(null);
+
+        ObserversDrop(prevPlayer.NetworkObject); 
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void ServerThrow(PlayerObject player)
+    {
+        Debug.Log($"[Throwable] ServerThrow called on server");
+        if (!_isHeld || _holdingPlayer != player) return;
+
+        foreach (var conn in NetworkObject.Observers)
+            Debug.Log($"[Throwable] Throw observer clientId: {conn.ClientId}");
+
+        _isHeld = false;
+        PlayerObject prevPlayer = _holdingPlayer;
+        _holdingPlayer = null;
+        prevPlayer.SetServerHeldObject(null);
 
         Vector3 throwDirection = player.transform.forward;
 
-        RemoveOwnership();
         ObserversThrow(prevPlayer.NetworkObject, throwDirection);
     }
 
     [ObserversRpc]
-    private void ObserversThrow(NetworkObject playerNetObj, Vector3 direction)
+    protected void ObserversThrow(NetworkObject playerNetObj, Vector3 direction)
+    {
+        Debug.Log($"[Throwable] ObserversThrow RPC received on client");
+        OnObserversThrow(playerNetObj, direction);
+    }
+
+    protected void OnObserversThrow(NetworkObject playerNetObj, Vector3 direction)
     {
         PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+
+        var nt = GetComponent<NetworkTransform>();
+        if (nt != null) nt.enabled = true;
 
         // Detach from hand
         transform.SetParent(null);
@@ -73,10 +127,16 @@ public class Throwable : Grabbable
         _readyToThrow = false;
     }
 
-    protected override void ObserversGrab(NetworkObject playerNetObj)
+    protected override void OnObserversGrab(NetworkObject playerNetObj)
     {
         PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        Debug.Log($"[Throwable] OnObserversGrab — player null: {player == null}");
         if (player == null) return;
+
+        _holdingPlayer = player;
+
+        var nt = GetComponent<NetworkTransform>();
+        if (nt != null) nt.enabled = false;
 
         _rigidbody.isKinematic = true;
 
@@ -92,10 +152,13 @@ public class Throwable : Grabbable
         _readyToThrow = true;
     }
 
-    protected override void ObserversDrop(NetworkObject playerNetObj)
+    protected override void OnObserversDrop(NetworkObject playerNetObj)
     {
         PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
         if (player == null) return;
+
+        var nt = GetComponent<NetworkTransform>();
+        if (nt != null) nt.enabled = true;
 
         _rigidbody.isKinematic = false;
         transform.SetParent(null);
