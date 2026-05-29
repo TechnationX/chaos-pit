@@ -9,7 +9,7 @@ public class LobbyUIManager : MonoBehaviour
 
     private void Start()
     {
-        if (SessionManager.Instance != null && !string.IsNullOrEmpty(SessionManager.Instance.JoinCode))
+        if (SessionManager.HasInstance && !string.IsNullOrEmpty(SessionManager.Instance.JoinCode))
         {
             joinCodeText.text = $"Code: {SessionManager.Instance.JoinCode}";
         }

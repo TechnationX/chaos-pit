@@ -74,7 +74,7 @@ public class InteractionManager : NetworkBehaviour
 
         if (Physics.Raycast(ray, out hit, _maxInteractDistance, _interactableLayer))
         {
-            IInteractable interactable = hit.collider.GetComponent<IInteractable>();
+            IInteractable interactable = hit.collider.GetComponentInParent<IInteractable>();
 
             if (interactable != null)
             {

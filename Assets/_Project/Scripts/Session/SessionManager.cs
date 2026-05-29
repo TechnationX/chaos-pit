@@ -192,6 +192,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
                 _connectedPlayers.Remove(conn);
                 Debug.Log($"[SessionManager] Player disconnected. Total: {PlayerCount}");
                 OnPlayerCountChanged?.Invoke(PlayerCount);
+                GameRoomManager.Instance?.OnPlayerDisconnected(conn);
             }
         }
     }

@@ -45,6 +45,17 @@ public class PlayerObject : NetworkBehaviour
     public bool IsHoldingObject => _heldObject != null;
     public Grabbable HeldObject => _heldObject;
 
+    private Vector3 _lastPosition;
+
+    private void Update()
+    {
+        if (transform.position != _lastPosition)
+        {
+            //Debug.Log($"[PlayerObject] Position changed to {transform.position} — frame: {Time.frameCount}");
+            _lastPosition = transform.position;
+        }
+    }
+
     public override void OnStartClient()
     {
         base.OnStartClient();
@@ -63,7 +74,6 @@ public class PlayerObject : NetworkBehaviour
         if (!IsOwner || _initialized) return;
 
         _initialized = true;
-
         _playerMovement.enabled = true;
         _playerCamera.enabled = true;
         _interactionManager.enabled = true;
@@ -96,5 +106,10 @@ public class PlayerObject : NetworkBehaviour
     public void SetServerHeldObject(Grabbable obj)
     {
         _serverHeldObject = obj;
+    }
+
+    public void ReinitializeCamera()
+    {
+        _playerCamera.Initialize(this);
     }
 }

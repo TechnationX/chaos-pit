@@ -66,7 +66,7 @@ public class PlayerMovement : NetworkBehaviour
         if (_animator == null)
             _animator = player.CharacterModel.GetComponentInChildren<Animator>();
 
-        Debug.Log($"[PlayerObject] Animator found: {_animator != null}, GameObject: {_animator?.gameObject.name}");
+        //Debug.Log($"[PlayerMovement] Animator found: {_animator != null}, GameObject: {_animator?.gameObject.name}");
     }
 
     private void Update()

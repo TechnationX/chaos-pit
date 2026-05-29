@@ -64,6 +64,8 @@ public class PlayerCamera : NetworkBehaviour
 
     private void HandleFirstPersonLook()
     {
+        if (Cursor.lockState != CursorLockMode.Locked) return;
+
         var mouse = Mouse.current;
         if (mouse == null) return;
 
@@ -182,5 +184,17 @@ public class PlayerCamera : NetworkBehaviour
     public void Unpause()
     {
         if (_isPaused) TogglePause();
+    }
+
+    public void ReleaseCursor()
+    {
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+    }
+
+    public void LockCursor()
+    {
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
     }
 }

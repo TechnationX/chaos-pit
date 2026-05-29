@@ -37,7 +37,7 @@ public class Grabbable : NetworkBehaviour, IInteractable
 
     public virtual void OnInteract(PlayerObject player)
     {
-        Debug.Log($"[Grabbable] OnInteract — IsServer: {IsServerInitialized}, IsClient: {IsClientInitialized}, IsHeld: {_isHeld}");
+        //Debug.Log($"[Grabbable] OnInteract — IsServer: {IsServerInitialized}, IsClient: {IsClientInitialized}, IsHeld: {_isHeld}");
 
         if (_isHeld)
         {
@@ -65,7 +65,7 @@ public class Grabbable : NetworkBehaviour, IInteractable
     [ServerRpc(RequireOwnership = false)]
     protected virtual void ServerGrab(PlayerObject player)
     {
-        Debug.Log($"[Grabbable] ServerGrab called — IsHeld: {_isHeld}, Player: {player?.name}");
+        //Debug.Log($"[Grabbable] ServerGrab called — IsHeld: {_isHeld}, Player: {player?.name}");
         if (_isHeld) return;
         if (player.ServerIsHoldingObject) return;
 
@@ -77,7 +77,7 @@ public class Grabbable : NetworkBehaviour, IInteractable
         {
             Debug.Log($"[Grabbable] Observer: {conn.ClientId}");
         }
-        Debug.Log($"[Grabbable] Grabbing player connection: {player.Owner?.ClientId}");
+        //Debug.Log($"[Grabbable] Grabbing player connection: {player.Owner?.ClientId}");
 
         ObserversGrab(player.NetworkObject);
     }
@@ -85,11 +85,11 @@ public class Grabbable : NetworkBehaviour, IInteractable
     [Server]
     protected virtual void ServerDrop()
     {
-        Debug.Log($"[Grabbable] ServerDrop — IsHeld before: {_isHeld}");
+        //Debug.Log($"[Grabbable] ServerDrop — IsHeld before: {_isHeld}");
         if (!_isHeld) return;
 
         _isHeld = false;
-        Debug.Log($"[Grabbable] ServerDrop — IsHeld after: {_isHeld}");
+        //Debug.Log($"[Grabbable] ServerDrop — IsHeld after: {_isHeld}");
 
         PlayerObject prevPlayer = _holdingPlayer;
         _holdingPlayer = null;
@@ -106,7 +106,7 @@ public class Grabbable : NetworkBehaviour, IInteractable
 
     protected virtual void OnObserversGrab(NetworkObject playerNetObj)
     {
-        Debug.Log($"[Grabbable] ObserversGrab fired on client");
+        //Debug.Log($"[Grabbable] ObserversGrab fired on client");
         PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
         if (player == null) return;
 

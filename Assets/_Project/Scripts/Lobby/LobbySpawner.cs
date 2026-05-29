@@ -3,6 +3,7 @@
 using FishNet;
 using FishNet.Object;
 using FishNet.Transporting;
+using FishNet.Connection;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -20,6 +21,31 @@ public class LobbySpawner : MonoBehaviour
     private List<Vector3> _availableSpawnPoints = new List<Vector3>();
     private List<Quaternion> _availableSpawnRotations = new List<Quaternion>();
     private bool _spawnListenerRegistered = false;
+    public static LobbySpawner Instance { get; private set; }
+
+    private int _spawnPointIndex = 0;
+    private HashSet<int> _spawnedConnections = new HashSet<int>();
+
+#if UNITY_EDITOR
+    private bool _editorHostSpawnPending = false;
+    public void EditorTriggerHostSpawn(FishNet.Connection.NetworkConnection conn)
+    {
+        if (_playerSpawnConfig.PlayerPrefab == null) return;
+
+        _spawnedConnections.Add(conn.ClientId);
+
+        if (!TryGetSpawnPoint(out Vector3 position, out Quaternion rotation))
+        {
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+        }
+
+        GameObject player = Instantiate(_playerSpawnConfig.PlayerPrefab, position, rotation);
+        NetworkObject netObj = player.GetComponent<NetworkObject>();
+        InstanceFinder.ServerManager.Spawn(netObj, conn);
+        PlayerProfileManager.Instance.RegisterPlayer(conn);
+    }
+#endif
 
     private void Start()
     {
@@ -29,11 +55,23 @@ public class LobbySpawner : MonoBehaviour
             SpawnFurniture();
             SpawnProps();
             RegisterSpawnListener();
+            InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
         }
         else
         {
             InstanceFinder.ServerManager.OnServerConnectionState += OnServerStarted;
         }
+    }
+
+    private void Awake()
+    {
+        Instance = this;
+    }
+
+    public void PreRegisterConnection(NetworkConnection conn)
+    {
+        _spawnedConnections.Add(conn.ClientId);
+        Debug.Log($"[LobbySpawner] Pre-registered connection: {conn.ClientId}");
     }
 
     private void OnServerStarted(ServerConnectionStateArgs args)
@@ -45,6 +83,13 @@ public class LobbySpawner : MonoBehaviour
         SpawnFurniture();
         SpawnProps();
         RegisterSpawnListener();
+        InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
+    }
+
+    private void OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+    {
+        if (args.ConnectionState == RemoteConnectionState.Stopped)
+            PlayerProfileManager.Instance.UnregisterPlayer(conn);
     }
 
     private void RegisterSpawnListener()
@@ -57,8 +102,11 @@ public class LobbySpawner : MonoBehaviour
 
     private void OnClientLoadedStartScenes(FishNet.Connection.NetworkConnection conn, bool asServer)
     {
-        //Debug.Log($"[LobbySpawner] Fired — ConnId: {conn.ClientId}, asServer: {asServer}, HostConnId: {InstanceFinder.ClientManager.Connection?.ClientId}, IsHost: {conn == InstanceFinder.ClientManager.Connection}");
+        Debug.Log($"[LobbySpawner] OnClientLoadedStartScenes — ConnId: {conn.ClientId}, already spawned: {_spawnedConnections.Contains(conn.ClientId)}");
         if (!asServer) return;
+
+        if (_spawnedConnections.Contains(conn.ClientId)) return;
+        _spawnedConnections.Add(conn.ClientId);
 
         if (_playerSpawnConfig.PlayerPrefab == null)
         {
@@ -76,6 +124,7 @@ public class LobbySpawner : MonoBehaviour
         GameObject player = Instantiate(_playerSpawnConfig.PlayerPrefab, position, rotation);
         NetworkObject netObj = player.GetComponent<NetworkObject>();
         InstanceFinder.ServerManager.Spawn(netObj, conn);
+        PlayerProfileManager.Instance.RegisterPlayer(conn);
     }
 
     private void OnDestroy()
@@ -84,6 +133,9 @@ public class LobbySpawner : MonoBehaviour
             InstanceFinder.ServerManager.OnServerConnectionState -= OnServerStarted;
         if (InstanceFinder.SceneManager != null)
             InstanceFinder.SceneManager.OnClientLoadedStartScenes -= OnClientLoadedStartScenes;
+        if (InstanceFinder.ServerManager != null)
+            InstanceFinder.ServerManager.OnRemoteConnectionState -= OnRemoteConnectionState;
+        _spawnedConnections.Clear();
     }
 
     // --- Player Spawn Points ---
@@ -104,17 +156,17 @@ public class LobbySpawner : MonoBehaviour
 
     public bool TryGetSpawnPoint(out Vector3 position, out Quaternion rotation)
     {
-        if (_availableSpawnPoints.Count == 0)
+        if (_playerSpawnConfig == null || _playerSpawnConfig.SpawnPoints.Length == 0)
         {
             position = Vector3.zero;
             rotation = Quaternion.identity;
             return false;
         }
 
-        position = _availableSpawnPoints[0];
-        rotation = _availableSpawnRotations[0];
-        _availableSpawnPoints.RemoveAt(0);
-        _availableSpawnRotations.RemoveAt(0);
+        position = _playerSpawnConfig.SpawnPoints[_spawnPointIndex].Position;
+        rotation = Quaternion.Euler(_playerSpawnConfig.SpawnPoints[_spawnPointIndex].Rotation);
+
+        _spawnPointIndex = (_spawnPointIndex + 1) % _playerSpawnConfig.SpawnPoints.Length;
         return true;
     }
 
@@ -132,6 +184,22 @@ public class LobbySpawner : MonoBehaviour
             _availableSpawnRotations[i] = _availableSpawnRotations[j];
             _availableSpawnRotations[j] = tempRot;
         }
+    }
+    public bool TryGetReturnSpawnPoint(out Vector3 position, out Quaternion rotation)
+    {
+        // Re-read all spawn points from config each time — doesn't consume the list
+        if (_playerSpawnConfig == null || _playerSpawnConfig.SpawnPoints.Length == 0)
+        {
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            return false;
+        }
+
+        // Pick a random spawn point from the full config list
+        int index = Random.Range(0, _playerSpawnConfig.SpawnPoints.Length);
+        position = _playerSpawnConfig.SpawnPoints[index].Position;
+        rotation = Quaternion.Euler(_playerSpawnConfig.SpawnPoints[index].Rotation);
+        return true;
     }
 
     // --- Furniture ---

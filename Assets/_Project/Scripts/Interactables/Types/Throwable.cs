@@ -32,7 +32,7 @@ public class Throwable : Grabbable
     private void Update()
     {
         if (!_isHeld || _holdingPlayer == null) return;
-        Debug.Log($"[Throwable] Update — IsOwner: {IsOwner}, holdingPlayer.IsOwner: {_holdingPlayer.IsOwner}");
+        //Debug.Log($"[Throwable] Update — IsOwner: {IsOwner}, holdingPlayer.IsOwner: {_holdingPlayer.IsOwner}");
         if (!_holdingPlayer.IsOwner) return;
 
         // Right click to throw while held
@@ -81,7 +81,7 @@ public class Throwable : Grabbable
     [ServerRpc(RequireOwnership = false)]
     private void ServerThrow(PlayerObject player)
     {
-        Debug.Log($"[Throwable] ServerThrow called on server");
+        //Debug.Log($"[Throwable] ServerThrow called on server");
         if (!_isHeld || _holdingPlayer != player) return;
 
         foreach (var conn in NetworkObject.Observers)
@@ -100,7 +100,7 @@ public class Throwable : Grabbable
     [ObserversRpc]
     protected void ObserversThrow(NetworkObject playerNetObj, Vector3 direction)
     {
-        Debug.Log($"[Throwable] ObserversThrow RPC received on client");
+        //Debug.Log($"[Throwable] ObserversThrow RPC received on client");
         OnObserversThrow(playerNetObj, direction);
     }
 
@@ -130,7 +130,7 @@ public class Throwable : Grabbable
     protected override void OnObserversGrab(NetworkObject playerNetObj)
     {
         PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
-        Debug.Log($"[Throwable] OnObserversGrab — player null: {player == null}");
+        //Debug.Log($"[Throwable] OnObserversGrab — player null: {player == null}");
         if (player == null) return;
 
         _holdingPlayer = player;
