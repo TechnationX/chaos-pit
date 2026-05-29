@@ -21,6 +21,7 @@ public class StubMiniGame : MiniGameController
 
         Debug.Log($"[StubMiniGame] StartGame — {_players.Count} players");
         TeleportPlayersToSpawns();
+        UnlockAllPlayers();
         StartRound();
     }
 
@@ -52,7 +53,19 @@ public class StubMiniGame : MiniGameController
         else
         {
             Debug.Log("[StubMiniGame] All rounds complete — notifying GameRoomManager");
-            // TODO: call GameRoomManager.OnGameComplete(_lastResults) here once built
+            if (_currentRound < _totalRounds)
+            {
+                StartRound();
+            }
+            else
+            {
+                Debug.Log("[StubMiniGame] All rounds complete");
+                List<RoundResult> results = GetResults();
+
+                // Find station index by matching this controller to active sessions
+                // TODO: pass stationIndex in StartGame instead of searching
+                GameRoomManager.Instance.NotifyGameComplete(this, results);
+            }
         }
     }
 

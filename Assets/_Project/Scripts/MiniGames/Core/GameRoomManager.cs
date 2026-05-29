@@ -8,6 +8,7 @@ using FishNet.Object;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Mathematics;
 using UnityEngine;
 
 public class GameRoomManager : NetworkBehaviour
@@ -31,6 +32,7 @@ public class GameRoomManager : NetworkBehaviour
     [SerializeField] private MiniGameRegistry _registry;
 
     private static List<MinigameStation> _pendingStations = new List<MinigameStation>();
+    private Dictionary<int, HashSet<int>> _loadedClients = new Dictionary<int, HashSet<int>>();
 
     private void Awake()
     {
@@ -127,6 +129,63 @@ public class GameRoomManager : NetworkBehaviour
         SyncSessionToClients(stationIndex, session);
     }
 
+    private void OnClientPresenceChangeEnd(ClientPresenceChangeEventArgs args, int stationIndex)
+    {
+        if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) return;
+        if (session.SelectedGame == null) return;
+
+        // Only care about our scene
+        if (args.Scene.name != session.SelectedGame.SceneName) return;
+        // Only care about additions not removals
+        if (!args.Added) return;
+
+        if (!_loadedClients.ContainsKey(stationIndex))
+            _loadedClients[stationIndex] = new HashSet<int>();
+
+        _loadedClients[stationIndex].Add(args.Connection.ClientId);
+
+        int expected = session.Players.Count;
+        int loaded = _loadedClients[stationIndex].Count;
+
+        Debug.Log($"[GameRoomManager] Client {args.Connection.ClientId} loaded — {loaded}/{expected}");
+
+        if (loaded < expected) return;
+
+        // All clients loaded — unsubscribe and start
+        InstanceFinder.NetworkManager.SceneManager.OnClientPresenceChangeEnd -=
+            (a) => OnClientPresenceChangeEnd(a, stationIndex);
+
+        _loadedClients.Remove(stationIndex);
+        StartCoroutine(StartGameAfterLoad(stationIndex));
+    }
+
+    private IEnumerator StartGameAfterLoad(int stationIndex)
+    {
+        // One frame buffer after all clients confirm loaded
+        yield return new WaitForSeconds(0.5f);
+
+        if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) yield break;
+
+        session.State = GameRoomState.InProgress;
+        SyncSessionToClients(stationIndex, session);
+
+        MiniGameController controller = FindMiniGameController(session.SelectedGame.SceneName);
+        if (controller == null)
+        {
+            Debug.LogError($"[GameRoomManager] No MiniGameController found in {session.SelectedGame.SceneName}");
+            yield break;
+        }
+
+        session.ActiveController = controller;
+        controller.StartGame(session.Players);
+
+        foreach (PlayerObject player in session.Players)
+            RpcReinitializeCamera(player.Owner);
+
+        Debug.Log($"[GameRoomManager] Game started for station {stationIndex}");
+        _stations[stationIndex].OnSessionUpdated(session);
+    }
+
     // ─── Host Controls ────────────────────────────────────────────────────────
 
     [ServerRpc(RequireOwnership = false)]
@@ -212,25 +271,36 @@ public class GameRoomManager : NetworkBehaviour
     [Server]
     private void BeginTransition(int stationIndex)
     {
-        if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) return;
+        //Debug.Log($"[GameRoomManager] BeginTransition — stationIndex: {stationIndex}");
+
+        if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session))
+        {
+            Debug.LogError("[GameRoomManager] BeginTransition — session not found.");
+            return;
+        }
+
+        //Debug.Log($"[GameRoomManager] BeginTransition — session found, state: {session.State}");
+        //Debug.Log($"[GameRoomManager] BeginTransition — SelectedGame: {session.SelectedGame?.MiniGameName}");
+        //Debug.Log($"[GameRoomManager] BeginTransition — ScoreManager: {ScoreManager.Instance != null}");
+        //Debug.Log($"[GameRoomManager] BeginTransition — Players: {session.Players.Count}");
 
         session.State = GameRoomState.Loading;
         string sessionId = GetSessionId(stationIndex);
 
-        // Register with ScoreManager
         ScoreManager.Instance.RegisterSession(sessionId);
 
-        // Collect connections for this session only
         NetworkConnection[] connections = session.Players
             .Select(p => p.Owner)
             .Where(c => c != null)
             .ToArray();
 
-        // Move players to GameRoom layer — hides them from lobby camera
         foreach (PlayerObject player in session.Players)
             SetPlayerLayer(player, _gameRoomLayer);
 
-        // Load game room scene additively for session connections only
+        // Subscribe BEFORE loading
+        InstanceFinder.NetworkManager.SceneManager.OnClientPresenceChangeEnd +=
+         (args) => OnClientPresenceChangeEnd(args, stationIndex);
+
         SceneLoadData sld = new SceneLoadData(session.SelectedGame.SceneName)
         {
             ReplaceScenes = ReplaceOption.None,
@@ -238,35 +308,9 @@ public class GameRoomManager : NetworkBehaviour
         };
 
         InstanceFinder.NetworkManager.SceneManager.LoadConnectionScenes(connections, sld);
-        InstanceFinder.NetworkManager.SceneManager.OnLoadEnd += (args) => OnSceneLoadEnd(args, stationIndex);
 
         Debug.Log($"[GameRoomManager] Loading scene {session.SelectedGame.SceneName} " +
                   $"for station {stationIndex}");
-    }
-
-    private void OnSceneLoadEnd(SceneLoadEndEventArgs args, int stationIndex)
-    {
-        // Unsubscribe immediately
-        InstanceFinder.NetworkManager.SceneManager.OnLoadEnd -= (a) => OnSceneLoadEnd(a, stationIndex);
-
-        if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) return;
-
-        session.State = GameRoomState.InProgress;
-
-        // Find MiniGameController in loaded scene and start game
-        MiniGameController controller = FindMiniGameController(session.SelectedGame.SceneName);
-        if (controller == null)
-        {
-            Debug.LogError($"[GameRoomManager] No MiniGameController found in scene " +
-                           $"{session.SelectedGame.SceneName}");
-            return;
-        }
-
-        session.ActiveController = controller;
-        controller.StartGame(session.Players);
-
-        Debug.Log($"[GameRoomManager] Game started for station {stationIndex}");
-        _stations[stationIndex].OnSessionUpdated(session);
     }
 
     // ─── Results ──────────────────────────────────────────────────────────────
@@ -307,6 +351,8 @@ public class GameRoomManager : NetworkBehaviour
         if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) return;
 
         session.State = GameRoomState.Returning;
+        SyncSessionToClients(stationIndex, session);
+
         string sessionId = GetSessionId(stationIndex);
 
         // Clean up mini game
@@ -533,5 +579,26 @@ public class GameRoomManager : NetworkBehaviour
         bool gameSelected = session.SelectedGame != null;
         int minPlayers = session.SelectedGame?.MinPlayers ?? 0;
         RpcSyncSessionState(stationIndex, hostId, names, clientIds, session.State, gameSelected, minPlayers);
+    }
+
+    public void NotifyGameComplete(MiniGameController controller, List<RoundResult> results)
+    {
+        foreach (var kvp in _sessions)
+        {
+            if (kvp.Value.ActiveController == controller)
+            {
+                OnGameComplete(kvp.Key, results);
+                return;
+            }
+        }
+        Debug.LogWarning("[GameRoomManager] NotifyGameComplete — no matching session found.");
+    }
+
+    [TargetRpc]
+    private void RpcReinitializeCamera(NetworkConnection conn)
+    {
+        PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
+        if (player == null) return;
+        player.ReinitializeCamera();
     }
 }

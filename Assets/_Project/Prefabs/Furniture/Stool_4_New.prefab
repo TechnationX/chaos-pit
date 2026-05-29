@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 8829041123137663485}
   - component: {fileID: -8613071847940435256}
   m_Layer: 0
-  m_Name: Stool_4
+  m_Name: Stool_4_New
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

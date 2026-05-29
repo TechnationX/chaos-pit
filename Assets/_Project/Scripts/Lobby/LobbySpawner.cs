@@ -1,9 +1,10 @@
 ﻿// LobbySpawner.cs
 
 using FishNet;
+using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Transporting;
-using FishNet.Connection;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -49,6 +50,33 @@ public class LobbySpawner : MonoBehaviour
 
     private void Start()
     {
+        if (InstanceFinder.ServerManager == null)
+        {
+            Debug.LogWarning("[LobbySpawner] ServerManager not ready — waiting.");
+            StartCoroutine(WaitForServerManager());
+            return;
+        }
+
+        if (InstanceFinder.ServerManager.Started)
+        {
+            RegisterSpawnPoints();
+            SpawnFurniture();
+            SpawnProps();
+            RegisterSpawnListener();
+            InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
+        }
+        else
+        {
+            InstanceFinder.ServerManager.OnServerConnectionState += OnServerStarted;
+        }
+    }
+
+    private IEnumerator WaitForServerManager()
+    {
+        while (InstanceFinder.ServerManager == null)
+            yield return null;
+
+        // ServerManager exists now — run normal Start logic
         if (InstanceFinder.ServerManager.Started)
         {
             RegisterSpawnPoints();

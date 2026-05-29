@@ -15,36 +15,24 @@ public abstract class MiniGameController : NetworkBehaviour
 
     // --- Required overrides ---
 
-    /// <summary>
     /// Called by GameRoomManager when all players are loaded into the scene.
-    /// </summary>
     public abstract void StartGame(List<PlayerObject> players);
 
-    /// <summary>
     /// Called each time a round begins.
-    /// </summary>
     public abstract void StartRound();
 
-    /// <summary>
     /// Called when win condition is met or timer expires.
-    /// </summary>
     public abstract void EndRound();
 
-    /// <summary>
     /// Returns ordered list of players by standing for current round.
-    /// </summary>
     public abstract List<RoundResult> GetResults();
 
-    /// <summary>
     /// Called by GameRoomManager after results are displayed and before scene unload.
-    /// </summary>
     public abstract void CleanUp();
 
     // --- Base helpers available to all mini games ---
 
-    /// <summary>
     /// Teleports all players to this scene's spawn points.
-    /// </summary>
     protected virtual void TeleportPlayersToSpawns()
     {
         for (int i = 0; i < _players.Count; i++)
@@ -61,9 +49,7 @@ public abstract class MiniGameController : NetworkBehaviour
         }
     }
 
-    /// <summary>
     /// Removes a player from the game gracefully (disconnect, elimination, etc.)
-    /// </summary>
     public virtual void RemovePlayer(PlayerObject player)
     {
         if (_players.Contains(player))
@@ -73,9 +59,7 @@ public abstract class MiniGameController : NetworkBehaviour
         }
     }
 
-    /// <summary>
     /// Builds a result label string from standing value.
-    /// </summary>
     protected string GetResultLabel(int standing)
     {
         return standing switch
@@ -85,5 +69,14 @@ public abstract class MiniGameController : NetworkBehaviour
             3 => "3rd Place",
             _ => $"{standing}th Place"
         };
+    }
+
+    protected void UnlockAllPlayers()
+    {
+        foreach (PlayerObject player in _players)
+        {
+            player.Movement.SetMovementLocked(false);
+            player.Interaction.SetInteractionEnabled(false); // keep interactions off in minigame
+        }
     }
 }

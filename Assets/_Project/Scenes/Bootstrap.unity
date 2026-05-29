@@ -1068,8 +1068,28 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 6481108759872449387, guid: 0c2be4be1ff62344c994ab30cf7f0ca6, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 556834208756308594}
   m_SourcePrefab: {fileID: 100100000, guid: 0c2be4be1ff62344c994ab30cf7f0ca6, type: 3}
+--- !u!1 &556834208756308593 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6481108759872449387, guid: 0c2be4be1ff62344c994ab30cf7f0ca6, type: 3}
+  m_PrefabInstance: {fileID: 556834208756308592}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &556834208756308594
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 556834208756308593}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1d1864a58a8e09d43a9d14a518e55b64, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ScoreManager
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

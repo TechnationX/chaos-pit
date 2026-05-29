@@ -20,6 +20,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_Project/Scenes/Lobby.unity
     guid: 77bd4e92bb2554643919f61e2a29a222
+  - enabled: 1
+    path: Assets/_Project/Scenes/MiniGames/Stub Test Scene.unity
+    guid: 0cd73ade00b32674ba42130846af5f33
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

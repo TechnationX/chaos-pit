@@ -55,17 +55,12 @@ public class MinigameStation : MonoBehaviour, IInteractable
 
     private void Start()
     {
+        // Register with GameRoomManager
         GameRoomManager.RequestRegistration(this);
     }
 
     private void Awake()
     {
-        // Register with GameRoomManager
-        if (GameRoomManager.Instance != null)
-            GameRoomManager.Instance.RegisterStation(this);
-        else
-            Debug.LogWarning($"[MinigameStation] GameRoomManager not found on Awake — station {_stationIndex}");
-
         _panel.SetActive(false);
 
         _joinButton.onClick.AddListener(OnJoinPressed);
@@ -177,7 +172,9 @@ public class MinigameStation : MonoBehaviour, IInteractable
         _currentSession = session;
 
         if (session.State == GameRoomState.Loading ||
-            session.State == GameRoomState.InProgress)
+            session.State == GameRoomState.InProgress ||
+            session.State == GameRoomState.Returning ||
+            session.State == GameRoomState.Results)
         {
             if (_isPanelOpen)
                 ClosePanel();
@@ -205,8 +202,8 @@ public class MinigameStation : MonoBehaviour, IInteractable
         bool isInProgress = _syncedState == GameRoomState.InProgress;
         bool enoughPlayers = _syncedPlayerCount >= _syncedMinPlayers && _syncedMinPlayers > 0;
 
-        Debug.Log($"[MinigameStation] RefreshUI — localClientId: {localClientId}, " +
-                  $"hostClientId: {_hostClientId}, isHost: {localIsHost}, state: {_syncedState}");
+        //Debug.Log($"[MinigameStation] RefreshUI — localClientId: {localClientId}, " +
+        //          $"hostClientId: {_hostClientId}, isHost: {localIsHost}, state: {_syncedState}");
 
         // Status label
         _statusLabel.text = _syncedState switch
@@ -251,21 +248,21 @@ public class MinigameStation : MonoBehaviour, IInteractable
 
     private void BuildGameButtons()
     {
-        Debug.Log("[MinigameStation] BuildGameButtons — start");
+        //Debug.Log("[MinigameStation] BuildGameButtons — start");
 
         foreach (Transform child in _gameButtonContainer)
             Destroy(child.gameObject);
 
         if (_registry == null) return;
 
-        Debug.Log($"[MinigameStation] BuildGameButtons — entries: {_registry.GetActiveEntries().Count}");
+        //Debug.Log($"[MinigameStation] BuildGameButtons — entries: {_registry.GetActiveEntries().Count}");
 
         foreach (MiniGameRegistryEntry entry in _registry.GetActiveEntries())
         {
-            Debug.Log($"[MinigameStation] BuildGameButtons — creating button for: {entry?.MiniGameName}");
+            //Debug.Log($"[MinigameStation] BuildGameButtons — creating button for: {entry?.MiniGameName}");
 
             Button btn = Instantiate(_gameButtonPrefab, _gameButtonContainer);
-            Debug.Log("[MinigameStation] BuildGameButtons — button instantiated");
+            //Debug.Log("[MinigameStation] BuildGameButtons — button instantiated");
 
             TextMeshProUGUI label = btn.GetComponentInChildren<TextMeshProUGUI>();
             if (label != null) label.text = entry.MiniGameName;
@@ -277,7 +274,7 @@ public class MinigameStation : MonoBehaviour, IInteractable
             btn.onClick.AddListener(() => OnGameSelected(id));
         }
 
-        Debug.Log("[MinigameStation] BuildGameButtons — complete");
+        //Debug.Log("[MinigameStation] BuildGameButtons — complete");
     }
 
     private void BuildPlayerList()
@@ -325,6 +322,7 @@ public class MinigameStation : MonoBehaviour, IInteractable
     public void UpdateSessionState(int hostClientId, List<string> playerNames,
         List<int> clientIds, GameRoomState state, bool gameSelected, int minPlayers)
     {
+        Debug.Log($"[MinigameStation] UpdateSessionState — hostId: {hostClientId}, state: {state}");
         _hostClientId = hostClientId;
         _syncedPlayerNames = playerNames;
         _syncedClientIds = clientIds;
@@ -332,6 +330,17 @@ public class MinigameStation : MonoBehaviour, IInteractable
         _syncedPlayerCount = playerNames.Count;
         _syncedGameSelected = gameSelected;
         _syncedMinPlayers = minPlayers;
+
+        // Close panel when game is starting or in progress
+        if (state == GameRoomState.Loading ||
+            state == GameRoomState.InProgress ||
+            state == GameRoomState.Returning ||
+            state == GameRoomState.Results)
+        {
+            if (_isPanelOpen)
+                ClosePanel();
+            return;
+        }
 
         if (_isPanelOpen)
             RefreshUI();
