@@ -4,10 +4,11 @@ using System.Collections.Generic;
 using FishNet.Object;
 using UnityEngine;
 
-public abstract class MiniGameController : NetworkBehaviour
+public abstract class MiniGameController : MonoBehaviour
 {
     [Header("Spawn Points")]
     [SerializeField] protected Transform[] _spawnPoints;
+    public Transform[] SpawnPoints => _spawnPoints;
 
     protected List<PlayerObject> _players = new List<PlayerObject>();
     protected int _currentRound = 0;

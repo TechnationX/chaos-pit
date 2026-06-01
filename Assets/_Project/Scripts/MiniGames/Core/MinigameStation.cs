@@ -134,6 +134,19 @@ public class MinigameStation : MonoBehaviour, IInteractable
             _localPlayer?.Camera.LockCursor();
         }
 
+        // Clear status label
+        if (_statusLabel != null)
+            _statusLabel.text = string.Empty;
+
+        // Reset synced state so panel shows correctly next open
+        _hostClientId = -1;
+        _syncedPlayerNames.Clear();
+        _syncedClientIds.Clear();
+        _syncedState = GameRoomState.Idle;
+        _syncedPlayerCount = 0;
+        _syncedGameSelected = false;
+        _syncedMinPlayers = 0;
+
         _localPlayer = null;
     }
 
@@ -308,9 +321,7 @@ public class MinigameStation : MonoBehaviour, IInteractable
 
     private string GetPromptLabel()
     {
-        if (_currentSession == null) return "View Game Room";
-
-        return _currentSession.State switch
+        return _syncedState switch
         {
             GameRoomState.InProgress => "In Progress",
             GameRoomState.Loading => "Loading...",

@@ -131,6 +131,9 @@ public class GameRoomManager : NetworkBehaviour
 
     private void OnClientPresenceChangeEnd(ClientPresenceChangeEventArgs args, int stationIndex)
     {
+        //Debug.Log($"[GameRoomManager] OnClientPresenceChangeEnd — scene: {args.Scene.name}, " +
+        //      $"clientId: {args.Connection.ClientId}, added: {args.Added}, station: {stationIndex}");
+
         if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) return;
         if (session.SelectedGame == null) return;
 
@@ -147,7 +150,7 @@ public class GameRoomManager : NetworkBehaviour
         int expected = session.Players.Count;
         int loaded = _loadedClients[stationIndex].Count;
 
-        Debug.Log($"[GameRoomManager] Client {args.Connection.ClientId} loaded — {loaded}/{expected}");
+        //Debug.Log($"[GameRoomManager] Client {args.Connection.ClientId} loaded — {loaded}/{expected}");
 
         if (loaded < expected) return;
 
@@ -161,6 +164,8 @@ public class GameRoomManager : NetworkBehaviour
 
     private IEnumerator StartGameAfterLoad(int stationIndex)
     {
+        //Debug.Log($"[GameRoomManager] StartGameAfterLoad — stationIndex: {stationIndex}");
+
         // One frame buffer after all clients confirm loaded
         yield return new WaitForSeconds(0.5f);
 
@@ -179,8 +184,27 @@ public class GameRoomManager : NetworkBehaviour
         session.ActiveController = controller;
         controller.StartGame(session.Players);
 
-        foreach (PlayerObject player in session.Players)
+        // Teleport each player to their spawn point on their client
+        for (int i = 0; i < session.Players.Count; i++)
+        {
+            PlayerObject player = session.Players[i];
+            Transform[] spawns = controller.SpawnPoints;
+            if (spawns != null && spawns.Length > 0)
+            {
+                int spawnIndex = i % spawns.Length;
+                Vector3 pos = spawns[spawnIndex].position;
+                Quaternion rot = spawns[spawnIndex].rotation;
+
+                NetworkTransform nt = player.GetComponent<NetworkTransform>();
+                if (nt != null) nt.Teleport();
+
+                player.transform.position = pos;
+                player.transform.rotation = rot;
+                RpcTeleportToPoint(player.Owner, pos, rot);
+            }
             RpcReinitializeCamera(player.Owner);
+            RpcUnlockPlayer(player.Owner);  // ADD
+        }
 
         Debug.Log($"[GameRoomManager] Game started for station {stationIndex}");
         _stations[stationIndex].OnSessionUpdated(session);
@@ -202,7 +226,7 @@ public class GameRoomManager : NetworkBehaviour
         }
 
         session.SelectedGame = entry;
-        Debug.Log($"[GameRoomManager] Station {stationIndex} selected game: {entry.MiniGameName}");
+        //Debug.Log($"[GameRoomManager] Station {stationIndex} selected game: {entry.MiniGameName}");
         _stations[stationIndex].OnSessionUpdated(session);
         SyncSessionToClients(stationIndex, session);
     }
@@ -378,6 +402,11 @@ public class GameRoomManager : NetworkBehaviour
         // TODO: LeaderboardManager.Instance.Refresh() — wire up in Step 14
 
         ResetSession(stationIndex);
+
+        // Sync idle state to clients so UI resets
+        if (_stations.TryGetValue(stationIndex, out MinigameStation station))
+            SyncSessionToClients(stationIndex, _sessions[stationIndex]);
+
         Debug.Log($"[GameRoomManager] Players returned to lobby from station {stationIndex}");
     }
 
@@ -451,8 +480,6 @@ public class GameRoomManager : NetworkBehaviour
         session.HostPlayer = session.Players[0];
         Debug.Log($"[GameRoomManager] Host migrated to {session.HostPlayer.name} " +
                   $"on station {stationIndex}");
-
-        // TODO: RPC to new host client to show host UI controls
     }
 
     private void SetPlayerLayer(PlayerObject player, int layer)
@@ -503,7 +530,7 @@ public class GameRoomManager : NetworkBehaviour
     private void ResetSession(int stationIndex)
     {
         _sessions[stationIndex] = new GameRoomSession(stationIndex, _countdownDuration);
-        Debug.Log($"[GameRoomManager] Session reset for station {stationIndex}");
+        //Debug.Log($"[GameRoomManager] Session reset for station {stationIndex}");
     }
 
     private string GetSessionId(int stationIndex) => $"station_{stationIndex}";
@@ -549,7 +576,7 @@ public class GameRoomManager : NetworkBehaviour
     [TargetRpc]
     private void RpcTeleportAndUnlock(NetworkConnection conn, Vector3 position, Quaternion rotation)
     {
-        Debug.Log($"[GameRoomManager] RpcTeleportAndUnlock — targeting conn: {conn.ClientId}, pos: {position}");
+        //Debug.Log($"[GameRoomManager] RpcTeleportAndUnlock — targeting conn: {conn.ClientId}, pos: {position}");
 
         PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
         if (player == null) return;
@@ -560,7 +587,9 @@ public class GameRoomManager : NetworkBehaviour
         player.transform.position = position;
         player.transform.rotation = rotation;
         player.Movement.SetMovementLocked(false);
-        player.ReinitializeCamera();  // ADD THIS
+        player.Interaction.SetInteractionEnabled(true);
+        player.Interaction.enabled = true;
+        player.ReinitializeCamera();
     }
 
     [ObserversRpc]
@@ -600,5 +629,14 @@ public class GameRoomManager : NetworkBehaviour
         PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
         if (player == null) return;
         player.ReinitializeCamera();
+    }
+
+    [TargetRpc]
+    private void RpcUnlockPlayer(NetworkConnection conn)
+    {
+        PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
+        if (player == null) return;
+        player.Movement.SetMovementLocked(false);
+        player.Interaction.SetInteractionEnabled(false);
     }
 }

@@ -36,6 +36,9 @@ public class InteractionManager : NetworkBehaviour
 
     private void Update()
     {
+        //Debug.Log($"[InteractionManager] Checking — camera: {_mainCamera != null}, " +
+        //  $"enabled: {this.enabled}, isOwner: {IsOwner}, " +
+        //  $"componentEnabled: {_player?.Interaction?.enabled}");
         if (!IsOwner) return;
 
         // Handle drop while holding
@@ -57,7 +60,9 @@ public class InteractionManager : NetworkBehaviour
 
     private void CheckForInteractable()
     {
-        //Debug.Log($"IsHoldingObject: {_player.IsHoldingObject}");
+        //Debug.Log($"[InteractionManager] Checking — camera: {_mainCamera != null}, " +
+         // $"enabled: {this.enabled}, isOwner: {IsOwner}");
+
         // Block interaction if already holding an object
         if (_player.IsHoldingObject)
         {

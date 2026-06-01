@@ -20,8 +20,6 @@ public class StubMiniGame : MiniGameController
         _gameActive = true;
 
         Debug.Log($"[StubMiniGame] StartGame — {_players.Count} players");
-        TeleportPlayersToSpawns();
-        UnlockAllPlayers();
         StartRound();
     }
 
