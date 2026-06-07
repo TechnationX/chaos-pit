@@ -1,9 +1,10 @@
 // MinigameStation.cs
 
+using FishNet.Object;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
 
 public class MinigameStation : MonoBehaviour, IInteractable
 {
@@ -103,19 +104,13 @@ public class MinigameStation : MonoBehaviour, IInteractable
     {
         if (_localPlayer == null) return;
 
-        bool localIsHost = _currentSession != null && _currentSession.HostPlayer == _localPlayer;
-        bool isCountdown = _currentSession?.State == GameRoomState.Countdown;
+        bool localIsHost = _localPlayer.OwnerId == _hostClientId;
+        bool isCountdown = _syncedState == GameRoomState.Countdown;
         bool localInSession = IsLocalPlayerInSession();
 
-        if (localIsHost && (isCountdown || localInSession))
+        if (localInSession)
         {
-            if (isCountdown)
-                GameRoomManager.Instance.CancelCountdown(_stationIndex);
-            else
-                GameRoomManager.Instance.RequestLeave(_stationIndex, _localPlayer);
-        }
-        else if (localInSession)
-        {
+            // Always just leave — host migration handled server side
             GameRoomManager.Instance.RequestLeave(_stationIndex, _localPlayer);
         }
 
@@ -148,6 +143,13 @@ public class MinigameStation : MonoBehaviour, IInteractable
         _syncedMinPlayers = 0;
 
         _localPlayer = null;
+    }
+
+    public void ForceClosePanel()
+    {
+        if (!_isPanelOpen) return;
+        ClosePanel();
+        _localPlayer?.Camera.LockCursor();
     }
 
     // ─── Button Handlers ──────────────────────────────────────────────────────
@@ -333,7 +335,7 @@ public class MinigameStation : MonoBehaviour, IInteractable
     public void UpdateSessionState(int hostClientId, List<string> playerNames,
         List<int> clientIds, GameRoomState state, bool gameSelected, int minPlayers)
     {
-        Debug.Log($"[MinigameStation] UpdateSessionState — hostId: {hostClientId}, state: {state}");
+        //Debug.Log($"[MinigameStation] UpdateSessionState — hostId: {hostClientId}, state: {state}");
         _hostClientId = hostClientId;
         _syncedPlayerNames = playerNames;
         _syncedClientIds = clientIds;

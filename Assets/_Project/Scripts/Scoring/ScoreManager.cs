@@ -33,9 +33,7 @@ public class ScoreManager : MonoBehaviour
 
     // --- Session Lifecycle ---
 
-    /// <summary>
     /// Called by GameRoomManager when a session starts.
-    /// </summary>
     public void RegisterSession(string sessionId)
     {
         if (_sessionScores.ContainsKey(sessionId))
@@ -48,12 +46,10 @@ public class ScoreManager : MonoBehaviour
         _processingQueues[sessionId] = new Queue<List<RoundResult>>();
         _processingActive[sessionId] = false;
 
-        Debug.Log($"[ScoreManager] Session registered: {sessionId}");
+        //Debug.Log($"[ScoreManager] Session registered: {sessionId}");
     }
 
-    /// <summary>
     /// Called by GameRoomManager when a session ends and players return to lobby.
-    /// </summary>
     public void UnregisterSession(string sessionId)
     {
         if (!_sessionScores.ContainsKey(sessionId))
@@ -66,15 +62,13 @@ public class ScoreManager : MonoBehaviour
         _processingQueues.Remove(sessionId);
         _processingActive.Remove(sessionId);
 
-        Debug.Log($"[ScoreManager] Session unregistered: {sessionId}");
+        //Debug.Log($"[ScoreManager] Session unregistered: {sessionId}");
     }
 
     // --- Results Processing ---
 
-    /// <summary>
     /// Called by GameRoomManager after each round ends.
     /// Enqueues results for processing — safe to call rapidly or from multiple sessions.
-    /// </summary>
     public void SubmitResults(string sessionId, List<RoundResult> results)
     {
         if (!_processingQueues.ContainsKey(sessionId))
@@ -130,8 +124,8 @@ public class ScoreManager : MonoBehaviour
             // Write to career score
             PlayerProfileManager.Instance.AddCareerScore(result.Player.Owner, result.ScoreAwarded);
 
-            Debug.Log($"[ScoreManager] [{sessionId}] {result.Player.name} — {result.ResultLabel}, " +
-                      $"+{result.ScoreAwarded}pts, session total: {_sessionScores[sessionId][clientId]}");
+            //Debug.Log($"[ScoreManager] [{sessionId}] {result.Player.name} — {result.ResultLabel}, " +
+            //          $"+{result.ScoreAwarded}pts, session total: {_sessionScores[sessionId][clientId]}");
         }
 
         // TODO: BACKEND — push updated career scores to database after each round
@@ -139,10 +133,8 @@ public class ScoreManager : MonoBehaviour
 
     // --- Leaderboard ---
 
-    /// <summary>
     /// Returns sorted leaderboard for a specific game room session.
     /// Used by Results Screen.
-    /// </summary>
     public List<SessionLeaderboardEntry> GetSessionLeaderboard(string sessionId)
     {
         if (!_sessionScores.ContainsKey(sessionId))
@@ -176,10 +168,8 @@ public class ScoreManager : MonoBehaviour
         return leaderboard;
     }
 
-    /// <summary>
     /// Returns sorted career score leaderboard across all currently connected players.
     /// Used by lobby leaderboard display.
-    /// </summary>
     public List<SessionLeaderboardEntry> GetCareerLeaderboard()
     {
         var leaderboard = new List<SessionLeaderboardEntry>();
@@ -215,9 +205,7 @@ public class ScoreManager : MonoBehaviour
     }
 }
 
-/// <summary>
 /// Single entry in a leaderboard — used for both session and career displays.
-/// </summary>
 [System.Serializable]
 public class SessionLeaderboardEntry
 {

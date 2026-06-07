@@ -60,13 +60,13 @@ public class RelayManager : SingletonBehaviour<RelayManager>
             Allocation allocation = await RelayService.Instance.CreateAllocationAsync(maxPlayers - 1, "us-west2");
             _allocationId = allocation.AllocationId;
 
-            Debug.Log($"[RelayManager] Allocation created at time: {Time.realtimeSinceStartup}, region: {allocation.Region}");
+            //Debug.Log($"[RelayManager] Allocation created at time: {Time.realtimeSinceStartup}, region: {allocation.Region}");
 
             string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
 
             SetRelayHostData(allocation);
 
-            Debug.Log($"[RelayManager.CreateRelaySession] Join code: {joinCode} at time: {Time.realtimeSinceStartup}");
+            //Debug.Log($"[RelayManager.CreateRelaySession] Join code: {joinCode} at time: {Time.realtimeSinceStartup}");
             return joinCode;
         }
         catch (System.Exception e)
@@ -93,7 +93,7 @@ public class RelayManager : SingletonBehaviour<RelayManager>
 
         try
         {
-            Debug.Log($"[RelayManager.JoinRelaySession] Attempting to join with code: {joinCode} at time: {Time.realtimeSinceStartup}");
+            //Debug.Log($"[RelayManager.JoinRelaySession] Attempting to join with code: {joinCode} at time: {Time.realtimeSinceStartup}");
             JoinAllocation joinAllocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
             SetRelayClientData(joinAllocation);
         }
@@ -117,7 +117,7 @@ public class RelayManager : SingletonBehaviour<RelayManager>
         }
 
         utpTransport.SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "dtls"));
-        Debug.Log($"[RelayManager] Protocol type after set: {utpTransport.Protocol}");
+        //Debug.Log($"[RelayManager] Protocol type after set: {utpTransport.Protocol}");
     }
 
     private void SetRelayClientData(JoinAllocation joinAllocation)

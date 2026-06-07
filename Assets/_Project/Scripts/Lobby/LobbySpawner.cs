@@ -44,7 +44,9 @@ public class LobbySpawner : MonoBehaviour
         GameObject player = Instantiate(_playerSpawnConfig.PlayerPrefab, position, rotation);
         NetworkObject netObj = player.GetComponent<NetworkObject>();
         InstanceFinder.ServerManager.Spawn(netObj, conn);
+        //Debug.Log($"[LobbySpawner] EditorTriggerHostSpawn — spawned at {position}");
         PlayerProfileManager.Instance.RegisterPlayer(conn);
+        GameRoomManager.Instance?.SyncLeaderboardToClients();
     }
 #endif
 
@@ -99,7 +101,7 @@ public class LobbySpawner : MonoBehaviour
     public void PreRegisterConnection(NetworkConnection conn)
     {
         _spawnedConnections.Add(conn.ClientId);
-        Debug.Log($"[LobbySpawner] Pre-registered connection: {conn.ClientId}");
+        //Debug.Log($"[LobbySpawner] Pre-registered connection: {conn.ClientId}");
     }
 
     private void OnServerStarted(ServerConnectionStateArgs args)
@@ -130,10 +132,17 @@ public class LobbySpawner : MonoBehaviour
 
     private void OnClientLoadedStartScenes(FishNet.Connection.NetworkConnection conn, bool asServer)
     {
-        Debug.Log($"[LobbySpawner] OnClientLoadedStartScenes — ConnId: {conn.ClientId}, already spawned: {_spawnedConnections.Contains(conn.ClientId)}");
+        //Debug.Log($"[LobbySpawner] OnClientLoadedStartScenes — connId: {conn.ClientId}, asServer: {asServer}, alreadySpawned: {_spawnedConnections.Contains(conn.ClientId)}");
+
         if (!asServer) return;
 
-        if (_spawnedConnections.Contains(conn.ClientId)) return;
+        if (_spawnedConnections.Contains(conn.ClientId))
+        {
+            // Refresh leaderboard for both server and client
+            //LeaderboardManager.Instance?.Refresh();
+            return;
+        }
+
         _spawnedConnections.Add(conn.ClientId);
 
         if (_playerSpawnConfig.PlayerPrefab == null)
@@ -153,6 +162,8 @@ public class LobbySpawner : MonoBehaviour
         NetworkObject netObj = player.GetComponent<NetworkObject>();
         InstanceFinder.ServerManager.Spawn(netObj, conn);
         PlayerProfileManager.Instance.RegisterPlayer(conn);
+        //Debug.Log($"[LobbySpawner] Calling LeaderboardManager.Refresh — instance: {LeaderboardManager.Instance != null}");
+        GameRoomManager.Instance?.SyncLeaderboardToClients();
     }
 
     private void OnDestroy()
@@ -184,6 +195,7 @@ public class LobbySpawner : MonoBehaviour
 
     public bool TryGetSpawnPoint(out Vector3 position, out Quaternion rotation)
     {
+        //Debug.Log($"[LobbySpawner] TryGetSpawnPoint — index: {_spawnPointIndex}, caller: {new System.Diagnostics.StackTrace().ToString().Split('\n')[1].Trim()}");
         if (_playerSpawnConfig == null || _playerSpawnConfig.SpawnPoints.Length == 0)
         {
             position = Vector3.zero;

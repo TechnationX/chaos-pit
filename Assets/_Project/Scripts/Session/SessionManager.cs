@@ -106,7 +106,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             await Task.Delay(100);
             InstanceFinder.ClientManager.StartConnection();
 
-            Debug.Log($"[SessionManager] Host session started. Join code: {JoinCode}");
+            //Debug.Log($"[SessionManager] Host session started. Join code: {JoinCode}");
             OnJoinCodeReady?.Invoke(JoinCode);
 
             // Host is up — session is now active
@@ -144,7 +144,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             // Connect client after Relay is configured
             InstanceFinder.ClientManager.StartConnection();
 
-            Debug.Log($"[SessionManager] Joined session with code: {joinCode}");
+            //Debug.Log($"[SessionManager] Joined session with code: {joinCode}");
 
             // Connected — session is now active
             SetState(SessionState.Active);
@@ -181,7 +181,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             if (!_connectedPlayers.Contains(conn))
             {
                 _connectedPlayers.Add(conn);
-                Debug.Log($"[SessionManager] Player connected. Total: {PlayerCount}");
+                //Debug.Log($"[SessionManager] Player connected. Total: {PlayerCount}");
                 OnPlayerCountChanged?.Invoke(PlayerCount);
             }
         }
@@ -190,7 +190,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             if (_connectedPlayers.Contains(conn))
             {
                 _connectedPlayers.Remove(conn);
-                Debug.Log($"[SessionManager] Player disconnected. Total: {PlayerCount}");
+                //Debug.Log($"[SessionManager] Player disconnected. Total: {PlayerCount}");
                 OnPlayerCountChanged?.Invoke(PlayerCount);
                 GameRoomManager.Instance?.OnPlayerDisconnected(conn);
             }

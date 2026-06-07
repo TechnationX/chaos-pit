@@ -11,6 +11,10 @@ public class StubMiniGame : MiniGameController
     [SerializeField] private float _roundDuration = 5f;
     [SerializeField] private int _totalRounds = 2;
 
+    [Header("Stub Results UI")]
+    [SerializeField] private TMPro.TextMeshProUGUI _resultsText;
+    [SerializeField] private TMPro.TextMeshProUGUI _countdownText;
+
     private List<RoundResult> _lastResults = new List<RoundResult>();
 
     public override void StartGame(List<PlayerObject> players)
@@ -85,6 +89,49 @@ public class StubMiniGame : MiniGameController
         }
 
         return results;
+    }
+
+    protected override void OnShowResults(ResultsData data)
+    {
+        if (_resultsScreenPanel != null)
+            _resultsScreenPanel.SetActive(true);
+
+        // Build results text
+        if (_resultsText != null)
+        {
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            sb.AppendLine("--- RESULTS ---");
+
+            foreach (PlayerResultEntry entry in data.Entries)
+            {
+                sb.AppendLine($"{entry.ResultLabel}: {entry.DisplayName}");
+                sb.AppendLine($"  +{entry.PointsEarned}pts | Level {entry.CareerLevel}");
+            }
+
+            _resultsText.text = sb.ToString();
+        }
+
+        StartCoroutine(ResultsTimerCoroutine());
+    }
+
+    private IEnumerator ResultsTimerCoroutine()
+    {
+        float remaining = _resultsDuration;
+        while (remaining > 0f)
+        {
+            if (_countdownText != null)
+                _countdownText.text = $"Returning in {Mathf.CeilToInt(remaining)}...";
+            yield return new WaitForSeconds(1f);
+            remaining -= 1f;
+        }
+
+        if (_countdownText != null)
+            _countdownText.text = string.Empty;
+
+        if (_resultsScreenPanel != null)
+            _resultsScreenPanel.SetActive(false);
+
+        GameRoomManager.Instance.OnResultsDismissed(this);
     }
 
     public override void CleanUp()
