@@ -159,6 +159,10 @@ public class GameRoomManager : NetworkBehaviour
         if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) return;
         if (session.SelectedGame == null) return;
 
+        //Debug.Log($"[GameRoomManager] OnClientPresenceChangeEnd — scene: {args.Scene.name}, " +
+        //  $"clientId: {args.Connection.ClientId}, added: {args.Added}, " +
+        //  $"expected: {session.Players.Count}, loaded: {_loadedClients[stationIndex].Count}");
+
         // Only care about our scene
         if (args.Scene.name != session.SelectedGame.SceneName) return;
         // Only care about additions not removals
@@ -172,7 +176,10 @@ public class GameRoomManager : NetworkBehaviour
         int expected = session.Players.Count;
         int loaded = _loadedClients[stationIndex].Count;
 
-        //Debug.Log($"[GameRoomManager] Client {args.Connection.ClientId} loaded — {loaded}/{expected}");
+        //Debug.Log($"[GameRoomManager] OnClientPresenceChangeEnd — scene: {args.Scene.name}, " +
+        //  $"clientId: {args.Connection.ClientId}, added: {args.Added}, " +
+        //  $"expected: {expected}, loaded: {loaded}, " +
+        //  $"playerIds: {string.Join(",", session.Players.Select(p => p.Owner?.ClientId))}");
 
         if (loaded < expected) return;
 
@@ -196,7 +203,7 @@ public class GameRoomManager : NetworkBehaviour
         session.State = GameRoomState.InProgress;
         SyncSessionToClients(stationIndex, session);
 
-        MiniGameController controller = FindMiniGameController(session.SelectedGame.SceneName);
+        MiniGameController controller = FindActiveMinigameController();
         if (controller == null)
         {
             Debug.LogError($"[GameRoomManager] No MiniGameController found in {session.SelectedGame.SceneName}");
@@ -205,6 +212,9 @@ public class GameRoomManager : NetworkBehaviour
 
         session.ActiveController = controller;
         controller.StartGame(session.Players);
+
+        foreach (PlayerObject player in session.Players)
+            RpcInitMinigame(player.Owner);
 
         // Teleport each player to their spawn point on their client
         for (int i = 0; i < session.Players.Count; i++)
@@ -341,7 +351,12 @@ public class GameRoomManager : NetworkBehaviour
             .ToArray();
 
         foreach (PlayerObject player in session.Players)
+        {
             SetPlayerLayer(player, _gameRoomLayer);
+            RpcSetPlayerLayerObservers(player.GetComponent<NetworkObject>(), _gameRoomLayer);
+            Debug.Log($"[GameRoomManager] SetPlayerLayer — player: {player.name}, layer: {_gameRoomLayer}");
+            RpcSetLobbyCanvasVisible(player.Owner, false);
+        }
 
         // Subscribe BEFORE loading
         InstanceFinder.NetworkManager.SceneManager.OnClientPresenceChangeEnd +=
@@ -357,6 +372,33 @@ public class GameRoomManager : NetworkBehaviour
 
         //Debug.Log($"[GameRoomManager] Loading scene {session.SelectedGame.SceneName} " +
         //          $"for station {stationIndex}");
+    }
+
+    [TargetRpc]
+    private void RpcSetPlayerLayer(NetworkConnection conn, int layer)
+    {
+        PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
+        //Debug.Log($"[GameRoomManager] RpcSetPlayerLayer — targetConn: {conn.ClientId}, " +
+        //      $"FirstObject: {conn.FirstObject?.name ?? "null"}, player: {player?.name ?? "null"}");
+        if (player == null) return;
+        player.gameObject.layer = layer;
+        foreach (Transform child in player.GetComponentsInChildren<Transform>())
+            child.gameObject.layer = layer;
+    }
+
+    [ObserversRpc]
+    private void RpcSetPlayerLayerObservers(NetworkObject playerNetObj, int layer)
+    {
+        //Debug.Log($"[GameRoomManager] RpcSetPlayerLayerObservers — target: {playerNetObj?.name ?? "null"}, " +
+        //      $"ownerClientId: {playerNetObj?.Owner?.ClientId ?? -1}, layer: {layer}, " +
+        //      $"IsServer: {IsServerInitialized}, IsClient: {IsClientInitialized}");
+
+        if (playerNetObj == null) return;
+        playerNetObj.gameObject.layer = layer;
+        foreach (Transform child in playerNetObj.GetComponentsInChildren<Transform>())
+            child.gameObject.layer = layer;
+
+       // Debug.Log($"[GameRoomManager] RpcSetPlayerLayerObservers — applied. New layer on {playerNetObj.name}: {playerNetObj.gameObject.layer}");
     }
 
     // ─── Results ──────────────────────────────────────────────────────────────
@@ -410,6 +452,13 @@ public class GameRoomManager : NetworkBehaviour
         return data;
     }
 
+    [TargetRpc]
+    public void RpcSetLocalPlayerName(NetworkConnection conn, string name)
+    {
+        LobbyUIManager ui = FindFirstObjectByType<LobbyUIManager>(FindObjectsInactive.Include);
+        ui?.SetPlayerName(name);
+    }
+
     // Called by MiniGameController when results timer expires
     public void OnResultsDismissed(MiniGameController controller)
     {
@@ -450,13 +499,15 @@ public class GameRoomManager : NetworkBehaviour
 
         // Return players to lobby
         foreach (PlayerObject player in session.Players.ToList())
+        {
             ReturnPlayerToLobby(player);
-
-        // Clear score session
-        ScoreManager.Instance.UnregisterSession(sessionId);
+        }
 
         // Refresh lobby leaderboard
         GameRoomManager.Instance?.SyncLeaderboardToClients();
+
+        // Clear score session
+        ScoreManager.Instance.UnregisterSession(sessionId);
 
         ResetSession(stationIndex);
 
@@ -494,6 +545,7 @@ public class GameRoomManager : NetworkBehaviour
     private void ReturnPlayerToLobby(PlayerObject player)
     {
         SetPlayerLayer(player, 0);
+        RpcSetPlayerLayerObservers(player.GetComponent<NetworkObject>(), 0);
         player.Interaction.SetInteractionEnabled(true);
 
         if (LobbySpawner.Instance != null &&
@@ -642,23 +694,6 @@ public class GameRoomManager : NetworkBehaviour
 
     private string GetSessionId(int stationIndex) => $"station_{stationIndex}";
 
-    private MiniGameController FindMiniGameController(string sceneName)
-    {
-        // Search loaded scenes for MiniGameController
-        for (int i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
-        {
-            var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
-            if (scene.name != sceneName) continue;
-
-            foreach (GameObject obj in scene.GetRootGameObjects())
-            {
-                MiniGameController controller = obj.GetComponentInChildren<MiniGameController>();
-                if (controller != null) return controller;
-            }
-        }
-        return null;
-    }
-
     public GameRoomSession GetSession(int stationIndex)
     {
         _sessions.TryGetValue(stationIndex, out GameRoomSession session);
@@ -668,6 +703,8 @@ public class GameRoomManager : NetworkBehaviour
     [TargetRpc]
     private void RpcTeleportToPoint(NetworkConnection conn, Vector3 position, Quaternion rotation)
     {
+        //Debug.Log($"[GameRoomManager] RpcTeleportToPoint — clientId: {conn.ClientId}, pos: {position}");
+
         PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
         if (player == null) return;
 
@@ -697,6 +734,10 @@ public class GameRoomManager : NetworkBehaviour
         player.Interaction.SetInteractionEnabled(true);
         player.Interaction.enabled = true;
         player.ReinitializeCamera();
+
+        LobbyUIManager ui = FindFirstObjectByType<LobbyUIManager>(FindObjectsInactive.Include);
+        Debug.Log($"[GameRoomManager] RpcTeleportAndUnlock — LobbyUIManager found: {ui != null}, active: {ui?.gameObject.activeSelf}");
+        if (ui != null) ui.SetVisible(true);
     }
 
     [ObserversRpc]
@@ -710,7 +751,9 @@ public class GameRoomManager : NetworkBehaviour
     private void SyncSessionToClients(int stationIndex, GameRoomSession session)
     {
         int hostId = session.HostPlayer?.Owner?.ClientId ?? -1;
-        List<string> names = session.Players.Select(p => p.name).ToList();
+        List<string> names = session.Players
+            .Select(p => PlayerProfileManager.Instance.GetProfile(p.Owner)?.DisplayName ?? p.name)
+            .ToList();
         List<int> clientIds = session.Players.Select(p => p.Owner?.ClientId ?? -1).ToList();
         bool gameSelected = session.SelectedGame != null;
         int minPlayers = session.SelectedGame?.MinPlayers ?? 0;
@@ -784,7 +827,7 @@ public class GameRoomManager : NetworkBehaviour
 
     public void SyncLeaderboardToClients()
     {
-        Debug.Log($"[GameRoomManager] SyncLeaderboardToClients — profiles: {PlayerProfileManager.Instance.GetAllProfiles().Count}");
+        //Debug.Log($"[GameRoomManager] SyncLeaderboardToClients — profiles: {PlayerProfileManager.Instance.GetAllProfiles().Count}");
         var careerEntries = ScoreManager.Instance.GetCareerLeaderboard();
 
         // Build aggregate session scores across all active sessions
@@ -837,5 +880,48 @@ public class GameRoomManager : NetworkBehaviour
     {
         LeaderboardManager.Instance?.SetCachedData(careerEntries, sessionEntries);
         LeaderboardManager.Instance?.Refresh();
+    }
+
+    /// Generic RPC for any minigame to send data to all clients.
+    /// Called by MiniGameController subclasses on the server.
+    /// Clients find the active controller and dispatch the message to it.
+    [ObserversRpc]
+    public void RpcMinigameMessage(string messageType, string payload)
+    {
+        //Debug.Log($"[GameRoomManager] RpcMinigameMessage SENT/RECEIVED — type: {messageType}, IsServer: {IsServerInitialized}, IsClient: {IsClientInitialized}");
+
+        if (IsServerInitialized && !IsClientInitialized) return;
+        MiniGameController controller = FindActiveMinigameController();
+        controller?.OnNetworkMessage(messageType, payload);
+    }
+
+    /// Finds the active MiniGameController across all loaded scenes.
+    /// Reuses the same scene-search pattern already in GameRoomManager.
+    private MiniGameController FindActiveMinigameController()
+    {
+        for (int i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+        {
+            var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
+            foreach (GameObject obj in scene.GetRootGameObjects())
+            {
+                MiniGameController ctrl = obj.GetComponentInChildren<MiniGameController>();
+                if (ctrl != null) return ctrl;
+            }
+        }
+        return null;
+    }
+
+    [TargetRpc]
+    private void RpcSetLobbyCanvasVisible(NetworkConnection conn, bool visible)
+    {
+        LobbyUIManager ui = FindFirstObjectByType<LobbyUIManager>();
+        if (ui != null) ui.SetVisible(visible);
+    }
+
+    [TargetRpc]
+    private void RpcInitMinigame(NetworkConnection conn)
+    {
+        MiniGameController controller = FindActiveMinigameController();
+        controller?.ClientInit();
     }
 }

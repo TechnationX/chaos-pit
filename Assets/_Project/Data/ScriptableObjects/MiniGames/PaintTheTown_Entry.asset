@@ -10,13 +10,13 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ea268d6cdb1b99247a8c5755fbc1d4fd, type: 3}
-  m_Name: StubMiniGame_Entry
+  m_Name: PaintTheTown_Entry
   m_EditorClassIdentifier: Assembly-CSharp::MiniGameRegistryEntry
-  MiniGameId: stub_01
-  MiniGameName: Stub Game
-  SceneName: StubTestScene
+  MiniGameId: paint_the_town
+  MiniGameName: Paint The Town
+  SceneName: PaintTheTownScene
   MinPlayers: 1
   MaxPlayers: 6
-  Description: 
+  Description: Claim more tiles than anyone else before time runs out
   Thumbnail: {fileID: 0}
   IsActive: 1

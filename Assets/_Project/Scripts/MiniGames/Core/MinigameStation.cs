@@ -310,6 +310,7 @@ public class MinigameStation : MonoBehaviour, IInteractable
     /// Called by GameRoomManager each countdown tick via RPC.
     public void UpdateCountdown(int secondsRemaining)
     {
+        _countdownLabel.gameObject.SetActive(true);
         _countdownLabel.text = $"Starting in {secondsRemaining}...";
     }
 

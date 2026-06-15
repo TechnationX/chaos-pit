@@ -52,6 +52,8 @@ public class EditorBootstrap : MonoBehaviour
             yield break;
         }
 
+        if (!InstanceFinder.IsServerStarted) yield break;
+
         //Debug.Log($"[EditorBootstrap] Connected. ClientId: {InstanceFinder.ClientManager.Connection.ClientId}");
         // Pre-register immediately — no delay
         var lobbySpawner = FindFirstObjectByType<LobbySpawner>();

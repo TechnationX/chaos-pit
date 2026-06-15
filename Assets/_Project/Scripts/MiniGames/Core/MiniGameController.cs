@@ -37,6 +37,8 @@ public abstract class MiniGameController : MonoBehaviour
     /// Called by GameRoomManager after results are displayed and before scene unload.
     public abstract void CleanUp();
 
+    public virtual void ClientInit() { }
+
     // --- Base helpers available to all mini games ---
 
     /// Teleports all players to this scene's spawn points.
@@ -118,4 +120,11 @@ public abstract class MiniGameController : MonoBehaviour
 
         GameRoomManager.Instance.OnResultsDismissed(this);
     }
+
+    /// Called by GameRoomManager.RpcMinigameMessage on all clients.
+    /// Override in subclass to handle minigame-specific network messages.
+    /// <param name="messageType">Identifies what kind of data this is e.g. "colors", "tiles"</param>
+    /// <param name="payload">JSON string — parse with JsonUtility or manually</param>
+    public virtual void OnNetworkMessage(string messageType, string payload) { }
+
 }

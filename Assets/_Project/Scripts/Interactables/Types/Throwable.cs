@@ -20,7 +20,7 @@ public class Throwable : Grabbable
             if (player.IsHoldingObject && player.HeldObject == this)
             {
                 ServerDropRpc(player);
-                Debug.Log($"[Throwabble] OnInteract Drop");
+                //Debug.Log($"[Throwabble] OnInteract Drop");
             }
             return;
         }
@@ -52,7 +52,7 @@ public class Throwable : Grabbable
 
         foreach (var conn in NetworkObject.Observers)
         {
-            Debug.Log($"[Throwable] Observer clientId: {conn.ClientId}");
+            //Debug.Log($"[Throwable] Observer clientId: {conn.ClientId}");
         }
 
         ObserversGrab(player.NetworkObject);

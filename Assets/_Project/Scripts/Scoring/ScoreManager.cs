@@ -139,7 +139,7 @@ public class ScoreManager : MonoBehaviour
     {
         if (!_sessionScores.ContainsKey(sessionId))
         {
-            Debug.LogWarning($"[ScoreManager] GetSessionLeaderboard — session {sessionId} not found.");
+            //Debug.LogWarning($"[ScoreManager] GetSessionLeaderboard — session {sessionId} not found.");
             return new List<SessionLeaderboardEntry>();
         }
 

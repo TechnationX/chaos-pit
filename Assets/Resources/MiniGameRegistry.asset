@@ -14,3 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MiniGameRegistry
   Entries:
   - {fileID: 11400000, guid: 7bd89d283ea938f4db2dbbb63a634f1b, type: 2}
+  - {fileID: 11400000, guid: 3b585a9b9f9bb564fab75fab28e5cba1, type: 2}

@@ -6,6 +6,7 @@ using TMPro;
 public class LobbyUIManager : MonoBehaviour
 {
     [SerializeField] private TMP_Text joinCodeText;
+    [SerializeField] private TextMeshProUGUI _playerNameText;
 
     private void Start()
     {
@@ -17,5 +18,16 @@ public class LobbyUIManager : MonoBehaviour
         {
             joinCodeText.text = string.Empty;
         }
+    }
+
+    public void SetVisible(bool visible)
+    {
+        gameObject.SetActive(visible);
+    }
+
+    public void SetPlayerName(string name)
+    {
+        if (_playerNameText != null)
+            _playerNameText.text = name;
     }
 }

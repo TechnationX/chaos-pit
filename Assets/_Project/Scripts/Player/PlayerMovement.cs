@@ -28,6 +28,19 @@ public class PlayerMovement : NetworkBehaviour
     [Header("Key Bindings")]
     [SerializeField] private Key _crouchKey = Key.C;
 
+    [Header("Sprint / Stamina")]
+    [SerializeField] private float _maxStamina = 3f;        // seconds of sprint available
+    [SerializeField] private float _staminaDrainRate = 1f;  // per second while sprinting
+    [SerializeField] private float _staminaRegenRate = 0.5f; // per second while not sprinting
+    [SerializeField] private float _staminaRegenDelay = 1.5f; // cooldown before regen starts
+
+    private float _currentStamina;
+    private float _regenDelayTimer;
+    private bool _staminaLimited = false; // off = unlimited sprint (lobby default)
+
+    public float CurrentStamina => _currentStamina;
+    public float MaxStamina => _maxStamina;
+
     private bool _isCrouching;
     private float _targetHeight;
     private bool _isJumping;
@@ -60,6 +73,7 @@ public class PlayerMovement : NetworkBehaviour
         _isGrounded = true;
         _animator?.SetBool("IsGrounded", true);
         _animator?.SetBool("IsJumping", false);
+        _currentStamina = _maxStamina;
 
         // Find animator immediately on the CharacterModel
         _animator = player.CharacterModel.GetComponent<Animator>();
@@ -216,8 +230,26 @@ public class PlayerMovement : NetworkBehaviour
         if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed) v += 1f;
         if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) v -= 1f;
 
-        _isSprinting = keyboard.leftShiftKey.isPressed && v > 0 && h == 0 && !_isCrouching;
-        //Debug.Log($"isSprinting: {_isSprinting}, v: {v}, h: {h}, isCrouching: {_isCrouching}, shift: {keyboard.leftShiftKey.isPressed}");
+        bool wantsSprint = keyboard.leftShiftKey.isPressed && v > 0 && h == 0 && !_isCrouching;
+        _isSprinting = wantsSprint && (!_staminaLimited || _currentStamina > 0f);
+
+        if (_staminaLimited)
+        {
+            if (_isSprinting)
+            {
+                _currentStamina = Mathf.Max(0f, _currentStamina - _staminaDrainRate * Time.deltaTime);
+                _regenDelayTimer = _staminaRegenDelay;
+            }
+            else if (_regenDelayTimer > 0f)
+            {
+                _regenDelayTimer -= Time.deltaTime;
+            }
+            else
+            {
+                _currentStamina = Mathf.Min(_maxStamina, _currentStamina + _staminaRegenRate * Time.deltaTime);
+            }
+        }
+
 
         // Set blend values
         _moveX = h;
@@ -231,6 +263,12 @@ public class PlayerMovement : NetworkBehaviour
         _controller.Move(move * speed * Time.deltaTime);
 
         _isMoving = (h != 0f || v != 0f);
+    }
+
+    public void SetStaminaLimited(bool limited)
+    {
+        _staminaLimited = limited;
+        if (!limited) _currentStamina = _maxStamina;
     }
 
     private void HandleJump()

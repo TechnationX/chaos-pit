@@ -101,7 +101,7 @@ public class LeaderboardManager : MonoBehaviour
         for (int i = 0; i < _pages.Length; i++)
         {
             _pages[i].gameObject.SetActive(i == index);
-            Debug.Log($"[LeaderboardManager] Page {i} position: {_pages[i].GetComponent<RectTransform>().anchoredPosition}");
+            //Debug.Log($"[LeaderboardManager] Page {i} position: {_pages[i].GetComponent<RectTransform>().anchoredPosition}");
         }
 
         if (_pageIndicator != null)

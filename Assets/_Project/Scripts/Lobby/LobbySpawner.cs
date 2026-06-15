@@ -46,6 +46,12 @@ public class LobbySpawner : MonoBehaviour
         InstanceFinder.ServerManager.Spawn(netObj, conn);
         //Debug.Log($"[LobbySpawner] EditorTriggerHostSpawn — spawned at {position}");
         PlayerProfileManager.Instance.RegisterPlayer(conn);
+
+        PlayerObject playerObj = player.GetComponent<PlayerObject>();
+        PlayerProfile profile = PlayerProfileManager.Instance.GetProfile(conn);
+        string displayName = profile?.DisplayName ?? $"Player_{conn.ClientId}";
+        playerObj?.SetPlayerData(displayName, conn.ClientId);
+        GameRoomManager.Instance?.RpcSetLocalPlayerName(conn, displayName);
         GameRoomManager.Instance?.SyncLeaderboardToClients();
     }
 #endif
@@ -162,6 +168,12 @@ public class LobbySpawner : MonoBehaviour
         NetworkObject netObj = player.GetComponent<NetworkObject>();
         InstanceFinder.ServerManager.Spawn(netObj, conn);
         PlayerProfileManager.Instance.RegisterPlayer(conn);
+
+        PlayerObject playerObj = player.GetComponent<PlayerObject>();
+        PlayerProfile profile = PlayerProfileManager.Instance.GetProfile(conn);
+        string displayName = profile?.DisplayName ?? $"Player_{conn.ClientId}";
+        playerObj?.SetPlayerData(displayName, conn.ClientId);
+        GameRoomManager.Instance?.RpcSetLocalPlayerName(conn, displayName);
         //Debug.Log($"[LobbySpawner] Calling LeaderboardManager.Refresh — instance: {LeaderboardManager.Instance != null}");
         GameRoomManager.Instance?.SyncLeaderboardToClients();
     }

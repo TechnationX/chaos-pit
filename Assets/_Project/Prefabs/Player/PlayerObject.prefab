@@ -522,7 +522,6 @@ MonoBehaviour:
   _characterModel: {fileID: 10508792203387683}
   _handSocket: {fileID: 2841485608747275214}
   _cameraRoot: {fileID: 1696979339290945896}
-  _animator: {fileID: 0}
 --- !u!114 &4406292158570597787
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -544,7 +543,7 @@ MonoBehaviour:
   _gravity: -19.62
   _groundLayer:
     serializedVersion: 2
-    m_Bits: 64
+    m_Bits: 320
   _groundCheckDistance: 0.3
   _crouchSpeed: 2
   _crouchHeight: 0.9
