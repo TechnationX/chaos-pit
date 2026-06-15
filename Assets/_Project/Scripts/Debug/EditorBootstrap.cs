@@ -1,11 +1,11 @@
 using FishNet;
 using System.Collections;
-using UnityEditor.SceneManagement;
+//using UnityEditor.SceneManagement;
 using UnityEngine;
 
 public class EditorBootstrap : MonoBehaviour
 {
-    //#if UNITY_EDITOR
+    #if UNITY_EDITOR
 
     private static bool _launchedFromBootstrap = false;
 
@@ -68,5 +68,5 @@ public class EditorBootstrap : MonoBehaviour
         if (lobbySpawner != null)
             lobbySpawner.EditorTriggerHostSpawn(InstanceFinder.ClientManager.Connection);
     }
-//#endif
+    #endif
 }
