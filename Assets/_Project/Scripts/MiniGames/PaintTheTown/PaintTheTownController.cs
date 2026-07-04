@@ -22,6 +22,10 @@ namespace ChaosPit.Minigames.PaintTheTown
     public class PaintTheTownController : MiniGameController
     {
         // ── Inspector ─────────────────────────────────────────────
+        [Header("Results UI")]
+        [SerializeField] private TMPro.TextMeshProUGUI _resultsText;
+        [SerializeField] private TMPro.TextMeshProUGUI _countdownText;
+
         [Header("Game Config")]
         [SerializeField] private float _roundDuration = 75f;
         [SerializeField] private float _syncInterval = 0.2f;
@@ -37,10 +41,6 @@ namespace ChaosPit.Minigames.PaintTheTown
         [Header("References")]
         [SerializeField] private TileGrid _tileGrid;
         [SerializeField] private PaintTheTownHUD _hud;
-
-        [Header("Results UI")]
-        [SerializeField] private TMPro.TextMeshProUGUI _resultsText;
-        [SerializeField] private TMPro.TextMeshProUGUI _countdownText;
 
         private Dictionary<int, string> _nameMap = new();
 

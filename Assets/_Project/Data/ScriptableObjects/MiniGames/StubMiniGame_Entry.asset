@@ -17,6 +17,6 @@ MonoBehaviour:
   SceneName: StubTestScene
   MinPlayers: 1
   MaxPlayers: 6
-  Description: 
+  Description: Test Game
   Thumbnail: {fileID: 0}
   IsActive: 1

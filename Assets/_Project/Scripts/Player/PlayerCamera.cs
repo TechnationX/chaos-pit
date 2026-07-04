@@ -168,13 +168,13 @@ public class PlayerCamera : NetworkBehaviour
         {
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
-            _player.Movement.SetMovementLocked(true);
+            _player.Movement.SetMovementLocked(true, "pause_menu");
         }
         else
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
-            _player.Movement.SetMovementLocked(false);
+            _player.Movement.SetMovementLocked(false, "pause_menu");
         }
 
         // Tell the pause menu to show/hide

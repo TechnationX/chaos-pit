@@ -2,7 +2,9 @@
 
 using FishNet.Object;
 using System.Collections;
+using FishNet.Connection;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 public abstract class MiniGameController : MonoBehaviour
@@ -84,7 +86,7 @@ public abstract class MiniGameController : MonoBehaviour
     {
         foreach (PlayerObject player in _players)
         {
-            player.Movement.SetMovementLocked(false);
+            player.Movement.ClearAllMovementLocks();
             player.Interaction.SetInteractionEnabled(false); // keep interactions off in minigame
         }
     }
@@ -121,10 +123,51 @@ public abstract class MiniGameController : MonoBehaviour
         GameRoomManager.Instance.OnResultsDismissed(this);
     }
 
+    /// Shared results-countdown timer used by minigame results screens.
+    /// Counts down _resultsDuration on the given text field.
+    ///
+    /// Pass notifyDismissal: true ONLY for the instance responsible for
+    /// telling GameRoomManager to return players to the lobby — this is
+    /// the server-authoritative path reached via OnShowResults (which only
+    /// ever runs on the server's own controller instance, since
+    /// GameRoomManager.OnGameComplete calls ShowResults() as a direct
+    /// method call inside a [Server]-tagged method, not an RPC).
+    ///
+    /// Pure clients learn the game ended through a results broadcast
+    /// instead (e.g. "bt_game_over" / "tm_game_over") and should pass
+    /// notifyDismissal: false — they display the countdown locally without
+    /// double-triggering the return-to-lobby flow. On a host (server+client
+    /// in the same process), both paths run on the same object; the
+    /// notifyDismissal: false call simply re-displays the same countdown,
+    /// which is harmless.
+    protected IEnumerator ResultsCountdownCoroutine(TextMeshProUGUI countdownText, bool notifyDismissal)
+    {
+        float remaining = _resultsDuration;
+        while (remaining > 0f)
+        {
+            if (countdownText != null)
+                countdownText.text = $"Returning in {Mathf.CeilToInt(remaining)}...";
+            yield return new WaitForSeconds(1f);
+            remaining -= 1f;
+        }
+
+        if (countdownText != null) countdownText.text = string.Empty;
+
+        if (notifyDismissal)
+        {
+            if (_resultsScreenPanel != null) _resultsScreenPanel.SetActive(false);
+            GameRoomManager.Instance.OnResultsDismissed(this);
+        }
+    }
+
     /// Called by GameRoomManager.RpcMinigameMessage on all clients.
     /// Override in subclass to handle minigame-specific network messages.
     /// <param name="messageType">Identifies what kind of data this is e.g. "colors", "tiles"</param>
     /// <param name="payload">JSON string — parse with JsonUtility or manually</param>
     public virtual void OnNetworkMessage(string messageType, string payload) { }
+
+    /// Called on the server when a client sends a RequestMinigameAction.
+    /// Override in subclass to handle client-originated requests (e.g. kill confirm, shove).
+    public virtual void OnClientAction(string messageType, string payload, NetworkConnection sender) { }
 
 }

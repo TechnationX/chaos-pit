@@ -95,7 +95,7 @@ public class Sittable : NetworkBehaviour, IInteractable
 
         if (player.Movement != null)
         {
-            player.Movement.SetMovementLocked(true);
+            player.Movement.SetMovementLocked(true, "sitting");
             player.Movement.SetCurrentSeat(this);
         }
 
@@ -121,7 +121,7 @@ public class Sittable : NetworkBehaviour, IInteractable
 
         if (player.Movement != null)
         {
-            player.Movement.SetMovementLocked(false);
+            player.Movement.SetMovementLocked(false, "sitting");
             player.Movement.SetCurrentSeat(null);
         }
 

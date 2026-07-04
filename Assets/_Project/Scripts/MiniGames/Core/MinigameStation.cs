@@ -96,7 +96,7 @@ public class MinigameStation : MonoBehaviour, IInteractable
         RefreshUI();
 
         // Lock player movement while panel is open
-        _localPlayer?.Movement.SetMovementLocked(true);
+        _localPlayer?.Movement.SetMovementLocked(true, "station_menu");
         _localPlayer?.Camera.ReleaseCursor();
     }
 
@@ -123,11 +123,10 @@ public class MinigameStation : MonoBehaviour, IInteractable
         _panel.SetActive(false);
 
         // Restore movement if player is not in session
+        _localPlayer?.Movement.SetMovementLocked(false, "station_menu");
+
         if (!IsLocalPlayerInSession())
-        {
-            _localPlayer?.Movement.SetMovementLocked(false);
             _localPlayer?.Camera.LockCursor();
-        }
 
         // Clear status label
         if (_statusLabel != null)

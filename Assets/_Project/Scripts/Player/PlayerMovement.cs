@@ -3,6 +3,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using FishNet.Object;
+using System.Collections.Generic;
 
 public class PlayerMovement : NetworkBehaviour
 {
@@ -27,6 +28,7 @@ public class PlayerMovement : NetworkBehaviour
 
     [Header("Key Bindings")]
     [SerializeField] private Key _crouchKey = Key.C;
+    [SerializeField] private Key _shoveKey = Key.F;
 
     [Header("Sprint / Stamina")]
     [SerializeField] private float _maxStamina = 3f;        // seconds of sprint available
@@ -49,18 +51,27 @@ public class PlayerMovement : NetworkBehaviour
     private CharacterController _controller;
     private Vector3 _velocity;
     private bool _isGrounded;
-    private bool _movementLocked;
+
+    // Lock-stack: each caller locks/unlocks under its own source key so
+    // unrelated systems (pause menu, sitting, stun, etc.) can't clobber
+    // each other's lock state. Movement is locked if this set is non-empty.
+    private readonly HashSet<string> _movementLockSources = new HashSet<string>();
+
     private bool _isSprinting;
     private Sittable _currentSeat;
+
     private bool _isMoving;
     public bool IsCrouching => _isCrouching;
     public bool IsJumping => _isJumping;
+
     private float _jumpCooldown = 0f;
     private const float JumpCooldownDuration = 0.2f;
+    private float _shoveCooldown = 0f;
+
     private float _moveX;
     private float _moveY;
 
-    public bool IsMovementLocked => _movementLocked;
+    public bool IsMovementLocked => _movementLockSources.Count > 0;
     public bool IsSprinting => _isSprinting;
 
     public void SetCurrentSeat(Sittable seat) => _currentSeat = seat;
@@ -85,10 +96,10 @@ public class PlayerMovement : NetworkBehaviour
 
     private void Update()
     {
-        //Debug.Log($"Movement Update — IsOwner: {IsOwner}, Locked: {_movementLocked}");
+        //Debug.Log($"Movement Update — IsOwner: {IsOwner}, Locked: {IsMovementLocked}");
         if (!IsOwner) return;
 
-        if (_movementLocked)
+        if (IsMovementLocked)
         {
             HandleSeatExit();
             return;
@@ -98,6 +109,7 @@ public class PlayerMovement : NetworkBehaviour
         HandleMovement();
         HandleJump();
         HandleCrouch();
+        HandleShove();
         ApplyGravity();
         UpdateAnimator();
     }
@@ -297,9 +309,31 @@ public class PlayerMovement : NetworkBehaviour
         _controller.Move(_velocity * Time.deltaTime);
     }
 
-    public void SetMovementLocked(bool locked)
+    /// Locks or unlocks movement under a named source. Multiple systems can
+    /// hold a lock simultaneously (e.g. "sitting" and "stunned") — movement
+    /// stays locked until every source has released it. Always pair a
+    /// locked:true call with a matching locked:false call using the SAME
+    /// source string.
+    public void SetMovementLocked(bool locked, string source)
     {
-        _movementLocked = locked;
+        if (string.IsNullOrEmpty(source))
+        {
+            Debug.LogWarning("[PlayerMovement] SetMovementLocked called with no source — ignoring.");
+            return;
+        }
+
+        if (locked)
+            _movementLockSources.Add(source);
+        else
+            _movementLockSources.Remove(source);
+    }
+
+    /// Hard reset — clears every lock source regardless of who holds it.
+    /// Use for full-state resets (minigame end, disconnect, return to lobby),
+    /// not as a substitute for releasing a specific lock.
+    public void ClearAllMovementLocks()
+    {
+        _movementLockSources.Clear();
     }
 
     public void SetMovementEnabled(bool enabled)
@@ -307,4 +341,22 @@ public class PlayerMovement : NetworkBehaviour
         this.enabled = enabled;
     }
 
+    private void HandleShove()
+    {
+        if (_shoveCooldown > 0f)
+        {
+            _shoveCooldown -= Time.deltaTime;
+            return;
+        }
+
+        var keyboard = Keyboard.current;
+        if (keyboard == null) return;
+
+        if (keyboard[_shoveKey].wasPressedThisFrame)
+        {
+            _shoveCooldown = 3f;   // matches _shoveCooldown in LastOneStandingController
+            GameRoomManager.Instance.RequestMinigameAction(
+                "los_shove_request", _player.PlayerId.ToString());
+        }
+    }
 }

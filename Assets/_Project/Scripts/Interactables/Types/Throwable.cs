@@ -85,7 +85,7 @@ public class Throwable : Grabbable
         if (!_isHeld || _holdingPlayer != player) return;
 
         foreach (var conn in NetworkObject.Observers)
-            Debug.Log($"[Throwable] Throw observer clientId: {conn.ClientId}");
+           // Debug.Log($"[Throwable] Throw observer clientId: {conn.ClientId}");
 
         _isHeld = false;
         PlayerObject prevPlayer = _holdingPlayer;

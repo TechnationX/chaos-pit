@@ -104,3 +104,10 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Ignore all Assets subfolders except _Project
+Assets/*
+!Assets/_Project
+!Assets/_Project/**
+Assets/*.meta
+!Assets/_Project.meta

@@ -1,5 +1,6 @@
 // GameRoomManager.cs
 
+using ChaosPit.Minigames.Jinxed;
 using FishNet;
 using FishNet.Component.Transforming;
 using FishNet.Connection;
@@ -29,6 +30,8 @@ public class GameRoomManager : NetworkBehaviour
     // Layer index for GameRoom layer
     private int _gameRoomLayer;
 
+    private int _playerLayer;
+
     [SerializeField] private MiniGameRegistry _registry;
 
     private static List<MinigameStation> _pendingStations = new List<MinigameStation>();
@@ -43,6 +46,7 @@ public class GameRoomManager : NetworkBehaviour
         }
         Instance = this;
         _gameRoomLayer = LayerMask.NameToLayer("GameRoom");
+        _playerLayer = LayerMask.NameToLayer("Player");
 
         // Register any stations that were waiting
         foreach (var station in _pendingStations)
@@ -97,7 +101,7 @@ public class GameRoomManager : NetworkBehaviour
         TeleportToWaitingArea(stationIndex, player);
 
         // Lock movement and interactions
-        player.Movement.SetMovementLocked(true);
+        player.Movement.SetMovementLocked(true, "lobby_session");
 
         player.Interaction.SetInteractionEnabled(false);
 
@@ -374,18 +378,6 @@ public class GameRoomManager : NetworkBehaviour
         //          $"for station {stationIndex}");
     }
 
-    [TargetRpc]
-    private void RpcSetPlayerLayer(NetworkConnection conn, int layer)
-    {
-        PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
-        //Debug.Log($"[GameRoomManager] RpcSetPlayerLayer — targetConn: {conn.ClientId}, " +
-        //      $"FirstObject: {conn.FirstObject?.name ?? "null"}, player: {player?.name ?? "null"}");
-        if (player == null) return;
-        player.gameObject.layer = layer;
-        foreach (Transform child in player.GetComponentsInChildren<Transform>())
-            child.gameObject.layer = layer;
-    }
-
     [ObserversRpc]
     private void RpcSetPlayerLayerObservers(NetworkObject playerNetObj, int layer)
     {
@@ -544,22 +536,39 @@ public class GameRoomManager : NetworkBehaviour
 
     private void ReturnPlayerToLobby(PlayerObject player)
     {
-        SetPlayerLayer(player, 0);
+        Debug.Log($"[GameRoomManager] ReturnPlayerToLobby — player: {player.name}, " +
+          $"interactionEnabled: {player.Interaction.enabled}");
+
+        SetPlayerLayer(player, _playerLayer);
         RpcSetPlayerLayerObservers(player.GetComponent<NetworkObject>(), 0);
+        player.Movement.ClearAllMovementLocks();
+        RpcClearMovementLocks(player.Owner);
         player.Interaction.SetInteractionEnabled(true);
 
         if (LobbySpawner.Instance != null &&
             LobbySpawner.Instance.TryGetSpawnPoint(out Vector3 pos, out Quaternion rot))
         {
-            //Debug.Log($"[GameRoomManager] Returning {player.name} to spawn: {pos}");
-
-            // Use FishNet's built-in teleport — bypasses NT interpolation
             NetworkTransform nt = player.GetComponent<NetworkTransform>();
             if (nt != null) nt.Teleport();
             else
                 player.transform.position = pos;
 
             RpcTeleportAndUnlock(player.Owner, pos, rot);
+
+            // Host is both server and client — TargetRpc may not fire for host owner
+            // Call unlock directly for the host player
+            if (player.IsOwner)
+            {
+                player.transform.position = pos;
+                player.transform.rotation = rot;
+                player.Movement.SetMovementLocked(false, "jinxed_round");
+                player.Interaction.SetInteractionEnabled(true);
+                player.Interaction.enabled = true;
+                player.ReinitializeCamera();
+
+                LobbyUIManager ui = FindFirstObjectByType<LobbyUIManager>(FindObjectsInactive.Include);
+                if (ui != null) ui.SetVisible(true);
+            }
         }
     }
 
@@ -599,6 +608,8 @@ public class GameRoomManager : NetworkBehaviour
         player.gameObject.layer = layer;
         foreach (Transform child in player.GetComponentsInChildren<Transform>())
             child.gameObject.layer = layer;
+
+        RpcSyncPlayerLayer(player.NetworkObject, layer);
     }
 
     // ─── Disconnect Handling ──────────────────────────────────────────────────
@@ -728,9 +739,12 @@ public class GameRoomManager : NetworkBehaviour
         NetworkTransform nt = player.GetComponent<NetworkTransform>();
         if (nt != null) nt.Teleport();
 
+        Debug.Log($"[GameRoomManager] RpcTeleportAndUnlock — clientId: {conn.ClientId}, " +
+          $"interactionEnabled: {player.Interaction.enabled}");
+
         player.transform.position = position;
         player.transform.rotation = rotation;
-        player.Movement.SetMovementLocked(false);
+        player.Movement.SetMovementLocked(false, "lobby_session");
         player.Interaction.SetInteractionEnabled(true);
         player.Interaction.enabled = true;
         player.ReinitializeCamera();
@@ -786,7 +800,7 @@ public class GameRoomManager : NetworkBehaviour
     {
         PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
         if (player == null) return;
-        player.Movement.SetMovementLocked(false);
+        player.Movement.ClearAllMovementLocks();
         player.Interaction.SetInteractionEnabled(false);
     }
 
@@ -924,4 +938,54 @@ public class GameRoomManager : NetworkBehaviour
         MiniGameController controller = FindActiveMinigameController();
         controller?.ClientInit();
     }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestMinigameAction(string messageType, string payload, NetworkConnection sender = null)
+    {
+        MiniGameController controller = FindActiveMinigameController();
+        controller?.OnClientAction(messageType, payload, sender);
+    }
+    public void TeleportPlayer(NetworkConnection conn, Vector3 pos, Quaternion rot)
+    {
+        RpcTeleportToPoint(conn, pos, rot);
+    }
+
+    [TargetRpc]
+    public void SetPlayerTagMode(NetworkConnection conn, bool active)
+    {
+        PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
+        if (player == null) return;
+
+        JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
+        player.Interaction.SetJinxedTagActive(active, active ? hud : null);
+    }
+
+    [TargetRpc]
+    public void SetPlayerMovementLocked(NetworkConnection conn, bool locked, string source)
+    {
+        PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
+        if (player == null) return;
+        player.Movement.SetMovementLocked(locked, source);
+    }
+
+    [ObserversRpc]
+    private void RpcSyncPlayerLayer(NetworkObject playerNetObj, int layer)
+    {
+        if (playerNetObj == null) return;
+        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        if (player == null) return;
+
+        player.gameObject.layer = layer;
+        foreach (Transform child in player.GetComponentsInChildren<Transform>())
+            child.gameObject.layer = layer;
+    }
+
+    [TargetRpc]
+    public void RpcClearMovementLocks(NetworkConnection conn)
+    {
+        PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
+        if (player == null) return;
+        player.Movement.ClearAllMovementLocks();
+    }
+
 }
