@@ -16,8 +16,8 @@ TagManager:
   - Environment
   - Interactable
   - GameRoom
-  - 
-  - 
+  - Player
+  - Item
   - 
   - 
   - 

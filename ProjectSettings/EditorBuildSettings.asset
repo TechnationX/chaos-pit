@@ -26,6 +26,18 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_Project/Scenes/MiniGames/PaintTheTownScene.unity
     guid: cb7b40c5eacdf6e4f958a7f59c7d8bdc
+  - enabled: 1
+    path: Assets/_Project/Scenes/MiniGames/LastOneStandingScene.unity
+    guid: d2b502e0105bffd489efe212610324b4
+  - enabled: 1
+    path: Assets/_Project/Scenes/MiniGames/ThiefsMarketScene.unity
+    guid: cee80092d8c32174b883e7a67adf7731
+  - enabled: 1
+    path: Assets/_Project/Scenes/MiniGames/JinxedScene.unity
+    guid: 9ecca16bb8f9fd64d894805210869315
+  - enabled: 1
+    path: Assets/_Project/Scenes/MiniGames/BombTossScene.unity
+    guid: 26f94303264be74429cbc4f550740de3
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0
