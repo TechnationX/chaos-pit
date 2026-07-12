@@ -140,7 +140,7 @@ public abstract class MiniGameController : MonoBehaviour
     /// in the same process), both paths run on the same object; the
     /// notifyDismissal: false call simply re-displays the same countdown,
     /// which is harmless.
-    protected IEnumerator ResultsCountdownCoroutine(TextMeshProUGUI countdownText, bool notifyDismissal)
+    protected IEnumerator ResultsCountdownCoroutine(TextMeshProUGUI countdownText, bool notifyDismissal, System.Action onComplete = null)
     {
         float remaining = _resultsDuration;
         while (remaining > 0f)
@@ -152,6 +152,8 @@ public abstract class MiniGameController : MonoBehaviour
         }
 
         if (countdownText != null) countdownText.text = string.Empty;
+
+        onComplete?.Invoke();
 
         if (notifyDismissal)
         {

@@ -119,7 +119,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChaosPit.Minigames.Template.ThievesMarketScoreRow
   _nameText: {fileID: 6008111855428975466}
-  _scoreText: {fileID: 1353315605828808570}
+  _countText: {fileID: 1353315605828808570}
+  _winnerIcon: {fileID: 6199174060732673997}
 --- !u!1 &654448099252378669
 GameObject:
   m_ObjectHideFlags: 0

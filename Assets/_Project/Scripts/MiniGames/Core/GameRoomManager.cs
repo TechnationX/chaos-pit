@@ -19,36 +19,29 @@ public class GameRoomManager : NetworkBehaviour
     [Header("Settings")]
     [SerializeField] private float _countdownDuration = 10f;
 
-    // Station registry — self-registered by MinigameStation on Awake
-    private Dictionary<int, MinigameStation> _stations
-        = new Dictionary<int, MinigameStation>();
+    private Dictionary<int, MinigameStation> _stations = new Dictionary<int, MinigameStation>();
+    private Dictionary<int, GameRoomSession> _sessions = new Dictionary<int, GameRoomSession>();
 
-    // Per-station state
-    private Dictionary<int, GameRoomSession> _sessions
-        = new Dictionary<int, GameRoomSession>();
-
-    // Layer index for GameRoom layer
     private int _gameRoomLayer;
-
     private int _playerLayer;
+    private int _sessionToken = 0;
+    private int _clientSessionToken = 0;
 
     [SerializeField] private MiniGameRegistry _registry;
 
     private static List<MinigameStation> _pendingStations = new List<MinigameStation>();
     private Dictionary<int, HashSet<int>> _loadedClients = new Dictionary<int, HashSet<int>>();
+    private Dictionary<int, int> _unloadedClientCounts = new Dictionary<int, int>();
+    private Dictionary<int, System.Action<ClientPresenceChangeEventArgs>> _unloadListeners
+        = new Dictionary<int, System.Action<ClientPresenceChangeEventArgs>>();
 
     private void Awake()
     {
-        if (Instance != null && Instance != this)
-        {
-            Destroy(gameObject);
-            return;
-        }
+        if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
         _gameRoomLayer = LayerMask.NameToLayer("GameRoom");
         _playerLayer = LayerMask.NameToLayer("Player");
 
-        // Register any stations that were waiting
         foreach (var station in _pendingStations)
             RegisterStation(station);
         _pendingStations.Clear();
@@ -58,10 +51,8 @@ public class GameRoomManager : NetworkBehaviour
 
     public static void RequestRegistration(MinigameStation station)
     {
-        if (Instance != null)
-            Instance.RegisterStation(station);
-        else
-            _pendingStations.Add(station);
+        if (Instance != null) Instance.RegisterStation(station);
+        else _pendingStations.Add(station);
     }
 
     public void RegisterStation(MinigameStation station)
@@ -71,10 +62,8 @@ public class GameRoomManager : NetworkBehaviour
             Debug.LogWarning($"[GameRoomManager] Station {station.StationIndex} already registered.");
             return;
         }
-
         _stations[station.StationIndex] = station;
         _sessions[station.StationIndex] = new GameRoomSession(station.StationIndex, _countdownDuration);
-        //Debug.Log($"[GameRoomManager] Station {station.StationIndex} registered.");
     }
 
     // ─── Join / Leave ─────────────────────────────────────────────────────────
@@ -91,27 +80,19 @@ public class GameRoomManager : NetworkBehaviour
 
         session.Players.Add(player);
 
-        // First player becomes host
         if (session.Players.Count == 1)
             session.HostPlayer = player;
 
         session.State = GameRoomState.Waiting;
 
-        // Teleport to waiting area
         TeleportToWaitingArea(stationIndex, player);
-
-        // Lock movement and interactions
         player.Movement.SetMovementLocked(true, "lobby_session");
-
+        SetPlayerMovementLocked(player.Owner, player.NetworkObject, true, "lobby_session");
         player.Interaction.SetInteractionEnabled(false);
+        RpcDisableInteraction(player.Owner, player.NetworkObject);
 
-        //Debug.Log($"[GameRoomManager] Player {player.name} joined station {stationIndex}. " +
-        //          $"Count: {session.Players.Count}");
-
-        // Notify station to refresh UI
         _stations[stationIndex].OnSessionUpdated(session);
         SyncSessionToClients(stationIndex, session);
-        return;
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -120,9 +101,6 @@ public class GameRoomManager : NetworkBehaviour
         if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) return;
         if (!session.Players.Contains(player)) return;
 
-        bool wasHost = session.HostPlayer == player;
-
-        // If countdown running and this player is leaving — stop it
         if (session.State == GameRoomState.Countdown)
         {
             if (session.CountdownCoroutine != null)
@@ -142,7 +120,6 @@ public class GameRoomManager : NetworkBehaviour
             return;
         }
 
-        // Return to waiting — new host already set by MigrateHost
         session.State = GameRoomState.Waiting;
         _stations[stationIndex].OnSessionUpdated(session);
         SyncSessionToClients(stationIndex, session);
@@ -157,19 +134,9 @@ public class GameRoomManager : NetworkBehaviour
 
     private void OnClientPresenceChangeEnd(ClientPresenceChangeEventArgs args, int stationIndex)
     {
-        //Debug.Log($"[GameRoomManager] OnClientPresenceChangeEnd — scene: {args.Scene.name}, " +
-        //      $"clientId: {args.Connection.ClientId}, added: {args.Added}, station: {stationIndex}");
-
         if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) return;
         if (session.SelectedGame == null) return;
-
-        //Debug.Log($"[GameRoomManager] OnClientPresenceChangeEnd — scene: {args.Scene.name}, " +
-        //  $"clientId: {args.Connection.ClientId}, added: {args.Added}, " +
-        //  $"expected: {session.Players.Count}, loaded: {_loadedClients[stationIndex].Count}");
-
-        // Only care about our scene
         if (args.Scene.name != session.SelectedGame.SceneName) return;
-        // Only care about additions not removals
         if (!args.Added) return;
 
         if (!_loadedClients.ContainsKey(stationIndex))
@@ -180,14 +147,8 @@ public class GameRoomManager : NetworkBehaviour
         int expected = session.Players.Count;
         int loaded = _loadedClients[stationIndex].Count;
 
-        //Debug.Log($"[GameRoomManager] OnClientPresenceChangeEnd — scene: {args.Scene.name}, " +
-        //  $"clientId: {args.Connection.ClientId}, added: {args.Added}, " +
-        //  $"expected: {expected}, loaded: {loaded}, " +
-        //  $"playerIds: {string.Join(",", session.Players.Select(p => p.Owner?.ClientId))}");
-
         if (loaded < expected) return;
 
-        // All clients loaded — unsubscribe and start
         InstanceFinder.NetworkManager.SceneManager.OnClientPresenceChangeEnd -=
             (a) => OnClientPresenceChangeEnd(a, stationIndex);
 
@@ -197,10 +158,11 @@ public class GameRoomManager : NetworkBehaviour
 
     private IEnumerator StartGameAfterLoad(int stationIndex)
     {
-        //Debug.Log($"[GameRoomManager] StartGameAfterLoad — stationIndex: {stationIndex}");
+        _sessionToken++;
+        int token = _sessionToken;
+        RpcSyncSessionToken(_sessionToken);
 
-        // One frame buffer after all clients confirm loaded
-        yield return new WaitForSeconds(0.5f);
+        //yield return new WaitForSeconds(0.5f);
 
         if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) yield break;
 
@@ -218,9 +180,8 @@ public class GameRoomManager : NetworkBehaviour
         controller.StartGame(session.Players);
 
         foreach (PlayerObject player in session.Players)
-            RpcInitMinigame(player.Owner);
+            RpcInitMinigame(player.Owner, player.NetworkObject);
 
-        // Teleport each player to their spawn point on their client
         for (int i = 0; i < session.Players.Count; i++)
         {
             PlayerObject player = session.Players[i];
@@ -233,16 +194,14 @@ public class GameRoomManager : NetworkBehaviour
 
                 NetworkTransform nt = player.GetComponent<NetworkTransform>();
                 if (nt != null) nt.Teleport();
-
                 player.transform.position = pos;
                 player.transform.rotation = rot;
-                RpcTeleportToPoint(player.Owner, pos, rot);
+                RpcTeleportToPoint(player.Owner, player.NetworkObject, pos, rot);
             }
-            RpcReinitializeCamera(player.Owner);
-            RpcUnlockPlayer(player.Owner);  // ADD
+            RpcReinitializeCamera(player.Owner, player.NetworkObject);
+            RpcUnlockPlayer(player.Owner, player.NetworkObject, token);
         }
 
-        //Debug.Log($"[GameRoomManager] Game started for station {stationIndex}");
         _stations[stationIndex].OnSessionUpdated(session);
     }
 
@@ -262,7 +221,6 @@ public class GameRoomManager : NetworkBehaviour
         }
 
         session.SelectedGame = entry;
-        //Debug.Log($"[GameRoomManager] Station {stationIndex} selected game: {entry.MiniGameName}");
         _stations[stationIndex].OnSessionUpdated(session);
         SyncSessionToClients(stationIndex, session);
     }
@@ -278,8 +236,6 @@ public class GameRoomManager : NetworkBehaviour
 
         session.State = GameRoomState.Countdown;
         session.CountdownCoroutine = StartCoroutine(CountdownCoroutine(stationIndex));
-
-        //Debug.Log($"[GameRoomManager] Countdown started for station {stationIndex}");
         _stations[stationIndex].OnSessionUpdated(session);
     }
 
@@ -292,17 +248,13 @@ public class GameRoomManager : NetworkBehaviour
         if (session.CountdownCoroutine != null)
             StopCoroutine(session.CountdownCoroutine);
 
-        // Return all players to lobby
         foreach (PlayerObject player in session.Players.ToList())
             ReturnPlayerToLobby(player);
 
         ResetSession(stationIndex);
-        Debug.Log($"[GameRoomManager] Countdown cancelled for station {stationIndex}");
         _stations[stationIndex].OnSessionUpdated(session);
         SyncSessionToClients(stationIndex, session);
     }
-
-    // GameRoomManager.cs
 
     [ObserversRpc]
     private void RpcUpdateCountdown(int stationIndex, int secondsRemaining)
@@ -331,18 +283,11 @@ public class GameRoomManager : NetworkBehaviour
     [Server]
     private void BeginTransition(int stationIndex)
     {
-        //Debug.Log($"[GameRoomManager] BeginTransition — stationIndex: {stationIndex}");
-
         if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session))
         {
             Debug.LogError("[GameRoomManager] BeginTransition — session not found.");
             return;
         }
-
-        //Debug.Log($"[GameRoomManager] BeginTransition — session found, state: {session.State}");
-        //Debug.Log($"[GameRoomManager] BeginTransition — SelectedGame: {session.SelectedGame?.MiniGameName}");
-        //Debug.Log($"[GameRoomManager] BeginTransition — ScoreManager: {ScoreManager.Instance != null}");
-        //Debug.Log($"[GameRoomManager] BeginTransition — Players: {session.Players.Count}");
 
         session.State = GameRoomState.Loading;
         string sessionId = GetSessionId(stationIndex);
@@ -358,13 +303,11 @@ public class GameRoomManager : NetworkBehaviour
         {
             SetPlayerLayer(player, _gameRoomLayer);
             RpcSetPlayerLayerObservers(player.GetComponent<NetworkObject>(), _gameRoomLayer);
-            Debug.Log($"[GameRoomManager] SetPlayerLayer — player: {player.name}, layer: {_gameRoomLayer}");
             RpcSetLobbyCanvasVisible(player.Owner, false);
         }
 
-        // Subscribe BEFORE loading
         InstanceFinder.NetworkManager.SceneManager.OnClientPresenceChangeEnd +=
-         (args) => OnClientPresenceChangeEnd(args, stationIndex);
+            (args) => OnClientPresenceChangeEnd(args, stationIndex);
 
         SceneLoadData sld = new SceneLoadData(session.SelectedGame.SceneName)
         {
@@ -373,29 +316,19 @@ public class GameRoomManager : NetworkBehaviour
         };
 
         InstanceFinder.NetworkManager.SceneManager.LoadConnectionScenes(connections, sld);
-
-        //Debug.Log($"[GameRoomManager] Loading scene {session.SelectedGame.SceneName} " +
-        //          $"for station {stationIndex}");
     }
 
     [ObserversRpc]
     private void RpcSetPlayerLayerObservers(NetworkObject playerNetObj, int layer)
     {
-        //Debug.Log($"[GameRoomManager] RpcSetPlayerLayerObservers — target: {playerNetObj?.name ?? "null"}, " +
-        //      $"ownerClientId: {playerNetObj?.Owner?.ClientId ?? -1}, layer: {layer}, " +
-        //      $"IsServer: {IsServerInitialized}, IsClient: {IsClientInitialized}");
-
         if (playerNetObj == null) return;
         playerNetObj.gameObject.layer = layer;
         foreach (Transform child in playerNetObj.GetComponentsInChildren<Transform>())
             child.gameObject.layer = layer;
-
-       // Debug.Log($"[GameRoomManager] RpcSetPlayerLayerObservers — applied. New layer on {playerNetObj.name}: {playerNetObj.gameObject.layer}");
     }
 
     // ─── Results ──────────────────────────────────────────────────────────────
 
-    /// Called by MiniGameController when all rounds are complete.
     [Server]
     public void OnGameComplete(int stationIndex, List<RoundResult> results)
     {
@@ -404,13 +337,8 @@ public class GameRoomManager : NetworkBehaviour
         session.State = GameRoomState.Results;
         string sessionId = GetSessionId(stationIndex);
 
-        // Process scores
         ScoreManager.Instance.SubmitResults(sessionId, results);
-
-        // Build results data for display
         ResultsData data = BuildResultsData(sessionId, results);
-
-        // Tell controller to show results screen
         session.ActiveController?.ShowResults(data);
 
         Debug.Log($"[GameRoomManager] Game complete for station {stationIndex} — showing results");
@@ -439,7 +367,6 @@ public class GameRoomManager : NetworkBehaviour
             });
         }
 
-        // Sort by standing
         data.Entries.Sort((a, b) => a.Standing.CompareTo(b.Standing));
         return data;
     }
@@ -451,7 +378,6 @@ public class GameRoomManager : NetworkBehaviour
         ui?.SetPlayerName(name);
     }
 
-    // Called by MiniGameController when results timer expires
     public void OnResultsDismissed(MiniGameController controller)
     {
         foreach (var kvp in _sessions)
@@ -468,46 +394,79 @@ public class GameRoomManager : NetworkBehaviour
     // ─── Return to Lobby ──────────────────────────────────────────────────────
 
     [Server]
-    public void ReturnToLobby(int stationIndex)
+    private void ReturnToLobby(int stationIndex)
     {
         if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) return;
+
+        _sessionToken++;
+        RpcSyncSessionToken(_sessionToken);
 
         session.State = GameRoomState.Returning;
         SyncSessionToClients(stationIndex, session);
 
         string sessionId = GetSessionId(stationIndex);
-
-        // Clean up mini game
         session.ActiveController?.CleanUp();
 
-        // Unload game room scene for session connections
         NetworkConnection[] connections = session.Players
             .Select(p => p.Owner)
             .Where(c => c != null)
             .ToArray();
 
-        SceneUnloadData sud = new SceneUnloadData(session.SelectedGame.SceneName);
-        InstanceFinder.NetworkManager.SceneManager.UnloadConnectionScenes(connections, sud);
+        List<PlayerObject> players = session.Players.ToList();
+        string sceneName = session.SelectedGame.SceneName;
 
-        // Return players to lobby
-        foreach (PlayerObject player in session.Players.ToList())
+        _unloadedClientCounts[stationIndex] = 0;
+
+        void listener(ClientPresenceChangeEventArgs args) =>
+            OnMinigameSceneUnloaded(args, players, sceneName, sessionId, stationIndex);
+
+        _unloadListeners[stationIndex] = listener;
+        InstanceFinder.NetworkManager.SceneManager.OnClientPresenceChangeEnd += listener;
+
+        SceneUnloadData sud = new SceneUnloadData(sceneName);
+        InstanceFinder.NetworkManager.SceneManager.UnloadConnectionScenes(connections, sud);
+    }
+
+    private void OnMinigameSceneUnloaded(ClientPresenceChangeEventArgs args, List<PlayerObject> players,
+        string sceneName, string sessionId, int stationIndex)
+    {
+        if (args.Scene.name != sceneName) return;
+        if (args.Added) return;
+
+        if (!_unloadedClientCounts.ContainsKey(stationIndex))
+            _unloadedClientCounts[stationIndex] = 0;
+
+        _unloadedClientCounts[stationIndex]++;
+
+        Debug.Log($"[GameRoomManager] Scene unload progress — {_unloadedClientCounts[stationIndex]}/{players.Count}");
+
+        if (_unloadedClientCounts[stationIndex] < players.Count) return;
+
+        // All players unloaded — clean up listener
+        _unloadedClientCounts.Remove(stationIndex);
+
+        if (_unloadListeners.TryGetValue(stationIndex, out var storedListener))
         {
-            ReturnPlayerToLobby(player);
+            InstanceFinder.NetworkManager.SceneManager.OnClientPresenceChangeEnd -= storedListener;
+            _unloadListeners.Remove(stationIndex);
         }
 
-        // Refresh lobby leaderboard
+        StartCoroutine(ReturnPlayersDelayed(players, sessionId, stationIndex));
+    }
+
+    private IEnumerator ReturnPlayersDelayed(List<PlayerObject> players, string sessionId, int stationIndex)
+    {
+        yield return new WaitForSeconds(0.3f);
+
+        foreach (PlayerObject player in players)
+            ReturnPlayerToLobby(player);
+
         GameRoomManager.Instance?.SyncLeaderboardToClients();
-
-        // Clear score session
         ScoreManager.Instance.UnregisterSession(sessionId);
-
         ResetSession(stationIndex);
 
-        // Sync idle state to clients so UI resets
         if (_stations.TryGetValue(stationIndex, out MinigameStation station))
             SyncSessionToClients(stationIndex, _sessions[stationIndex]);
-
-        //Debug.Log($"[GameRoomManager] Players returned to lobby from station {stationIndex}");
     }
 
     // ─── Player Helpers ───────────────────────────────────────────────────────
@@ -528,47 +487,27 @@ public class GameRoomManager : NetworkBehaviour
 
         NetworkTransform nt = player.GetComponent<NetworkTransform>();
         if (nt != null) nt.Teleport();
-        else
-            player.transform.position = pos;
+        else player.transform.position = pos;
 
-        RpcTeleportToPoint(player.Owner, pos, rot);
+        RpcTeleportToPoint(player.Owner, player.NetworkObject, pos, rot);
     }
 
     private void ReturnPlayerToLobby(PlayerObject player)
     {
-        Debug.Log($"[GameRoomManager] ReturnPlayerToLobby — player: {player.name}, " +
-          $"interactionEnabled: {player.Interaction.enabled}");
-
         SetPlayerLayer(player, _playerLayer);
-        RpcSetPlayerLayerObservers(player.GetComponent<NetworkObject>(), 0);
+        //RpcSetPlayerLayerObservers(player.GetComponent<NetworkObject>(), 0);
         player.Movement.ClearAllMovementLocks();
-        RpcClearMovementLocks(player.Owner);
+        RpcClearMovementLocks(player.Owner, player.NetworkObject);
         player.Interaction.SetInteractionEnabled(true);
 
         if (LobbySpawner.Instance != null &&
-            LobbySpawner.Instance.TryGetSpawnPoint(out Vector3 pos, out Quaternion rot))
+            LobbySpawner.Instance.TryGetReturnSpawnPoint(out Vector3 pos, out Quaternion rot))
         {
             NetworkTransform nt = player.GetComponent<NetworkTransform>();
             if (nt != null) nt.Teleport();
-            else
-                player.transform.position = pos;
+            else player.transform.position = pos;
 
-            RpcTeleportAndUnlock(player.Owner, pos, rot);
-
-            // Host is both server and client — TargetRpc may not fire for host owner
-            // Call unlock directly for the host player
-            if (player.IsOwner)
-            {
-                player.transform.position = pos;
-                player.transform.rotation = rot;
-                player.Movement.SetMovementLocked(false, "jinxed_round");
-                player.Interaction.SetInteractionEnabled(true);
-                player.Interaction.enabled = true;
-                player.ReinitializeCamera();
-
-                LobbyUIManager ui = FindFirstObjectByType<LobbyUIManager>(FindObjectsInactive.Include);
-                if (ui != null) ui.SetVisible(true);
-            }
+            RpcTeleportAndUnlockPlayer(player.Owner, player.NetworkObject, pos, rot);
         }
     }
 
@@ -581,25 +520,16 @@ public class GameRoomManager : NetworkBehaviour
     private void RemovePlayerFromSession(GameRoomSession session, PlayerObject player, int stationIndex)
     {
         session.Players.Remove(player);
-
-        // Migrate host if needed
         if (session.HostPlayer == player)
             MigrateHost(session, stationIndex);
     }
 
     private void MigrateHost(GameRoomSession session, int stationIndex)
     {
-        if (session.Players.Count == 0)
-        {
-            session.HostPlayer = null;
-            return;
-        }
+        if (session.Players.Count == 0) { session.HostPlayer = null; return; }
 
         session.HostPlayer = session.Players[0];
-        Debug.Log($"[GameRoomManager] Host migrated to {session.HostPlayer.name} " +
-                  $"on station {stationIndex}");
-
-        // Sync new host to all clients so UI updates correctly
+        Debug.Log($"[GameRoomManager] Host migrated to {session.HostPlayer.name} on station {stationIndex}");
         SyncSessionToClients(stationIndex, session);
     }
 
@@ -608,13 +538,12 @@ public class GameRoomManager : NetworkBehaviour
         player.gameObject.layer = layer;
         foreach (Transform child in player.GetComponentsInChildren<Transform>())
             child.gameObject.layer = layer;
-
         RpcSyncPlayerLayer(player.NetworkObject, layer);
     }
 
     // ─── Disconnect Handling ──────────────────────────────────────────────────
 
-    public void OnPlayerDisconnected(NetworkConnection conn)
+    public void HandlePlayerDisconnected(NetworkConnection conn)
     {
         foreach (var kvp in _sessions)
         {
@@ -627,19 +556,12 @@ public class GameRoomManager : NetworkBehaviour
             if (session.State == GameRoomState.Waiting)
             {
                 RemovePlayerFromSession(session, player, stationIndex);
-
-                if (session.Players.Count == 0)
-                    ResetSession(stationIndex);
-                else
-                    SyncSessionToClients(stationIndex, session);
-
+                if (session.Players.Count == 0) ResetSession(stationIndex);
+                else SyncSessionToClients(stationIndex, session);
                 _stations[stationIndex].OnSessionUpdated(session);
             }
             else if (session.State == GameRoomState.Countdown)
             {
-                bool wasHost = session.HostPlayer == player;
-
-                // Stop countdown
                 if (session.CountdownCoroutine != null)
                     StopCoroutine(session.CountdownCoroutine);
                 session.CountdownCoroutine = null;
@@ -652,42 +574,28 @@ public class GameRoomManager : NetworkBehaviour
                 }
                 else
                 {
-                    // Migrate host if needed — already done in RemovePlayerFromSession
                     session.State = GameRoomState.Waiting;
                     SyncSessionToClients(stationIndex, session);
                     _stations[stationIndex].OnSessionUpdated(session);
-                    Debug.Log($"[GameRoomManager] Countdown cancelled due to disconnect — " +
-                              $"migrated to waiting, new host: {session.HostPlayer?.name}");
                 }
             }
             else if (session.State == GameRoomState.InProgress ||
                      session.State == GameRoomState.Results)
             {
                 bool wasHost = session.HostPlayer == player;
-
                 session.ActiveController?.RemovePlayer(player);
                 RemovePlayerFromSession(session, player, stationIndex);
 
                 if (session.Players.Count == 0)
                 {
-                    // No players left — clean up
                     ReturnToLobby(stationIndex);
                 }
                 else if (wasHost)
                 {
-                    // Try to migrate host
                     if (session.HostPlayer != null)
-                    {
-                        Debug.Log($"[GameRoomManager] Host disconnected during game — " +
-                                  $"migrated to {session.HostPlayer.name}");
                         SyncSessionToClients(stationIndex, session);
-                    }
                     else
-                    {
-                        // Migration failed — return everyone to lobby with no points
-                        Debug.Log("[GameRoomManager] Host migration failed — returning to lobby.");
                         ReturnToLobbyNoPoints(stationIndex);
-                    }
                 }
             }
 
@@ -700,7 +608,6 @@ public class GameRoomManager : NetworkBehaviour
     private void ResetSession(int stationIndex)
     {
         _sessions[stationIndex] = new GameRoomSession(stationIndex, _countdownDuration);
-        //Debug.Log($"[GameRoomManager] Session reset for station {stationIndex}");
     }
 
     private string GetSessionId(int stationIndex) => $"station_{stationIndex}";
@@ -711,47 +618,153 @@ public class GameRoomManager : NetworkBehaviour
         return session;
     }
 
-    [TargetRpc]
-    private void RpcTeleportToPoint(NetworkConnection conn, Vector3 position, Quaternion rotation)
-    {
-        //Debug.Log($"[GameRoomManager] RpcTeleportToPoint — clientId: {conn.ClientId}, pos: {position}");
+    // ─── RPCs ─────────────────────────────────────────────────────────────────
+    // All TargetRpcs pass NetworkObject directly to avoid conn.FirstObject
+    // resolving to the wrong player on the host.
 
-        PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
+    [TargetRpc]
+    private void RpcTeleportToPoint(NetworkConnection conn, NetworkObject playerNetObj, Vector3 position, Quaternion rotation)
+    {
+        if (playerNetObj == null) return;
+        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
         if (player == null) return;
 
         NetworkTransform nt = player.GetComponent<NetworkTransform>();
         if (nt != null) nt.enabled = false;
-
         player.transform.position = position;
         player.transform.rotation = rotation;
-
         StartCoroutine(ReenableNetworkTransform(nt));
     }
 
     [TargetRpc]
-    private void RpcTeleportAndUnlock(NetworkConnection conn, Vector3 position, Quaternion rotation)
+    private void RpcTeleportAndUnlockPlayer(NetworkConnection conn, NetworkObject playerNetObj, Vector3 position, Quaternion rotation)
     {
-        //Debug.Log($"[GameRoomManager] RpcTeleportAndUnlock — targeting conn: {conn.ClientId}, pos: {position}");
-
-        PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
+        if (playerNetObj == null) return;
+        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
         if (player == null) return;
 
         NetworkTransform nt = player.GetComponent<NetworkTransform>();
         if (nt != null) nt.Teleport();
 
-        Debug.Log($"[GameRoomManager] RpcTeleportAndUnlock — clientId: {conn.ClientId}, " +
-          $"interactionEnabled: {player.Interaction.enabled}");
-
         player.transform.position = position;
         player.transform.rotation = rotation;
-        player.Movement.SetMovementLocked(false, "lobby_session");
+        player.Movement.ClearAllMovementLocks();
+
+        //Debug.Log($"[GameRoomManager] RpcTeleportAndUnlockPlayer — enabling interaction, frame: {Time.frameCount}");
         player.Interaction.SetInteractionEnabled(true);
         player.Interaction.enabled = true;
+        player.Interaction.SetJinxedTagActive(false);
+        player.Interaction.SetBombPassActive(false);
+        player.Interaction.SetThiefsMarketPunchActive(false);
+        player.Interaction.RestartUpdateLoop();
+        //Debug.Log($"[GameRoomManager] Player scene: {player.gameObject.scene.name}, " +
+        //  $"interaction scene: {player.Interaction.gameObject.scene.name}");
+
         player.ReinitializeCamera();
+        player.Movement.SetStaminaLimited(false);
 
         LobbyUIManager ui = FindFirstObjectByType<LobbyUIManager>(FindObjectsInactive.Include);
-        Debug.Log($"[GameRoomManager] RpcTeleportAndUnlock — LobbyUIManager found: {ui != null}, active: {ui?.gameObject.activeSelf}");
         if (ui != null) ui.SetVisible(true);
+
+        //Debug.Log($"[GameRoomManager] RpcTeleportAndUnlockPlayer DONE — " +
+        //  $"interactionEnabled: {player.Interaction.enabled}, " +
+        //  $"componentEnabled: {player.GetComponent<InteractionManager>()?.enabled}");
+    }
+
+    [TargetRpc]
+    private void RpcUnlockPlayer(NetworkConnection conn, NetworkObject playerNetObj, int token)
+    {
+        if (playerNetObj == null) return;
+        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        if (player == null) return;
+
+        if (token != _clientSessionToken)
+        {
+            Debug.Log($"[GameRoomManager] RpcUnlockPlayer — stale token {token} vs {_sessionToken}, ignoring");
+            return;
+        }
+
+        player.Movement.ClearAllMovementLocks();
+
+        //Debug.Log($"[GameRoomManager] RpcUnlockPlayer — disabling interaction, frame: {Time.frameCount}");
+        player.Interaction.SetInteractionEnabled(false);
+        player.Movement.SetStaminaLimited(true);
+    }
+
+    [TargetRpc]
+    private void RpcReinitializeCamera(NetworkConnection conn, NetworkObject playerNetObj)
+    {
+        if (playerNetObj == null) return;
+        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        if (player == null) return;
+        player.ReinitializeCamera();
+    }
+
+    [TargetRpc]
+    private void RpcInitMinigame(NetworkConnection conn, NetworkObject playerNetObj)
+    {
+        MiniGameController controller = FindActiveMinigameController();
+        controller?.ClientInit();
+    }
+
+    [TargetRpc]
+    private void RpcSetLobbyCanvasVisible(NetworkConnection conn, bool visible)
+    {
+        LobbyUIManager ui = FindFirstObjectByType<LobbyUIManager>();
+        if (ui != null) ui.SetVisible(visible);
+    }
+
+    [TargetRpc]
+    public void SetPlayerTagMode(NetworkConnection conn, NetworkObject playerNetObj, bool active)
+    {
+        if (playerNetObj == null) return;
+        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        if (player == null) return;
+        player.Interaction.SetJinxedTagActive(active);
+    }
+
+    [TargetRpc]
+    public void SetPlayerThiefsMarketPunchMode(NetworkConnection conn, NetworkObject playerNetObj, bool active)
+    {
+        //Debug.Log($"[TM-DEBUG] TargetRpc received on this client — active: {active}, playerNetObj null: {playerNetObj == null}");
+        if (playerNetObj == null) return;
+        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        //Debug.Log($"[TM-DEBUG] Resolved player: {player?.name}, IsOwner: {player?.IsOwner}");
+        if (player == null) return;
+        player.Interaction.SetThiefsMarketPunchActive(active);
+    } 
+
+    [TargetRpc]
+    public void SetPlayerMovementLocked(NetworkConnection conn, NetworkObject playerNetObj, bool locked, string source)
+    {
+        if (playerNetObj == null) return;
+        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        if (player == null) return;
+        player.Movement.SetMovementLocked(locked, source);
+    }
+
+    [TargetRpc]
+    public void RpcClearMovementLocks(NetworkConnection conn, NetworkObject playerNetObj)
+    {
+        if (playerNetObj == null) return;
+        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        if (player == null) return;
+        player.Movement.ClearAllMovementLocks();
+    }
+
+    [TargetRpc]
+    private void RpcDisableInteraction(NetworkConnection conn, NetworkObject playerNetObj)
+    {
+        if (playerNetObj == null) return;
+        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        if (player == null) return;
+        player.Interaction.SetInteractionEnabled(false);
+    }
+
+    [ObserversRpc]
+    private void RpcSyncSessionToken(int token)
+    {
+        _clientSessionToken = token;
     }
 
     [ObserversRpc]
@@ -787,21 +800,107 @@ public class GameRoomManager : NetworkBehaviour
         Debug.LogWarning("[GameRoomManager] NotifyGameComplete — no matching session found.");
     }
 
-    [TargetRpc]
-    private void RpcReinitializeCamera(NetworkConnection conn)
+    [ObserversRpc]
+    private void RpcSyncPlayerLayer(NetworkObject playerNetObj, int layer)
     {
-        PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
+        if (playerNetObj == null) return;
+        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
         if (player == null) return;
-        player.ReinitializeCamera();
+        player.gameObject.layer = layer;
+        foreach (Transform child in player.GetComponentsInChildren<Transform>())
+            child.gameObject.layer = layer;
     }
 
-    [TargetRpc]
-    private void RpcUnlockPlayer(NetworkConnection conn)
+    [ObserversRpc]
+    private void RpcSyncLeaderboard(List<SessionLeaderboardEntry> careerEntries,
+                                     List<SessionLeaderboardEntry> sessionEntries)
     {
-        PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
-        if (player == null) return;
-        player.Movement.ClearAllMovementLocks();
-        player.Interaction.SetInteractionEnabled(false);
+        LeaderboardManager.Instance?.SetCachedData(careerEntries, sessionEntries);
+        LeaderboardManager.Instance?.Refresh();
+    }
+
+    [ObserversRpc]
+    public void RpcMinigameMessage(string messageType, string payload)
+    {
+        if (IsServerInitialized && !IsClientInitialized) return;
+        MiniGameController controller = FindActiveMinigameController();
+        controller?.OnNetworkMessage(messageType, payload);
+    }
+
+    private MiniGameController FindActiveMinigameController()
+    {
+        for (int i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+        {
+            var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
+            foreach (GameObject obj in scene.GetRootGameObjects())
+            {
+                MiniGameController ctrl = obj.GetComponentInChildren<MiniGameController>();
+                if (ctrl != null) return ctrl;
+            }
+        }
+        return null;
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestMinigameAction(string messageType, string payload, NetworkConnection sender = null)
+    {
+        MiniGameController controller = FindActiveMinigameController();
+        controller?.OnClientAction(messageType, payload, sender);
+    }
+
+    public void TeleportPlayer(NetworkConnection conn, Vector3 pos, Quaternion rot)
+    {
+        // Find the player object for this connection to pass NetworkObject
+        PlayerObject player = null;
+        foreach (var session in _sessions.Values)
+        {
+            player = session.Players.FirstOrDefault(p => p.Owner == conn);
+            if (player != null) break;
+        }
+
+        if (player != null)
+            RpcTeleportToPoint(conn, player.NetworkObject, pos, rot);
+    }
+
+    public void SyncLeaderboardToClients()
+    {
+        var careerEntries = ScoreManager.Instance.GetCareerLeaderboard();
+        var sessionEntries = new List<SessionLeaderboardEntry>();
+        var sessionScoreMap = new Dictionary<int, int>();
+
+        foreach (var kvp in _sessions)
+        {
+            string sessionId = GetSessionId(kvp.Key);
+            var entries = ScoreManager.Instance.GetSessionLeaderboard(sessionId);
+            foreach (var entry in entries)
+            {
+                if (!sessionScoreMap.ContainsKey(entry.ClientId))
+                    sessionScoreMap[entry.ClientId] = 0;
+                sessionScoreMap[entry.ClientId] += entry.SessionScore;
+            }
+        }
+
+        foreach (var profile in PlayerProfileManager.Instance.GetAllProfiles())
+        {
+            if (!sessionScoreMap.ContainsKey(profile.ClientId))
+                sessionScoreMap[profile.ClientId] = 0;
+        }
+
+        var sorted = sessionScoreMap.OrderByDescending(kvp => kvp.Value).ToList();
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            PlayerProfile profile = PlayerProfileManager.Instance.GetProfile(sorted[i].Key);
+            sessionEntries.Add(new SessionLeaderboardEntry
+            {
+                ClientId = sorted[i].Key,
+                DisplayName = profile?.DisplayName ?? $"Player_{sorted[i].Key}",
+                SessionScore = sorted[i].Value,
+                CareerScore = profile?.CareerScore ?? 0,
+                Standing = i + 1
+            });
+        }
+
+        RpcSyncLeaderboard(careerEntries, sessionEntries);
     }
 
     [Server]
@@ -825,167 +924,9 @@ public class GameRoomManager : NetworkBehaviour
             InstanceFinder.NetworkManager.SceneManager.UnloadConnectionScenes(connections, sud);
         }
 
-        foreach (PlayerObject player in session.Players.ToList())
-            ReturnPlayerToLobby(player);
-
         string sessionId = GetSessionId(stationIndex);
-        ScoreManager.Instance.UnregisterSession(sessionId);
+        List<PlayerObject> players = session.Players.ToList();
 
-        ResetSession(stationIndex);
-
-        if (_stations.TryGetValue(stationIndex, out MinigameStation station))
-            SyncSessionToClients(stationIndex, _sessions[stationIndex]);
-
-        Debug.Log($"[GameRoomManager] ReturnToLobbyNoPoints — station {stationIndex}");
+        StartCoroutine(ReturnPlayersDelayed(players, sessionId, stationIndex));
     }
-
-    public void SyncLeaderboardToClients()
-    {
-        //Debug.Log($"[GameRoomManager] SyncLeaderboardToClients — profiles: {PlayerProfileManager.Instance.GetAllProfiles().Count}");
-        var careerEntries = ScoreManager.Instance.GetCareerLeaderboard();
-
-        // Build aggregate session scores across all active sessions
-        var sessionEntries = new List<SessionLeaderboardEntry>();
-        var sessionScoreMap = new Dictionary<int, int>();
-
-        foreach (var kvp in _sessions)
-        {
-            string sessionId = GetSessionId(kvp.Key);
-            var entries = ScoreManager.Instance.GetSessionLeaderboard(sessionId);
-            foreach (var entry in entries)
-            {
-                if (!sessionScoreMap.ContainsKey(entry.ClientId))
-                    sessionScoreMap[entry.ClientId] = 0;
-                sessionScoreMap[entry.ClientId] += entry.SessionScore;
-            }
-        }
-
-        // Also include all connected players with 0 session score if not already listed
-        foreach (var profile in PlayerProfileManager.Instance.GetAllProfiles())
-        {
-            if (!sessionScoreMap.ContainsKey(profile.ClientId))
-                sessionScoreMap[profile.ClientId] = 0;
-        }
-
-        // Build sorted list
-        var sorted = sessionScoreMap
-            .OrderByDescending(kvp => kvp.Value)
-            .ToList();
-
-        for (int i = 0; i < sorted.Count; i++)
-        {
-            PlayerProfile profile = PlayerProfileManager.Instance.GetProfile(sorted[i].Key);
-            sessionEntries.Add(new SessionLeaderboardEntry
-            {
-                ClientId = sorted[i].Key,
-                DisplayName = profile?.DisplayName ?? $"Player_{sorted[i].Key}",
-                SessionScore = sorted[i].Value,
-                CareerScore = profile?.CareerScore ?? 0,
-                Standing = i + 1
-            });
-        }
-
-        RpcSyncLeaderboard(careerEntries, sessionEntries);
-    }
-
-    [ObserversRpc]
-    private void RpcSyncLeaderboard(List<SessionLeaderboardEntry> careerEntries,
-                                     List<SessionLeaderboardEntry> sessionEntries)
-    {
-        LeaderboardManager.Instance?.SetCachedData(careerEntries, sessionEntries);
-        LeaderboardManager.Instance?.Refresh();
-    }
-
-    /// Generic RPC for any minigame to send data to all clients.
-    /// Called by MiniGameController subclasses on the server.
-    /// Clients find the active controller and dispatch the message to it.
-    [ObserversRpc]
-    public void RpcMinigameMessage(string messageType, string payload)
-    {
-        //Debug.Log($"[GameRoomManager] RpcMinigameMessage SENT/RECEIVED — type: {messageType}, IsServer: {IsServerInitialized}, IsClient: {IsClientInitialized}");
-
-        if (IsServerInitialized && !IsClientInitialized) return;
-        MiniGameController controller = FindActiveMinigameController();
-        controller?.OnNetworkMessage(messageType, payload);
-    }
-
-    /// Finds the active MiniGameController across all loaded scenes.
-    /// Reuses the same scene-search pattern already in GameRoomManager.
-    private MiniGameController FindActiveMinigameController()
-    {
-        for (int i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
-        {
-            var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
-            foreach (GameObject obj in scene.GetRootGameObjects())
-            {
-                MiniGameController ctrl = obj.GetComponentInChildren<MiniGameController>();
-                if (ctrl != null) return ctrl;
-            }
-        }
-        return null;
-    }
-
-    [TargetRpc]
-    private void RpcSetLobbyCanvasVisible(NetworkConnection conn, bool visible)
-    {
-        LobbyUIManager ui = FindFirstObjectByType<LobbyUIManager>();
-        if (ui != null) ui.SetVisible(visible);
-    }
-
-    [TargetRpc]
-    private void RpcInitMinigame(NetworkConnection conn)
-    {
-        MiniGameController controller = FindActiveMinigameController();
-        controller?.ClientInit();
-    }
-
-    [ServerRpc(RequireOwnership = false)]
-    public void RequestMinigameAction(string messageType, string payload, NetworkConnection sender = null)
-    {
-        MiniGameController controller = FindActiveMinigameController();
-        controller?.OnClientAction(messageType, payload, sender);
-    }
-    public void TeleportPlayer(NetworkConnection conn, Vector3 pos, Quaternion rot)
-    {
-        RpcTeleportToPoint(conn, pos, rot);
-    }
-
-    [TargetRpc]
-    public void SetPlayerTagMode(NetworkConnection conn, bool active)
-    {
-        PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
-        if (player == null) return;
-
-        JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
-        player.Interaction.SetJinxedTagActive(active, active ? hud : null);
-    }
-
-    [TargetRpc]
-    public void SetPlayerMovementLocked(NetworkConnection conn, bool locked, string source)
-    {
-        PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
-        if (player == null) return;
-        player.Movement.SetMovementLocked(locked, source);
-    }
-
-    [ObserversRpc]
-    private void RpcSyncPlayerLayer(NetworkObject playerNetObj, int layer)
-    {
-        if (playerNetObj == null) return;
-        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
-        if (player == null) return;
-
-        player.gameObject.layer = layer;
-        foreach (Transform child in player.GetComponentsInChildren<Transform>())
-            child.gameObject.layer = layer;
-    }
-
-    [TargetRpc]
-    public void RpcClearMovementLocks(NetworkConnection conn)
-    {
-        PlayerObject player = conn.FirstObject?.GetComponent<PlayerObject>();
-        if (player == null) return;
-        player.Movement.ClearAllMovementLocks();
-    }
-
 }

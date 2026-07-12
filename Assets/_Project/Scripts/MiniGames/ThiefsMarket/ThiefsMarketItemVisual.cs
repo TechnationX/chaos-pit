@@ -9,6 +9,8 @@ using UnityEngine;
 [RequireComponent(typeof(Collider))]
 public class ThiefsMarketItemVisual : MonoBehaviour
 {
+    [SerializeField] private int _pointValue = 1;
+    public int PointValue => _pointValue;
     private int _itemId = -1;
     private Vector3 _originalPosition;
 

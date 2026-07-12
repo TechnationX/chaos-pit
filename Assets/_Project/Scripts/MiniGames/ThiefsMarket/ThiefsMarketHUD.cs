@@ -5,6 +5,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
+using System.Collections;
 
 namespace ChaosPit.Minigames.ThiefsMarket
 {
@@ -13,7 +14,6 @@ namespace ChaosPit.Minigames.ThiefsMarket
         [Header("HUD Elements")]
         [SerializeField] private TextMeshProUGUI _roundText;
         [SerializeField] private TextMeshProUGUI _timerText;
-        [SerializeField] private TextMeshProUGUI _punchPromptText;
         [SerializeField] private TextMeshProUGUI _feedText;
 
         [Header("Score Rows")]
@@ -23,6 +23,7 @@ namespace ChaosPit.Minigames.ThiefsMarket
         private Dictionary<int, string> _nameMap = new Dictionary<int, string>();
         private Dictionary<int, ThiefsMarketScoreRow> _scoreRows = new Dictionary<int, ThiefsMarketScoreRow>();
         private int _localPlayerId = -1;
+        private Coroutine _feedClearCoroutine;
 
         // ── Init ──────────────────────────────────────────────────
 
@@ -42,8 +43,6 @@ namespace ChaosPit.Minigames.ThiefsMarket
                 row.Init(kvp.Key, kvp.Value);
                 _scoreRows[kvp.Key] = row;
             }
-
-            SetPunchPrompt(false);
         }
 
         // ── Message Routing ───────────────────────────────────────
@@ -194,20 +193,25 @@ namespace ChaosPit.Minigames.ThiefsMarket
             }
         }
 
-        // ── Punch Prompt ──────────────────────────────────────────
-
-        public void SetPunchPrompt(bool visible, string targetName = "")
-        {
-            if (_punchPromptText == null) return;
-            _punchPromptText.gameObject.SetActive(visible);
-            if (visible) _punchPromptText.text = $"[Click] Punch {targetName}";
-        }
-
         // ── Feed ──────────────────────────────────────────────────
 
         private void ShowFeed(string message)
         {
-            if (_feedText != null) _feedText.text = message;
+            if (_feedText != null)
+                _feedText.text = message;
+
+            if (_feedClearCoroutine != null)
+                StopCoroutine(_feedClearCoroutine);
+
+            if (!string.IsNullOrEmpty(message))
+                _feedClearCoroutine = StartCoroutine(ClearFeedAfterDelay());
+        }
+
+        private IEnumerator ClearFeedAfterDelay()
+        {
+            yield return new WaitForSeconds(2.5f);
+            if (_feedText != null) _feedText.text = string.Empty;
+            _feedClearCoroutine = null;
         }
 
         // ── Helpers ───────────────────────────────────────────────
@@ -216,8 +220,14 @@ namespace ChaosPit.Minigames.ThiefsMarket
         {
             foreach (var p in FindObjectsByType<PlayerObject>(
                 FindObjectsInactive.Include, FindObjectsSortMode.None))
-                if (p.IsOwner) return p.PlayerId;
+                if (p.IsOwner) return p.Owner.ClientId;
             return -1;
+        }
+
+        public void SetScorePanelVisible(bool visible)
+        {
+            if (_scoreRowContainer != null)
+                _scoreRowContainer.gameObject.SetActive(visible);
         }
     }
 }

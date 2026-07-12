@@ -28,15 +28,6 @@ namespace ChaosPit.Minigames.Jinxed
         [SerializeField] private Transform _scoreRowParent;
         [SerializeField] private JinxedScoreRow _scoreRowPrefab;
 
-        [Header("Tag Prompt")]
-        [SerializeField] private GameObject _tagPromptRoot;
-        [SerializeField] private TextMeshProUGUI _tagPromptLabel;
-
-        [Header("Cooldown Bar")]
-        [SerializeField] private GameObject _cooldownRoot;
-        [SerializeField] private Image _cooldownBar;
-        [SerializeField] private TextMeshProUGUI _cooldownLabel;
-
         [Header("Banner")]
         [SerializeField] private GameObject _bannerRoot;
         [SerializeField] private TextMeshProUGUI _bannerText;
@@ -63,10 +54,7 @@ namespace ChaosPit.Minigames.Jinxed
             if (!_onCooldown) return;
 
             _cooldownRemaining -= Time.deltaTime;
-
-            if (_cooldownBar != null)
-                _cooldownBar.fillAmount = Mathf.Clamp01(_cooldownRemaining / _cooldownDuration);
-
+         
             if (_cooldownRemaining <= 0f)
                 ClearCooldown();
         }
@@ -77,9 +65,7 @@ namespace ChaosPit.Minigames.Jinxed
         {
             if (_resultsPanel != null) _resultsPanel.SetActive(false);
             if (_bannerRoot != null) _bannerRoot.SetActive(false);
-            if (_tagPromptRoot != null) _tagPromptRoot.SetActive(false);
-            if (_cooldownRoot != null) _cooldownRoot.SetActive(false);
-
+            
             if (_roundText != null)
                 _roundText.text = $"Round {roundNumber} / {totalRounds}";
 
@@ -93,7 +79,6 @@ namespace ChaosPit.Minigames.Jinxed
 
         public void OnRoundEnd()
         {
-            SetTagPrompt(false);
             ClearCooldown();
         }
 
@@ -142,17 +127,6 @@ namespace ChaosPit.Minigames.Jinxed
             _scoreRows.Clear();
         }
 
-        // ── Tag Prompt ────────────────────────────────────────────
-
-        public void SetTagPrompt(bool visible, string targetName = "")
-        {
-            if (_tagPromptRoot != null)
-                _tagPromptRoot.SetActive(visible);
-
-            if (visible && _tagPromptLabel != null)
-                _tagPromptLabel.text = $"Click to jinx {targetName}";
-        }
-
         // ── Cooldown ──────────────────────────────────────────────
 
         public void StartCooldown(float duration)
@@ -160,10 +134,6 @@ namespace ChaosPit.Minigames.Jinxed
             _cooldownDuration = duration;
             _cooldownRemaining = duration;
             _onCooldown = true;
-
-            if (_cooldownRoot != null) _cooldownRoot.SetActive(true);
-            if (_cooldownBar != null) _cooldownBar.fillAmount = 1f;
-            if (_cooldownLabel != null) _cooldownLabel.text = "Tag cooldown";
         }
 
         public void ClearCooldown()
@@ -171,7 +141,6 @@ namespace ChaosPit.Minigames.Jinxed
             _onCooldown = false;
             _cooldownRemaining = 0f;
 
-            if (_cooldownRoot != null) _cooldownRoot.SetActive(false);
         }
 
         // ── Banner ────────────────────────────────────────────────

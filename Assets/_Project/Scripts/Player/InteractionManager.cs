@@ -2,11 +2,11 @@
 
 using ChaosPit.Minigames.BombToss;
 using ChaosPit.Minigames.Jinxed;
-using ChaosPit.Minigames.Template;
 using ChaosPit.Minigames.ThiefsMarket;
 using FishNet.Object;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using System.Collections;
 
 public class InteractionManager : NetworkBehaviour
 {
@@ -19,15 +19,22 @@ public class InteractionManager : NetworkBehaviour
     [SerializeField] private TMPro.TextMeshProUGUI _promptLabel;
 
     [Header("Bomb Toss Pass")]
-    [SerializeField] private float _passCheckDistance = 5f;
-    [SerializeField] private LayerMask _playerLayer;
+    [SerializeField] private float _passCheckDistance = 3f;
+    [SerializeField] private float _passDirectionThreshold = 0.7f;
+    [SerializeField] private float _passCooldown = 2f;
+    private float _passCooldownUntil = 0f;
 
     [Header("Jinxed Tag")]
-    [SerializeField] private float _tagCheckDistance = 2.5f;
+    [SerializeField] private float _tagCheckDistance = 3f;
+    [SerializeField] private float _tagDirectionThreshold = 0.3f;
+    private float _jinxedTagCooldownUntil = 0f;
+    [SerializeField] private float _jinxedTagCooldown = 3f;
 
     [Header("Thiefs Market Punch")]
-    [SerializeField] private float _punchCheckDistance = 2.5f;
-    [SerializeField] private float _localPunchCooldownDisplay = 1.5f;
+    [SerializeField] private float _punchCheckDistance = 3f;
+    [SerializeField] private float _punchDirectionThreshold = 0.3f;
+    [SerializeField] private float _localPunchCooldown = 1.5f;
+
 
     private PlayerObject _player;
     private IInteractable _currentTarget;
@@ -42,6 +49,8 @@ public class InteractionManager : NetworkBehaviour
     private bool _tmPunchActive = false;
     private ThiefsMarketHUD _tmHUD;
     private float _localPunchCooldownUntil = 0f;
+    public float PunchCheckDistance => _punchCheckDistance;
+    public float PunchCooldown => _localPunchCooldown;
 
     public void Initialize(PlayerObject player)
     {
@@ -57,49 +66,71 @@ public class InteractionManager : NetworkBehaviour
 
         if (_interactionPromptUI != null)
             _interactionPromptUI.SetActive(false);
+
+        RestartUpdateLoop();
+    }
+
+    public void RestartUpdateLoop()
+    {
+        StopCoroutine("InteractionLoop");
+        StartCoroutine("InteractionLoop");
+    }
+
+    private IEnumerator InteractionLoop()
+    {
+        while (true)
+        {
+            //Debug.Log($"[InteractionManager] Loop — IsOwner: {IsOwner}, enabled: {enabled}");
+            if (IsOwner && enabled)
+            {
+                //Debug.Log($"[InteractionManager] Flags — bombPass: {_bombPassActive}, " +
+                //    $"jinxedTag: {_jinxedTagActive}, " +
+                //    $"tmPunch: {_tmPunchActive}, " +
+                //    $"holding: {_player?.IsHoldingObject}");
+
+                if (_bombPassActive)
+                {
+                    CheckForPassTarget();
+                }
+                else if (_jinxedTagActive)
+                {
+                    CheckForTagTarget();
+                }
+                else if (_tmPunchActive)
+                {
+                    //Debug.Log($"[TM-DEBUG] Loop reached punch branch, IsOwner: {IsOwner}");
+                    CheckForPunchTarget();
+                }
+                else if (_player.IsHoldingObject)
+                {
+                    _currentTarget = null;
+                    HidePrompt();
+
+                    if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+                        _player.HeldObject.OnInteract(_player);
+                }
+                else
+                {
+                    CheckForInteractable();
+
+                    if (_currentTarget != null && Mouse.current != null &&
+                        Mouse.current.leftButton.wasPressedThisFrame)
+                        TriggerInteraction();
+                }
+            }
+            yield return null;
+        }
     }
 
     private void Update()
     {
-        if (!IsOwner) return;
 
-        if (_bombPassActive)
-        {
-            CheckForPassTarget();
-            return; // skip normal interaction while bomb pass is active
-        }
-
-        if (_jinxedTagActive)
-        {
-            CheckForTagTarget();
-            return;
-        }
-
-        if (_tmPunchActive)
-        {
-            CheckForPunchTarget();
-            return;
-        }
-
-        // Handle drop while holding
-        if (_player.IsHoldingObject)
-        {
-            _currentTarget = null;
-            HidePrompt();
-
-            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
-                _player.HeldObject.OnInteract(_player);
-            return;
-        }
-
-        CheckForInteractable();
-
-        if (_currentTarget != null && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
-            TriggerInteraction();
     }
 
     private void CheckForInteractable()
     {
+        //Debug.Log($"[InteractionManager] CheckForInteractable fired");
+
         // Block interaction if already holding an object
         if (_player.IsHoldingObject)
         {
@@ -111,11 +142,22 @@ public class InteractionManager : NetworkBehaviour
             return;
         }
 
+        Camera cam = Camera.main;
+        //Debug.Log($"[InteractionManager] Raycast — cam: {cam?.name}, " +
+        //          $"pos: {cam?.transform.position}, " +
+        //          $"forward: {cam?.transform.forward}, " +
+        //          $"layerMask: {_interactableLayer.value}");
+
         Ray ray = new Ray(_mainCamera.transform.position, _mainCamera.transform.forward);
         RaycastHit hit;
 
+        //Debug.Log($"[InteractionManager] Raycast — from: {ray.origin}, dir: {ray.direction}, " +
+         //     $"maxDist: {_maxInteractDistance}, layerMask: {_interactableLayer.value}");
+
         if (Physics.Raycast(ray, out hit, _maxInteractDistance, _interactableLayer))
         {
+            //Debug.Log($"[InteractionManager] Hit: {hit.collider.name}, layer: {hit.collider.gameObject.layer}");
+
             IInteractable interactable = hit.collider.GetComponentInParent<IInteractable>();
 
             if (interactable != null)
@@ -127,6 +169,10 @@ public class InteractionManager : NetworkBehaviour
                 }
                 return;
             }
+        }
+        else
+        {
+            //Debug.Log($"[InteractionManager] No hit");
         }
 
         if (_currentTarget != null)
@@ -159,6 +205,12 @@ public class InteractionManager : NetworkBehaviour
     // Called by MiniGameController to disable interaction in mini games
     public void SetInteractionEnabled(bool enabled)
     {
+        if (!enabled)
+        {
+            //Debug.LogError($"[InteractionManager] DISABLED — full trace:");
+            //Debug.LogError(new System.Exception("SetInteractionEnabled(false) caller").StackTrace);
+        }
+
         this.enabled = enabled;
 
         if (!enabled)
@@ -171,108 +223,151 @@ public class InteractionManager : NetworkBehaviour
     public void SetBombPassActive(bool active, BombTossHUD hud = null)
     {
         _bombPassActive = active;
-        _bombTossHUD = hud;
-
-        if (!active)
-            _bombTossHUD?.SetPassPrompt(false);
+        if (active)
+        {
+            this.enabled = true;
+            _passCooldownUntil = 0f;
+        }
     }
 
     public void SetJinxedTagActive(bool active, JinxedHUD hud = null)
     {
         _jinxedTagActive = active;
-        _jinxedHUD = hud;
-
-        if (!active)
-            _jinxedHUD?.SetTagPrompt(false);
+        if (active) this.enabled = true;
+        if (!active) _jinxedTagCooldownUntil = 0f;
     }
 
     public void SetThiefsMarketPunchActive(bool active, ThiefsMarketHUD hud = null)
     {
         _tmPunchActive = active;
-        _tmHUD = hud;
-
-        if (!active)
-            _tmHUD?.SetPunchPrompt(false);
+        if (active) this.enabled = true;
+        //Debug.Log($"[TM-DEBUG] SetThiefsMarketPunchActive — active: {active}, IsOwner: {IsOwner}, enabled: {enabled}, gameObject: {gameObject.name}");
     }
 
     private void CheckForPassTarget()
     {
-        Ray ray = new Ray(_mainCamera.transform.position, _mainCamera.transform.forward);
+        if (Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame) return;
+        if (Time.time < _passCooldownUntil) return;
 
-        if (Physics.Raycast(ray, out RaycastHit hit, _passCheckDistance, _playerLayer))
+        Vector3 facingDir = _player.transform.forward;
+        PlayerObject bestTarget = null;
+        float bestScore = _passDirectionThreshold;
+
+        // Find all colliders on player layer within pass distance
+        Collider[] hits = Physics.OverlapSphere(
+            _player.transform.position, _passCheckDistance,
+            Physics.AllLayers, QueryTriggerInteraction.Collide);
+
+        //Debug.Log($"[PassCheck] no-mask hits: {hits.Length}");
+        //foreach (Collider c in hits)
+            //Debug.Log($"[PassCheck] hit: {c.name}, layer: {c.gameObject.layer}, layerName: {LayerMask.LayerToName(c.gameObject.layer)}");
+
+        foreach (Collider col in hits)
         {
-            PlayerObject target = hit.collider.GetComponentInParent<PlayerObject>();
+            if (!col.CompareTag("Player")) continue;
 
-            if (target != null && !target.IsOwner)
+            PlayerObject target = col.GetComponentInParent<PlayerObject>();
+            if (target == null || target.IsOwner) continue;
+
+            Vector3 toTarget = (target.transform.position - _player.transform.position).normalized;
+            float dot = Vector3.Dot(facingDir, toTarget);
+
+            // Only consider players roughly in front (dot > 0)
+            if (dot > bestScore)
             {
-                string name = target.name;
-                _bombTossHUD?.SetPassPrompt(true, name);
-
-                if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
-                {
-                    GameRoomManager.Instance.RequestMinigameAction(
-                        "bt_attempt_pass", target.PlayerId.ToString());
-
-                    _bombTossHUD?.SetPassPrompt(false);
-                }
-                return;
+                bestScore = dot;
+                bestTarget = target;
             }
         }
 
-        _bombTossHUD?.SetPassPrompt(false);
+        if (bestTarget != null)
+        {
+            //Debug.Log($"[PassCheck] Passing to {bestTarget.PlayerId}");
+            _passCooldownUntil = Time.time + _passCooldown;
+            GameRoomManager.Instance.RequestMinigameAction(
+                "bt_attempt_pass", bestTarget.Owner.ClientId.ToString());
+        }
     }
 
     private void CheckForTagTarget()
     {
-        Ray ray = new Ray(_mainCamera.transform.position, _mainCamera.transform.forward);
+        Vector3 facingDir = _player.transform.forward;
+        PlayerObject bestTarget = null;
+        float bestScore = _tagDirectionThreshold;
 
-        if (Physics.Raycast(ray, out RaycastHit hit, _tagCheckDistance, _playerLayer))
+        Collider[] hits = Physics.OverlapSphere(
+            _player.transform.position, _tagCheckDistance,
+            Physics.AllLayers, QueryTriggerInteraction.Collide);
+
+        foreach (Collider col in hits)
         {
-            PlayerObject target = hit.collider.GetComponentInParent<PlayerObject>();
+            if (!col.CompareTag("Player")) continue;
 
-            if (target != null && !target.IsOwner)
+            PlayerObject target = col.GetComponentInParent<PlayerObject>();
+            if (target == null || target.IsOwner) continue;
+
+            Vector3 toTarget = (target.transform.position - _player.transform.position).normalized;
+            float dot = Vector3.Dot(facingDir, toTarget);
+
+            if (dot > bestScore)
             {
-                _jinxedHUD?.SetTagPrompt(true, target.PlayerName);
-
-                if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
-                {
-                    GameRoomManager.Instance.RequestMinigameAction(
-                        "jinxed_tag_attempt",
-                        $"{_player.PlayerId}|{target.PlayerId}");
-
-                    _jinxedHUD?.SetTagPrompt(false);
-                }
-                return;
+                bestScore = dot;
+                bestTarget = target;
             }
         }
 
-        _jinxedHUD?.SetTagPrompt(false);
+        if (bestTarget != null && Mouse.current != null && 
+            Mouse.current.leftButton.wasPressedThisFrame && Time.time >= _jinxedTagCooldownUntil)
+        {
+            _jinxedTagCooldownUntil = Time.time + _jinxedTagCooldown;
+            GameRoomManager.Instance.RequestMinigameAction(
+                "jinxed_tag_attempt",
+                $"{_player.Owner.ClientId}|{bestTarget.Owner.ClientId}");
+        }
+
     }
 
     private void CheckForPunchTarget()
     {
-        Ray ray = new Ray(_mainCamera.transform.position, _mainCamera.transform.forward);
+        Vector3 facingDir = _player.transform.forward;
+        PlayerObject bestTarget = null;
+        float bestScore = _punchDirectionThreshold;
 
-        if (Physics.Raycast(ray, out RaycastHit hit, _punchCheckDistance, _playerLayer))
+        Collider[] hits = Physics.OverlapSphere(
+            _player.transform.position, _punchCheckDistance,
+            Physics.AllLayers, QueryTriggerInteraction.Collide);
+
+        foreach (Collider col in hits)
         {
-            PlayerObject target = hit.collider.GetComponentInParent<PlayerObject>();
+            if (!col.CompareTag("Player")) continue;
 
-            if (target != null && !target.IsOwner)
+            PlayerObject target = col.GetComponentInParent<PlayerObject>();
+            if (target == null || target.IsOwner) continue;
+
+            Vector3 toTarget = (target.transform.position - _player.transform.position).normalized;
+            float dot = Vector3.Dot(facingDir, toTarget);
+
+            if (dot > bestScore)
             {
-                _tmHUD?.SetPunchPrompt(true, target.PlayerName);
-
-                if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame
-                    && Time.time >= _localPunchCooldownUntil)
-                {
-                    _localPunchCooldownUntil = Time.time + _localPunchCooldownDisplay;
-
-                    GameRoomManager.Instance.RequestMinigameAction(
-                        "tm_punch_request", target.PlayerId.ToString());
-                }
-                return;
+                bestScore = dot;
+                bestTarget = target;
             }
         }
 
-        _tmHUD?.SetPunchPrompt(false);
+        //Debug.Log($"[TM-DEBUG] Punch check — hits: {hits.Length}, bestTarget: {bestTarget?.name}");
+        if (bestTarget != null)
+        {
+            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame
+                && Time.time >= _localPunchCooldownUntil)
+            {
+                //Debug.Log($"[TM-DEBUG] Sending punch request — target: {bestTarget.PlayerId}");
+                _localPunchCooldownUntil = Time.time + _localPunchCooldown;
+                GameRoomManager.Instance.RequestMinigameAction(
+                    "tm_punch_request", bestTarget.Owner.ClientId.ToString());
+            }
+        }
+        else
+        {
+        }
     }
 }

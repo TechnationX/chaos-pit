@@ -8,12 +8,12 @@
 //   - Points awarded per round based on elimination order
 //   - Final tally across all rounds decides winner
 
+using FishNet.Component.Transforming;
+using FishNet.Connection;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using FishNet.Connection;
-using FishNet.Component.Transforming;
 
 namespace ChaosPit.Minigames.BombToss
 {
@@ -22,16 +22,12 @@ namespace ChaosPit.Minigames.BombToss
         // ── Inspector ─────────────────────────────────────────────
 
         [Header("Round Settings")]
-        [SerializeField] private int _roundCount = 5;
         [SerializeField] private float[] _pointsPerElimination = { 1, 2, 3, 4, 5, 6, 7, 8 };
 
         [Header("Fuse Settings")]
         [SerializeField] private float _baseFuseTime = 15f;
         [SerializeField] private float _fuseReductionPerRound = 1f;
         [SerializeField] private float _minimumFuseTime = 5f;
-
-        [Header("Pass Settings")]
-        [SerializeField] private float _passDistance = 3f;
 
         [Header("Elimination Spawns")]
         [SerializeField] private Transform _eliminationSpawn;
@@ -71,8 +67,8 @@ namespace ChaosPit.Minigames.BombToss
 
             foreach (PlayerObject p in _players)
             {
-                _activePlayers.Add(p.PlayerId);
-                _cumulativeScores[p.PlayerId] = 0;
+                _activePlayers.Add(p.Owner.ClientId);
+                _cumulativeScores[p.Owner.ClientId] = 0;
             }
 
             GameRoomManager.Instance.RpcMinigameMessage("bt_players", BuildPlayersPayload());
@@ -165,7 +161,7 @@ namespace ChaosPit.Minigames.BombToss
             _eliminationOrder++;
 
             // Teleport eliminated player to elimination spawn
-            PlayerObject elimPlayer = FindPlayerById(eliminated);
+            PlayerObject elimPlayer = FindPlayerByClientId(eliminated);
             if (elimPlayer != null && _eliminationSpawn != null)
             {
                 Transform spawn = _eliminationSpawn;
@@ -184,6 +180,16 @@ namespace ChaosPit.Minigames.BombToss
 
             if (gameOver)
             {
+                // Award points to last survivor
+                if (_activePlayers.Count == 1)
+                {
+                    int survivor = _activePlayers[0];
+                    int survivorPoints = _eliminationOrder < _pointsPerElimination.Length
+                        ? (int)_pointsPerElimination[_eliminationOrder]
+                        : 0;
+                    _cumulativeScores[survivor] += survivorPoints;
+                }
+
                 StartCoroutine(EndGameDelayed(1.5f));
             }
             else
@@ -204,7 +210,7 @@ namespace ChaosPit.Minigames.BombToss
 
             var entries = _finalResults.Select(r => new PlayerResultEntry
             {
-                DisplayName = _nameMap.TryGetValue(r.Player.PlayerId, out string n) ? n : $"Player_{r.Player.PlayerId}",
+                DisplayName = _nameMap.TryGetValue(r.Player.Owner.ClientId, out string n) ? n : $"Player_{r.Player.PlayerId}",
                 PointsEarned = r.ScoreAwarded,
                 ResultLabel = r.ResultLabel,
                 Standing = r.Standing
@@ -217,25 +223,28 @@ namespace ChaosPit.Minigames.BombToss
 
         public override void OnClientAction(string messageType, string payload, NetworkConnection sender)
         {
+            //Debug.Log($"[BombToss] OnClientAction — type: {messageType}, payload: {payload}, sender: {sender.ClientId}");
             if (messageType != "bt_attempt_pass") return;
 
-            int senderPlayerId = sender.ClientId;
+            // Find the PlayerObject owned by this connection to get PlayerId
+            PlayerObject senderPlayer = _players.FirstOrDefault(p => p.Owner == sender);
+            //Debug.Log($"[BombToss] senderPlayer found: {senderPlayer != null}, currentHolder: {_currentHolderId}");
+
+            if (senderPlayer == null) return;
+            int senderPlayerId = senderPlayer.Owner.ClientId;
+            if (senderPlayerId != _currentHolderId) return;
+            //Debug.Log($"[BombToss] senderPlayerId: {senderPlayerId}, matches holder: {senderPlayerId == _currentHolderId}");
+
             if (senderPlayerId != _currentHolderId) return;
             if (!int.TryParse(payload, out int targetId)) return;
+            //Debug.Log($"[BombToss] targetId: {targetId}, in active: {_activePlayers.Contains(targetId)}");
+
             if (!_activePlayers.Contains(targetId) || targetId == _currentHolderId) return;
 
-            Vector3 holderPos = GetPlayerPosition(_currentHolderId);
-            Vector3 targetPos = GetPlayerPosition(targetId);
+            //Debug.Log($"[BombToss] distance: {dist}, passDistance: {_passDistance}");
 
-            if (Vector3.Distance(holderPos, targetPos) <= _passDistance)
-            {
-                _currentHolderId = targetId;
-                GameRoomManager.Instance.RpcMinigameMessage("bt_holder_changed", $"{_currentHolderId}");
-            }
-            else
-            {
-                GameRoomManager.Instance.RpcMinigameMessage("bt_pass_failed", senderPlayerId.ToString());
-            }
+            _currentHolderId = targetId;
+            GameRoomManager.Instance.RpcMinigameMessage("bt_holder_changed", $"{_currentHolderId}");
         }
 
         // ── Network Messages (all clients receive) ─────────────────
@@ -253,7 +262,11 @@ namespace ChaosPit.Minigames.BombToss
                         string[] p = payload.Split(',');
                         if (p.Length > 0 && int.TryParse(p[0], out int startHolder))
                         {
+                            PlayerObject local = FindObjectsByType<PlayerObject>(
+                                FindObjectsInactive.Include, FindObjectsSortMode.None)
+                                .FirstOrDefault(p2 => p2.IsOwner);
                             bool isLocalHolder = startHolder == GetLocalPlayerId();
+                            //Debug.Log($"[BombToss] round_start holder in payload: {startHolder}, local.PlayerId: {local?.PlayerId}, local.Owner.ClientId: {local?.Owner.ClientId}");
                             SetLocalPassMode(isLocalHolder);
                         }
                     }
@@ -261,10 +274,15 @@ namespace ChaosPit.Minigames.BombToss
                     break;
 
                 case "bt_fuse_sync":
+                    _hud?.OnNetworkMessage(messageType, payload);
+                    break;
 
                 case "bt_holder_changed":
                     if (int.TryParse(payload, out int newHolder))
                     {
+                        PlayerObject local = FindObjectsByType<PlayerObject>(
+                            FindObjectsInactive.Include, FindObjectsSortMode.None)
+                            .FirstOrDefault(p => p.IsOwner);
                         bool isLocalHolder = newHolder == GetLocalPlayerId();
                         SetLocalPassMode(isLocalHolder);
                     }
@@ -295,6 +313,8 @@ namespace ChaosPit.Minigames.BombToss
 
         protected override void OnShowResults(ResultsData data)
         {
+            _hud?.HideHUD();
+
             if (_resultsScreenPanel != null)
                 _resultsScreenPanel.SetActive(true);
 
@@ -319,8 +339,8 @@ namespace ChaosPit.Minigames.BombToss
             {
                 PlayerProfile profile = PlayerProfileManager.Instance.GetProfile(p.Owner);
                 string name = profile?.DisplayName ?? $"Player_{p.PlayerId}";
-                _nameMap[p.PlayerId] = name;
-                parts.Add($"{p.PlayerId},{name}");
+                parts.Add($"{p.Owner.ClientId},{name}");
+                _nameMap[p.Owner.ClientId] = name;
             }
             return string.Join("|", parts);
         }
@@ -336,7 +356,7 @@ namespace ChaosPit.Minigames.BombToss
             var results = new List<RoundResult>();
             for (int i = 0; i < sorted.Count; i++)
             {
-                PlayerObject player = FindPlayerById(sorted[i].Key);
+                PlayerObject player = _players.FirstOrDefault(p => p.Owner.ClientId == sorted[i].Key);
                 if (player == null) continue;
                 results.Add(new RoundResult(player, i + 1, sorted[i].Value, GetResultLabel(i + 1)));
             }
@@ -363,17 +383,24 @@ namespace ChaosPit.Minigames.BombToss
         {
             if (string.IsNullOrEmpty(payload)) return;
 
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine("RESULTS");
-
+            var entries = new List<(int id, int score)>();
             foreach (string entry in payload.Split('|'))
             {
                 string[] p = entry.Split(',');
                 if (p.Length < 2) continue;
                 if (!int.TryParse(p[0], out int id)) continue;
                 if (!int.TryParse(p[1], out int score)) continue;
-                string name = _nameMap.TryGetValue(id, out string n) ? n : $"Player_{id}";
-                sb.AppendLine($"{name}: {score}pts");
+                entries.Add((id, score));
+            }
+            entries.Sort((a, b) => b.score.CompareTo(a.score));
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("RESULTS");
+            for (int i = 0; i < entries.Count; i++)
+            {
+                string name = _nameMap.TryGetValue(entries[i].id, out string n) ? n : $"Player_{entries[i].id}";
+                string label = GetResultLabel(i + 1);
+                sb.AppendLine($"{label}: {name}  +{entries[i].score}pts");
             }
 
             if (_resultsScreenPanel != null) _resultsScreenPanel.SetActive(true);
@@ -393,7 +420,7 @@ namespace ChaosPit.Minigames.BombToss
 
             for (int i = 0; i < _activePlayers.Count; i++)
             {
-                PlayerObject player = FindPlayerById(_activePlayers[i]);
+                PlayerObject player = FindPlayerByClientId(_activePlayers[i]);
                 if (player == null) continue;
 
                 Transform spawn = _spawnPoints[i % _spawnPoints.Length];
@@ -405,16 +432,10 @@ namespace ChaosPit.Minigames.BombToss
             }
         }
 
-        private Vector3 GetPlayerPosition(int playerId)
-        {
-            PlayerObject p = FindPlayerById(playerId);
-            return p != null ? p.transform.position : Vector3.zero;
-        }
-
-        private PlayerObject FindPlayerById(int id)
+        private PlayerObject FindPlayerByClientId(int clientId)
         {
             foreach (PlayerObject p in _players)
-                if (p.PlayerId == id) return p;
+                if (p.Owner.ClientId == clientId) return p;
             return null;
         }
 
@@ -422,7 +443,7 @@ namespace ChaosPit.Minigames.BombToss
         {
             foreach (var p in FindObjectsByType<PlayerObject>(
                 FindObjectsInactive.Include, FindObjectsSortMode.None))
-                if (p.IsOwner) return p.PlayerId;
+                if (p.IsOwner) return p.Owner.ClientId;
             return -1;
         }
 
@@ -432,10 +453,13 @@ namespace ChaosPit.Minigames.BombToss
                 FindObjectsInactive.Include, FindObjectsSortMode.None)
                 .FirstOrDefault(p => p.IsOwner);
 
+            //Debug.Log($"[BombToss] SetLocalPassMode {active} — local found: {local != null}, localPlayerId: {GetLocalPlayerId()}");
+
             if (local == null) return;
 
             var interaction = local.GetComponent<InteractionManager>();
-            interaction?.SetBombPassActive(active, _hud);
+            //Debug.Log($"[BombToss] interaction found: {interaction != null}, setting bombPass: {active}");
+            interaction?.SetBombPassActive(active);
         }
     }
 }

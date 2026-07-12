@@ -2,9 +2,10 @@
 // Client-side HUD for Bomb Toss.
 // Receives network messages routed from BombTossController.OnNetworkMessage.
 
+using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 using TMPro;
+using UnityEngine;
 
 namespace ChaosPit.Minigames.BombToss
 {
@@ -16,14 +17,22 @@ namespace ChaosPit.Minigames.BombToss
         [SerializeField] private TextMeshProUGUI _roundText;
         [SerializeField] private TextMeshProUGUI _fuseTimerText;
         [SerializeField] private TextMeshProUGUI _holderNameText;
-        [SerializeField] private TextMeshProUGUI _passPromptText;
-        [SerializeField] private TextMeshProUGUI _eliminationFeedText;
+
+        [Header("Elimination Banner")]
+        [SerializeField] private GameObject _eliminationBanner;
+        [SerializeField] private TextMeshProUGUI _eliminationText;
+        [SerializeField] private float _bannerDisplayDuration = 2.5f;
 
         [Header("Score Rows")]
         [SerializeField] private Transform _scoreRowContainer;
         [SerializeField] private GameObject _scoreRowPrefab;
 
+        [Header("Panels")]
+        [SerializeField] private GameObject _hudPanel;
+
         [SerializeField] private BombVisualManager _bombVisual;
+
+        private Coroutine _bannerCoroutine;
 
         // ── Runtime State ─────────────────────────────────────────
 
@@ -50,8 +59,6 @@ namespace ChaosPit.Minigames.BombToss
                 row.Init(kvp.Key, kvp.Value);
                 _scoreRows[kvp.Key] = row;
             }
-
-            SetPassPrompt(false);
         }
 
         // ── Message Routing ───────────────────────────────────────
@@ -71,7 +78,7 @@ namespace ChaosPit.Minigames.BombToss
                         SetHolder(newHolder);
                     break;
                 case "bt_pass_failed":
-                    ShowFeed("No one in range!");
+                    
                     break;
                 case "bt_player_eliminated":
                     ApplyElimination(payload);
@@ -114,6 +121,8 @@ namespace ChaosPit.Minigames.BombToss
 
         private void SetHolder(int playerId)
         {
+            //Debug.Log($"[BombTossHUD] SetHolder {playerId} — bombVisual null: {_bombVisual == null}");
+
             if (_holderNameText == null) return;
 
             bool isLocal = playerId == _localPlayerId;
@@ -121,18 +130,20 @@ namespace ChaosPit.Minigames.BombToss
 
             _holderNameText.text = isLocal ? "YOU HAVE THE BOMB!" : $"{name} has the bomb";
             _holderNameText.color = isLocal ? Color.red : Color.white;
+            //Debug.Log($"[BombTossHUD] Calling AttachToHolder on visual: {_bombVisual != null}");
             _bombVisual?.AttachToHolder(playerId);
         }
 
         private void ApplyElimination(string payload)
         {
-            // Format: eliminatedId,points,scoresPayload
             string[] p = payload.Split(',', 3);
             if (p.Length < 1) return;
             if (!int.TryParse(p[0], out int elimId)) return;
 
+            bool isLocal = elimId == _localPlayerId;
             string name = _nameMap.TryGetValue(elimId, out string n) ? n : $"Player_{elimId}";
-            ShowFeed($"{name} exploded!");
+
+            ShowEliminationBanner(isLocal ? null : name);
 
             if (_scoreRows.TryGetValue(elimId, out var row))
                 row.SetEliminated();
@@ -147,6 +158,7 @@ namespace ChaosPit.Minigames.BombToss
         {
             ApplyScorePayload(payload);
             _bombVisual?.Hide();
+            if (_hudPanel != null) _hudPanel.SetActive(false);
         }
 
         private void ApplyScorePayload(string payload)
@@ -163,21 +175,25 @@ namespace ChaosPit.Minigames.BombToss
             }
         }
 
-        // ── Pass Prompt ───────────────────────────────────────────
-
-        public void SetPassPrompt(bool visible, string targetName = "")
-        {
-            if (_passPromptText == null) return;
-            _passPromptText.gameObject.SetActive(visible);
-            if (visible) _passPromptText.text = $"[E] Pass to {targetName}";
-        }
-
         // ── Feed ──────────────────────────────────────────────────
 
-        private void ShowFeed(string message)
+        private void ShowEliminationBanner(string playerName)
         {
-            if (_eliminationFeedText != null)
-                _eliminationFeedText.text = message;
+            if (_eliminationBanner == null) return;
+            if (_bannerCoroutine != null) StopCoroutine(_bannerCoroutine);
+            _bannerCoroutine = StartCoroutine(EliminationBannerCoroutine(playerName));
+        }
+
+        private IEnumerator EliminationBannerCoroutine(string playerName)
+        {
+            if (_eliminationText != null)
+                _eliminationText.text = string.IsNullOrEmpty(playerName)
+                    ? "You were eliminated!"
+                    : $"{playerName} was eliminated!";
+
+            _eliminationBanner.SetActive(true);
+            yield return new WaitForSeconds(_bannerDisplayDuration);
+            _eliminationBanner.SetActive(false);
         }
 
         // ── Helpers ───────────────────────────────────────────────
@@ -186,8 +202,13 @@ namespace ChaosPit.Minigames.BombToss
         {
             foreach (var p in FindObjectsByType<PlayerObject>(
                 FindObjectsInactive.Include, FindObjectsSortMode.None))
-                if (p.IsOwner) return p.PlayerId;
+                if (p.IsOwner) return p.Owner.ClientId;
             return -1;
+        }
+
+        public void HideHUD()
+        {
+            if (_hudPanel != null) _hudPanel.SetActive(false);
         }
     }
 }

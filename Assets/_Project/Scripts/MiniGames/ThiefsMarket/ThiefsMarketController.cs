@@ -2,7 +2,8 @@
 // Server-authoritative controller for the Thief's Market minigame.
 //
 // Round flow:
-//   - Fixed item pool spawns available at scene-authored positions.
+//   - Item pool spawns at a fresh procedurally-generated layout each round
+//     (mostly scattered singles, a few clusters — see GenerateItemLayout).
 //   - Players auto-pick-up items on trigger overlap (client detects locally,
 //     server validates and confirms — see ThiefsMarketItemVisual).
 //   - Players punch each other (crosshair + click, short cooldown) to force
@@ -34,10 +35,33 @@ namespace ChaosPit.Minigames.ThiefsMarket
         [Header("Item Pool")]
         [SerializeField] private Transform _itemPoolContainer;
 
+        [Header("Procedural Item Layout")]
+        // Rectangular spawn bounds in world space (X/Z), fixed Y. Fresh layout
+        // generated every round from a shared seed — see GenerateItemLayout.
+        [SerializeField] private Vector2 _spawnAreaMin = new Vector2(-10f, -10f);
+        [SerializeField] private Vector2 _spawnAreaMax = new Vector2(10f, 10f);
+        [SerializeField] private float _spawnGroundY = 0f;
+        [SerializeField] private float _minItemSpacing = 1.5f;
+        [SerializeField] private int _minClusters = 1;
+        [SerializeField] private int _maxClusters = 3;
+        [SerializeField] private int _minClusterSize = 3;
+        [SerializeField] private int _maxClusterSize = 6;
+        [SerializeField] private float _clusterRadius = 2.5f;
+        [SerializeField] private float _minClusterSpacing = 4f;
+        [SerializeField] private int _maxPlacementAttempts = 30;
+
+        // Broadcast once per game so every client can deterministically
+        // regenerate the identical layout each round without transmitting
+        // per-item positions — same principle as ArenaGrid's fall order in
+        // Jinxed. Combined with round number for a per-round seed.
+        private int _gameSeed;
+
         [Header("Punch Settings")]
-        [SerializeField] private float _punchRange = 2.5f;
+        // Check distance and cooldown now live on InteractionManager
+        // (single source of truth, same prefab server + client) — only the
+        // network-latency tolerance margin stays here, since that's a
+        // server-networking concern, not a gameplay-feel knob.
         [SerializeField] private float _punchLatencyBuffer = 0.5f;
-        [SerializeField] private float _punchCooldown = 1.5f;
         [SerializeField] private int _minStolenItems = 1;
         [SerializeField] private int _maxStolenItems = 3;
         [SerializeField] private float _dropPickupDelay = 1.5f;
@@ -57,8 +81,9 @@ namespace ChaosPit.Minigames.ThiefsMarket
             public int ItemId;
             public ItemState State;
             public int HolderPlayerId = -1;
-            public Vector3 Position;       // meaningful only when Dropped
-            public float PickupEligibleAt; // meaningful only when Dropped
+            public Vector3 Position;
+            public float PickupEligibleAt;
+            public int PointValue;
         }
 
         private Dictionary<int, ItemData> _items = new Dictionary<int, ItemData>();
@@ -74,6 +99,7 @@ namespace ChaosPit.Minigames.ThiefsMarket
 
         private bool _roundActive = false;
         private List<RoundResult> _finalResults = new List<RoundResult>();
+        private string _lastPlayersPayload = string.Empty;
 
         private ThiefsMarketHUD _hud;
 
@@ -105,6 +131,9 @@ namespace ChaosPit.Minigames.ThiefsMarket
 
             BuildItemPool();
 
+            _gameSeed = UnityEngine.Random.Range(int.MinValue, int.MaxValue);
+            GameRoomManager.Instance.RpcMinigameMessage("tm_seed", _gameSeed.ToString());
+
             GameRoomManager.Instance.RpcMinigameMessage("tm_players", BuildPlayersPayload());
 
             StartCoroutine(StartRoundDelayed(2f));
@@ -118,9 +147,16 @@ namespace ChaosPit.Minigames.ThiefsMarket
             ResetItemsForRound();
             RespawnPlayers();
 
-            GameRoomManager.Instance.RpcMinigameMessage("tm_round_reset", string.Empty);
+            GameRoomManager.Instance.RpcMinigameMessage("tm_round_reset", _currentRound.ToString());
             GameRoomManager.Instance.RpcMinigameMessage("tm_round_start",
                 $"{_currentRound},{_roundDuration.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+
+            // Explicit per-player TargetRpc rather than client self-discovery
+            // (see SetPlayerThiefsMarketPunchMode) — timing-safe here because
+            // StartRound() only runs 2s after StartGameAfterLoad already sent
+            // RpcUnlockPlayer to everyone, so nothing disables the component
+            // out from under this afterward.
+            ActivatePunchModeForAllPlayers(true);
 
             StartCoroutine(RoundTimerCoroutine());
         }
@@ -143,6 +179,7 @@ namespace ChaosPit.Minigames.ThiefsMarket
             _totalStuns.Clear();
             _punchCooldownUntil.Clear();
             _nameMap.Clear();
+            _lastPlayersPayload = string.Empty;
             _finalResults.Clear();
             _roundActive = false;
             _gameActive = false;
@@ -153,16 +190,27 @@ namespace ChaosPit.Minigames.ThiefsMarket
         {
             _hud = FindFirstObjectByType<ThiefsMarketHUD>();
 
+            // "tm_players" is broadcast the instant StartGame() runs on the
+            // server, which can reach this client before RpcInitMinigame does
+            // (no guaranteed ordering between an ObserversRpc and a TargetRpc
+            // fired moments later). If that happened, ApplyPlayersPayload ran
+            // with _hud still null and silently no-opped. Re-apply the cached
+            // payload now that _hud is guaranteed to exist.
+            if (!string.IsNullOrEmpty(_lastPlayersPayload))
+                _hud?.Init(_nameMap);
+
             // Item visuals live in the scene identically for every client —
             // no server data needed to discover and ID them.
             if (_itemVisualsById.Count == 0)
                 BuildItemPool();
 
-            // Punch is active for every player the whole round (unlike Bomb
-            // Toss's single-holder pass mode), so it's turned on locally as
-            // soon as this client's minigame scene is ready rather than
-            // toggled per-player via RPC.
-            SetLocalPunchModeActive(true);
+            // NOTE: punch-mode activation intentionally does NOT happen here.
+            // GameRoomManager.RpcUnlockPlayer runs after RpcInitMinigame and
+            // calls SetInteractionEnabled(false), which would immediately
+            // disable the InteractionManager component and wipe out an
+            // enable-punch-mode call made this early. Activation happens on
+            // "tm_round_start" instead — see OnNetworkMessage below — mirroring
+            // when BombTossController activates its own interaction mode.
         }
 
         public override void RemovePlayer(PlayerObject player)
@@ -205,7 +253,7 @@ namespace ChaosPit.Minigames.ThiefsMarket
             {
                 visuals[i].SetId(i);
                 _itemVisualsById[i] = visuals[i];
-                _items[i] = new ItemData { ItemId = i, State = ItemState.Available, HolderPlayerId = -1 };
+                _items[i] = new ItemData { ItemId = i, State = ItemState.Available, HolderPlayerId = -1, PointValue = visuals[i].PointValue };
             }
         }
 
@@ -275,10 +323,12 @@ namespace ChaosPit.Minigames.ThiefsMarket
 
             foreach (PlayerObject p in _players)
             {
-                int count = _heldItemsByPlayer.TryGetValue(p.PlayerId, out var set) ? set.Count : 0;
-                counts[p.PlayerId] = count;
-                _totalItemsAcrossRounds[p.PlayerId] += count;
-                if (count > maxCount) maxCount = count;
+                int value = _heldItemsByPlayer.TryGetValue(p.PlayerId, out var set)
+                    ? set.Sum(id => _items[id].PointValue)
+                    : 0;
+                counts[p.PlayerId] = value;
+                _totalItemsAcrossRounds[p.PlayerId] += value;
+                if (value > maxCount) maxCount = value;
             }
 
             var roundWinners = new List<int>();
@@ -305,6 +355,8 @@ namespace ChaosPit.Minigames.ThiefsMarket
         private IEnumerator EndGameDelayed(float delay)
         {
             yield return new WaitForSeconds(delay);
+
+            ActivatePunchModeForAllPlayers(false);
 
             _finalResults = BuildFinalResults();
             GameRoomManager.Instance.RpcMinigameMessage("tm_game_over", BuildFinalResultsPayload());
@@ -336,7 +388,13 @@ namespace ChaosPit.Minigames.ThiefsMarket
                 || (item.State == ItemState.Dropped && Time.time >= item.PickupEligibleAt);
             if (!eligible) return;
 
-            int playerId = sender.ClientId;
+            // Resolve via ClientId (reliable network identifier), then use
+            // PlayerId for all bookkeeping — matches _roundWins,
+            // _totalItemsAcrossRounds, _nameMap, and everything else in this
+            // controller, which are all keyed by PlayerId.
+            PlayerObject pickerUp = FindPlayerByClientId(sender.ClientId);
+            if (pickerUp == null) return;
+            int playerId = pickerUp.PlayerId;
 
             item.State = ItemState.Held;
             item.HolderPlayerId = playerId;
@@ -347,8 +405,9 @@ namespace ChaosPit.Minigames.ThiefsMarket
                 _heldItemsByPlayer[playerId] = held;
             }
             held.Add(itemId);
+            int heldValue = held.Sum(id => _items[id].PointValue);
 
-            GameRoomManager.Instance.RpcMinigameMessage("tm_pickup_confirm", $"{itemId},{playerId},{held.Count}");
+            GameRoomManager.Instance.RpcMinigameMessage("tm_pickup_confirm", $"{itemId},{playerId},{heldValue}");
         }
 
         private void HandlePunchRequest(string payload, NetworkConnection sender)
@@ -359,19 +418,25 @@ namespace ChaosPit.Minigames.ThiefsMarket
             int attackerId = sender.ClientId;
             if (attackerId == victimId) return;
 
+            PlayerObject attacker = FindPlayerByClientId(attackerId);
+            PlayerObject victim = FindPlayerByClientId(victimId);
+            if (attacker == null || victim == null) return;
+
+            // Distance and cooldown are read from the attacker's own
+            // InteractionManager — same prefab, same Inspector-tuned values
+            // server-side as client-side, no separate copy to keep in sync.
+            float checkDistance = attacker.Interaction.PunchCheckDistance;
+            float cooldown = attacker.Interaction.PunchCooldown;
+
             float now = Time.time;
             if (_punchCooldownUntil.TryGetValue(attackerId, out float readyAt) && now < readyAt) return;
 
-            PlayerObject attacker = FindPlayerById(attackerId);
-            PlayerObject victim = FindPlayerById(victimId);
-            if (attacker == null || victim == null) return;
-
-            float bufferedRange = _punchRange + _punchLatencyBuffer;
+            float bufferedRange = checkDistance + _punchLatencyBuffer;
             if (Vector3.Distance(attacker.transform.position, victim.transform.position) > bufferedRange) return;
 
-            _punchCooldownUntil[attackerId] = now + _punchCooldown;
+            _punchCooldownUntil[attackerId] = now + cooldown;
 
-            if (!_heldItemsByPlayer.TryGetValue(victimId, out var victimItems) || victimItems.Count == 0)
+            if (!_heldItemsByPlayer.TryGetValue(victim.PlayerId, out var victimItems) || victimItems.Count == 0)
             {
                 GameRoomManager.Instance.RpcMinigameMessage("tm_punch_whiff", $"{attackerId},{victimId}");
                 return;
@@ -399,22 +464,24 @@ namespace ChaosPit.Minigames.ThiefsMarket
                 dropParts.Add($"{itemId}:{dropPos.x.ToString(culture)}:{dropPos.y.ToString(culture)}:{dropPos.z.ToString(culture)}");
             }
 
-            _totalSteals[attackerId] = _totalSteals.TryGetValue(attackerId, out int steals) ? steals + 1 : 1;
-            _totalStuns[victimId] = _totalStuns.TryGetValue(victimId, out int stuns) ? stuns + 1 : 1;
+            _totalSteals[attacker.PlayerId] = _totalSteals.TryGetValue(attacker.PlayerId, out int steals) ? steals + 1 : 1;
+            _totalStuns[victim.PlayerId] = _totalStuns.TryGetValue(victim.PlayerId, out int stuns) ? stuns + 1 : 1;
 
-            GameRoomManager.Instance.SetPlayerMovementLocked(victim.Owner, true, "tm_stunned");
+            GameRoomManager.Instance.SetPlayerMovementLocked(victim.Owner, victim.NetworkObject, true, "tm_stunned");
             StartCoroutine(ClearStunAfterDelay(victim));
+
+            int victimNewValue = victimItems.Sum(id => _items[id].PointValue);
 
             string dropPayload = string.Join(";", dropParts);
             GameRoomManager.Instance.RpcMinigameMessage("tm_stolen",
-                $"{attackerId},{victimId},{victimItems.Count},{dropPayload}");
+                $"{attacker.PlayerId},{victim.PlayerId},{victimNewValue},{dropPayload}");
         }
 
         private IEnumerator ClearStunAfterDelay(PlayerObject victim)
         {
             yield return new WaitForSeconds(_stunDuration);
             if (victim != null && victim.Owner != null)
-                GameRoomManager.Instance.SetPlayerMovementLocked(victim.Owner, false, "tm_stunned");
+                GameRoomManager.Instance.SetPlayerMovementLocked(victim.Owner, victim.NetworkObject, false, "tm_stunned");
         }
 
         // ── Network Messages (all clients receive) ─────────────────
@@ -427,8 +494,13 @@ namespace ChaosPit.Minigames.ThiefsMarket
                     ApplyPlayersPayload(payload);
                     break;
 
+                case "tm_seed":
+                    int.TryParse(payload, out _gameSeed);
+                    break;
+
                 case "tm_round_reset":
-                    ResetAllVisuals();
+                    if (int.TryParse(payload, out int roundNum))
+                        GenerateAndApplyItemLayout(roundNum);
                     _hud?.OnNetworkMessage(messageType, payload);
                     break;
 
@@ -450,8 +522,10 @@ namespace ChaosPit.Minigames.ThiefsMarket
                     break;
 
                 case "tm_game_over":
-                    SetLocalPunchModeActive(false);
                     _hud?.OnNetworkMessage(messageType, payload);
+                    // Punch mode is deactivated server-side via
+                    // SetPlayerThiefsMarketPunchMode in EndGameDelayed(),
+                    // not here.
                     // OnShowResults (below) only ever runs on the server's own
                     // controller instance — GameRoomManager.OnGameComplete calls
                     // ShowResults() as a direct method call inside a [Server]
@@ -465,13 +539,118 @@ namespace ChaosPit.Minigames.ThiefsMarket
             }
         }
 
-        private void ResetAllVisuals()
+        // ── Procedural Item Layout ──────────────────────────────────
+
+        // Runs identically on every machine (server-as-host and every remote
+        // client) — same item count (from the scene), same seed (gameSeed +
+        // roundNum), same deterministic algorithm, so no per-item position
+        // ever needs to go over the network.
+        private void GenerateAndApplyItemLayout(int roundNum)
         {
-            foreach (var visual in _itemVisualsById.Values)
+            if (_itemVisualsById.Count == 0) return;
+
+            List<Vector3> positions = GenerateItemLayout(_itemVisualsById.Count, _gameSeed + roundNum);
+
+            for (int i = 0; i < _itemVisualsById.Count; i++)
             {
-                visual.ResetToOriginal();
-                visual.SetVisible(true);
+                _itemVisualsById[i].SetPosition(positions[i]);
+                _itemVisualsById[i].SetVisible(true);
             }
+        }
+
+        // Places "mostly scattered singles, a few clusters": cluster centers
+        // and sizes are rolled first, cluster members placed within
+        // _clusterRadius of their center, then whatever items remain are
+        // scattered as singles respecting _minItemSpacing from everything
+        // already placed (including cluster centers, so singles don't land
+        // inside a cluster).
+        private List<Vector3> GenerateItemLayout(int itemCount, int seed)
+        {
+            var rng = new System.Random(seed);
+            var positions = new List<Vector3>(itemCount);
+
+            int clusterCount = rng.Next(_minClusters, _maxClusters + 1);
+            var clusterCenters = new List<Vector2>();
+            var clusterSizes = new List<int>();
+
+            int remaining = itemCount;
+            for (int i = 0; i < clusterCount && remaining > 0; i++)
+            {
+                int size = Mathf.Min(remaining, rng.Next(_minClusterSize, _maxClusterSize + 1));
+                clusterSizes.Add(size);
+                remaining -= size;
+            }
+
+            foreach (int size in clusterSizes)
+            {
+                Vector2 center = FindValidPoint(rng, clusterCenters, _minClusterSpacing);
+                clusterCenters.Add(center);
+
+                for (int i = 0; i < size; i++)
+                {
+                    Vector2 offset = RandomInsideCircle(rng) * _clusterRadius;
+                    Vector2 point = ClampToBounds(center + offset);
+                    positions.Add(new Vector3(point.x, _spawnGroundY, point.y));
+                }
+            }
+
+            // Everything placed so far counts as an obstacle for singles too,
+            // so a scattered item can't land on top of a cluster.
+            var placed = positions.Select(p => new Vector2(p.x, p.z)).ToList();
+            placed.AddRange(clusterCenters);
+
+            for (int i = 0; i < remaining; i++)
+            {
+                Vector2 point = FindValidPoint(rng, placed, _minItemSpacing);
+                placed.Add(point);
+                positions.Add(new Vector3(point.x, _spawnGroundY, point.y));
+            }
+
+            return positions;
+        }
+
+        // Tries random points within bounds up to _maxPlacementAttempts,
+        // rejecting any candidate closer than minSpacing to an existing
+        // point. Falls back to an unchecked random point if it can't find a
+        // valid spot in time — guarantees every item in the pool gets a
+        // position rather than risking an infinite loop if the spawn area is
+        // too small/dense for the requested spacing.
+        private Vector2 FindValidPoint(System.Random rng, List<Vector2> existing, float minSpacing)
+        {
+            for (int attempt = 0; attempt < _maxPlacementAttempts; attempt++)
+            {
+                Vector2 candidate = RandomPointInBounds(rng);
+
+                bool valid = true;
+                foreach (Vector2 p in existing)
+                {
+                    if (Vector2.Distance(candidate, p) < minSpacing) { valid = false; break; }
+                }
+                if (valid) return candidate;
+            }
+
+            return RandomPointInBounds(rng);
+        }
+
+        private Vector2 RandomPointInBounds(System.Random rng)
+        {
+            return new Vector2(
+                (float)(rng.NextDouble() * (_spawnAreaMax.x - _spawnAreaMin.x) + _spawnAreaMin.x),
+                (float)(rng.NextDouble() * (_spawnAreaMax.y - _spawnAreaMin.y) + _spawnAreaMin.y));
+        }
+
+        private Vector2 RandomInsideCircle(System.Random rng)
+        {
+            float angle = (float)(rng.NextDouble() * Mathf.PI * 2.0);
+            float radius = Mathf.Sqrt((float)rng.NextDouble()); // sqrt for uniform area distribution, not just radius
+            return new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+        }
+
+        private Vector2 ClampToBounds(Vector2 point)
+        {
+            return new Vector2(
+                Mathf.Clamp(point.x, _spawnAreaMin.x, _spawnAreaMax.x),
+                Mathf.Clamp(point.y, _spawnAreaMin.y, _spawnAreaMax.y));
         }
 
         private void ApplyPickupConfirm(string payload)
@@ -528,7 +707,9 @@ namespace ChaosPit.Minigames.ThiefsMarket
                 _resultsText.text = sb.ToString();
             }
 
-            StartCoroutine(ResultsCountdownCoroutine(_countdownText, notifyDismissal: true));
+            _hud?.SetScorePanelVisible(false);
+            StartCoroutine(ResultsCountdownCoroutine(_countdownText, notifyDismissal: true,
+                onComplete: () => _hud?.SetScorePanelVisible(true)));
         }
 
         // Pure-client broadcast path — mirrors BombTossController's
@@ -549,15 +730,17 @@ namespace ChaosPit.Minigames.ThiefsMarket
                 if (p.Length < 6) continue;
                 if (!int.TryParse(p[0], out int standing)) continue;
                 if (!int.TryParse(p[1], out int id)) continue;
-                if (!int.TryParse(p[2], out int roundWins)) continue;
 
                 string name = _nameMap.TryGetValue(id, out string n) ? n : $"Player_{id}";
-                sb.AppendLine($"#{standing} {name} — {roundWins} round win(s)");
+                int points = (standing - 1) < _placementPoints.Length ? _placementPoints[standing - 1] : 0;
+                sb.AppendLine($"{GetResultLabel(standing)}: {name}  +{points}pts");
             }
 
             if (_resultsScreenPanel != null) _resultsScreenPanel.SetActive(true);
             if (_resultsText != null) _resultsText.text = sb.ToString();
-            StartCoroutine(ResultsCountdownCoroutine(_countdownText, notifyDismissal: false));
+            _hud?.SetScorePanelVisible(false);
+            StartCoroutine(ResultsCountdownCoroutine(_countdownText, notifyDismissal: false,
+                onComplete: () => _hud?.SetScorePanelVisible(true)));
         }
 
         // ── Payload Builders ───────────────────────────────────────
@@ -641,6 +824,7 @@ namespace ChaosPit.Minigames.ThiefsMarket
         private void ApplyPlayersPayload(string payload)
         {
             if (string.IsNullOrEmpty(payload)) return;
+            _lastPlayersPayload = payload;
             _nameMap.Clear();
             foreach (string entry in payload.Split('|'))
             {
@@ -661,16 +845,23 @@ namespace ChaosPit.Minigames.ThiefsMarket
             return null;
         }
 
-        private void SetLocalPunchModeActive(bool active)
+        // HandlePunchRequest resolves attacker/victim from sender.ClientId and
+        // the ClientId sent in the payload — both are real network ClientIds,
+        // not PlayerId. FindPlayerById compares against PlayerId instead, which
+        // isn't guaranteed to equal ClientId for every player (it happened to
+        // match for one player by coincidence, not for the host). This looks
+        // players up by the field that's actually being compared.
+        private PlayerObject FindPlayerByClientId(int clientId)
         {
-            PlayerObject local = FindObjectsByType<PlayerObject>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None)
-                .FirstOrDefault(p => p.IsOwner);
+            foreach (PlayerObject p in _players)
+                if (p.Owner != null && p.Owner.ClientId == clientId) return p;
+            return null;
+        }
 
-            if (local == null) return;
-
-            var interaction = local.GetComponent<InteractionManager>();
-            interaction?.SetThiefsMarketPunchActive(active, _hud);
+        private void ActivatePunchModeForAllPlayers(bool active)
+        {
+            foreach (PlayerObject p in _players)
+                GameRoomManager.Instance.SetPlayerThiefsMarketPunchMode(p.Owner, p.NetworkObject, active);
         }
     }
 }

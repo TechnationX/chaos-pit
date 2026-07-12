@@ -25,16 +25,20 @@ namespace ChaosPit.Minigames.BombToss
             _currentHolderId = playerId;
 
             PlayerObject holder = FindPlayerById(playerId);
+            //Debug.Log($"[BombVisual] AttachToHolder {playerId} — instance null: {_bombInstance == null}, holder found: {holder != null}");
             if (holder == null || holder.HandSocket == null)
             {
                 _bombInstance.SetActive(false);
                 return;
-            }
+            }         
 
             _bombInstance.transform.SetParent(holder.HandSocket, false);
+            //Debug.Log($"[BombVisual] Parented to {holder.name} — socket: {holder.HandSocket.name}, active: {_bombInstance.activeSelf}, pos: {_bombInstance.transform.position}");
+            
             _bombInstance.transform.localPosition = Vector3.zero;
             _bombInstance.transform.localRotation = Quaternion.identity;
             _bombInstance.SetActive(true);
+            //Debug.Log($"[BombVisual] SetActive called — now active: {_bombInstance.activeSelf}");
         }
 
         public void Hide()
@@ -48,7 +52,11 @@ namespace ChaosPit.Minigames.BombToss
         {
             foreach (var p in FindObjectsByType<PlayerObject>(
                 FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
                 if (p.PlayerId == playerId) return p;
+                // Fallback: match by owner ClientId (PlayerId may not be set on clients yet)
+                if (p.Owner != null && p.Owner.ClientId == playerId) return p;
+            }
             return null;
         }
     }
