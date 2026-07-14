@@ -43,6 +43,9 @@ namespace ChaosPit.Minigames.Jinxed
         [SerializeField] private int _totalRounds = 3;
         [SerializeField] private float _roundDuration = 60f;
 
+        [Header("Scoring")]
+        [SerializeField] private int[] _placementPoints = { 10, 8, 6, 3, 2, 1 };
+
         [Header("Tile Fall Settings")]
         [SerializeField] private float _tileFallInterval = 1.5f;
         [SerializeField] private float _tileWarnDuration = 0.8f;
@@ -62,8 +65,6 @@ namespace ChaosPit.Minigames.Jinxed
         private Coroutine _roundCoroutine;
         private Coroutine _fallCoroutine;
         private Coroutine _clientFallCoroutine;
-
-        private static readonly int[] _standingPoints = { 10, 8, 5, 3, 2, 1 };
 
         // ── MiniGameController Overrides ──────────────────────────
         public override void ClientInit()
@@ -114,7 +115,7 @@ namespace ChaosPit.Minigames.Jinxed
             for (int i = 0; i < sorted.Count; i++)
             {
                 int standing = i + 1;
-                int careerPoints = i < _standingPoints.Length ? _standingPoints[i] : 0;
+                int careerPoints = CalculatePlacementPoints(standing, sorted.Count);
                 string label = GetResultLabel(standing);
                 PlayerObject po = _players.FirstOrDefault(p => p.PlayerId == sorted[i].PlayerId);
 
@@ -483,7 +484,7 @@ namespace ChaosPit.Minigames.Jinxed
 
             for (int i = 0; i < roundSorted.Count; i++)
             {
-                int score = i < _standingPoints.Length ? _standingPoints[i] : 0;
+                int score = CalculatePlacementPoints(i + 1, roundSorted.Count);
                 roundSorted[i].TotalScore += score;
                 roundSorted[i].TotalSurvival += roundSorted[i].EliminatedAt >= 0f
                     ? roundSorted[i].EliminatedAt
@@ -564,7 +565,7 @@ namespace ChaosPit.Minigames.Jinxed
                 PlayerObject po = _players.FirstOrDefault(p => p.PlayerId == pd.PlayerId);
                 PlayerProfile profile = PlayerProfileManager.Instance.GetProfile(po?.Owner);
                 string name = profile?.DisplayName ?? po?.PlayerName ?? $"Player_{pd.PlayerId}";
-                int careerPoints = i < _standingPoints.Length ? _standingPoints[i] : 0;
+                int careerPoints = CalculatePlacementPoints(i + 1, sorted.Count);
                 parts.Add($"{pd.PlayerId}:{careerPoints}:{name}");
             }
             BroadcastMessage("jinxed_game_end", string.Join("|", parts));
@@ -653,6 +654,14 @@ namespace ChaosPit.Minigames.Jinxed
 
             JinxedHUD hudFinal = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
             hudFinal?.SetScorePanelVisible(true);
+        }
+
+        private int CalculatePlacementPoints(int standing, int totalPlayers)
+        {
+            int lastIndex = _placementPoints.Length - 1;
+            int index = lastIndex - totalPlayers + standing;
+            index = Mathf.Clamp(index, 0, lastIndex);
+            return _placementPoints[index];
         }
 
         // ── Helpers ───────────────────────────────────────────────

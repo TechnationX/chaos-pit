@@ -22,7 +22,7 @@ namespace ChaosPit.Minigames.BombToss
         // ── Inspector ─────────────────────────────────────────────
 
         [Header("Round Settings")]
-        [SerializeField] private float[] _pointsPerElimination = { 1, 2, 3, 4, 5, 6, 7, 8 };
+        [SerializeField] private int[] _placementPoints = { 10, 8, 6, 3, 2, 1 };
 
         [Header("Fuse Settings")]
         [SerializeField] private float _baseFuseTime = 15f;
@@ -154,11 +154,9 @@ namespace ChaosPit.Minigames.BombToss
             _activePlayers.Remove(eliminated);
             _eliminatedPlayers.Add(eliminated);
 
-            int points = _eliminationOrder < _pointsPerElimination.Length
-                ? (int)_pointsPerElimination[_eliminationOrder]
-                : 0;
+            int standing = _eliminationOrder + 1;
+            int points = CalculatePlacementPoints(standing, _players.Count);
             _cumulativeScores[eliminated] += points;
-            _eliminationOrder++;
 
             // Teleport eliminated player to elimination spawn
             PlayerObject elimPlayer = FindPlayerByClientId(eliminated);
@@ -184,9 +182,7 @@ namespace ChaosPit.Minigames.BombToss
                 if (_activePlayers.Count == 1)
                 {
                     int survivor = _activePlayers[0];
-                    int survivorPoints = _eliminationOrder < _pointsPerElimination.Length
-                        ? (int)_pointsPerElimination[_eliminationOrder]
-                        : 0;
+                    int survivorPoints = CalculatePlacementPoints(_eliminationOrder + 1, _players.Count);
                     _cumulativeScores[survivor] += survivorPoints;
                 }
 
@@ -217,6 +213,14 @@ namespace ChaosPit.Minigames.BombToss
             }).ToList();
 
             OnShowResults(new ResultsData { Entries = entries });
+        }
+
+        private int CalculatePlacementPoints(int standing, int totalPlayers)
+        {
+            int lastIndex = _placementPoints.Length - 1;
+            int index = lastIndex - totalPlayers + standing;
+            index = Mathf.Clamp(index, 0, lastIndex);
+            return _placementPoints[index];
         }
 
         // ── Client Action (server receives from clients) ───────────

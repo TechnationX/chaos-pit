@@ -2530,12 +2530,11 @@ MonoBehaviour:
   _resultsDuration: 5
   _arenaGrid: {fileID: 1206597847}
   _totalRounds: 3
-  _roundDuration: 60
-  _tileFallInterval: 1.5
-  _tileWarnDuration: 0.8
-  _tileDangerDuration: 0.4
-  _tagRange: 2
-  _tagCooldown: 3
+  _roundDuration: 120
+  _placementPoints: 0a0000000800000006000000030000000200000001000000
+  _tileFallInterval: 1
+  _tileWarnDuration: 0.6
+  _tileDangerDuration: 0.3
   _eliminationSpawnPoint: {fileID: 1191712606}
 --- !u!1 &1513864503
 GameObject:
@@ -3503,11 +3502,6 @@ MonoBehaviour:
   _roundText: {fileID: 502814497}
   _scoreRowParent: {fileID: 1206134666}
   _scoreRowPrefab: {fileID: -4471618727128429677, guid: 54da7c817741ec946b9a1d45406a7b43, type: 3}
-  _tagPromptRoot: {fileID: 0}
-  _tagPromptLabel: {fileID: 0}
-  _cooldownRoot: {fileID: 0}
-  _cooldownBar: {fileID: 0}
-  _cooldownLabel: {fileID: 0}
   _bannerRoot: {fileID: 272186388}
   _bannerText: {fileID: 2022565236}
   _bannerDuration: 2.5

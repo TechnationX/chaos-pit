@@ -769,22 +769,27 @@ public class GameRoomManager : NetworkBehaviour
 
     [ObserversRpc]
     private void RpcSyncSessionState(int stationIndex, int hostClientId,
-        List<string> playerNames, List<int> clientIds, GameRoomState state, bool gameSelected, int minPlayers)
+        List<string> playerNames, List<int> clientIds, GameRoomState state, 
+        bool gameSelected, int minPlayers, string selectedGameId)
     {
         if (!_stations.TryGetValue(stationIndex, out MinigameStation station)) return;
-        station.UpdateSessionState(hostClientId, playerNames, clientIds, state, gameSelected, minPlayers);
+        station.UpdateSessionState(hostClientId, playerNames, clientIds, state, gameSelected, minPlayers, selectedGameId);
     }
 
     private void SyncSessionToClients(int stationIndex, GameRoomSession session)
     {
         int hostId = session.HostPlayer?.Owner?.ClientId ?? -1;
-        List<string> names = session.Players
-            .Select(p => PlayerProfileManager.Instance.GetProfile(p.Owner)?.DisplayName ?? p.name)
-            .ToList();
+
+        List<string> names = session.Players.Select(p => {
+            PlayerProfile profile = PlayerProfileManager.Instance.GetProfile(p.Owner);
+            return profile?.DisplayName ?? p.name;
+        }).ToList();
+
         List<int> clientIds = session.Players.Select(p => p.Owner?.ClientId ?? -1).ToList();
         bool gameSelected = session.SelectedGame != null;
         int minPlayers = session.SelectedGame?.MinPlayers ?? 0;
-        RpcSyncSessionState(stationIndex, hostId, names, clientIds, session.State, gameSelected, minPlayers);
+        string selectedGameId = session.SelectedGame?.MiniGameId ?? string.Empty;
+        RpcSyncSessionState(stationIndex, hostId, names, clientIds, session.State, gameSelected, minPlayers, selectedGameId);
     }
 
     public void NotifyGameComplete(MiniGameController controller, List<RoundResult> results)

@@ -30,13 +30,7 @@ namespace ChaosPit.Minigames.PaintTheTown
         [SerializeField] private float _roundDuration = 75f;
         [SerializeField] private float _syncInterval = 0.2f;
 
-        [Header("Scoring — Points Per Standing")]
-        [SerializeField] private int _points1st = 10;
-        [SerializeField] private int _points2nd = 8;
-        [SerializeField] private int _points3rd = 6;
-        [SerializeField] private int _points4th = 4;
-        [SerializeField] private int _points5th = 2;
-        [SerializeField] private int _points6th = 1;
+        [SerializeField] private int[] _placementPoints = { 10, 8, 6, 3, 2, 1 };
 
         [Header("References")]
         [SerializeField] private TileGrid _tileGrid;
@@ -417,8 +411,7 @@ namespace ChaosPit.Minigames.PaintTheTown
             var sorted = new List<PlayerObject>(_players);
             sorted.Sort((a, b) => _tileCounts[b.PlayerId].CompareTo(_tileCounts[a.PlayerId]));
 
-            int[] pts = { _points1st, _points2nd, _points3rd, _points4th, _points5th, _points6th };
-
+     
             var results = new List<RoundResult>();
             int prevCount = -1;
             int prevStanding = 1;
@@ -428,7 +421,7 @@ namespace ChaosPit.Minigames.PaintTheTown
                 PlayerObject player = sorted[i];
                 int count = _tileCounts[player.PlayerId];
                 int standing = (count == prevCount) ? prevStanding : i + 1;
-                int points = (standing - 1 < pts.Length) ? pts[standing - 1] : 0;
+                int points = CalculatePlacementPoints(standing, sorted.Count);
 
                 results.Add(new RoundResult(player, standing, points, GetResultLabel(standing)));
 
@@ -437,6 +430,14 @@ namespace ChaosPit.Minigames.PaintTheTown
             }
 
             return results;
+        }
+
+        private int CalculatePlacementPoints(int standing, int totalPlayers)
+        {
+            int lastIndex = _placementPoints.Length - 1;
+            int index = lastIndex - totalPlayers + standing;
+            index = Mathf.Clamp(index, 0, lastIndex);
+            return _placementPoints[index];
         }
 
         // ── Helpers ───────────────────────────────────────────────

@@ -15,7 +15,7 @@ MonoBehaviour:
   MiniGameId: bomb_toss
   MiniGameName: Bomb Toss
   SceneName: BombTossScene
-  MinPlayers: 2
+  MinPlayers: 1
   MaxPlayers: 6
   Description: Bomb Toss
   Thumbnail: {fileID: 0}

@@ -2898,10 +2898,10 @@ MonoBehaviour:
   _resultsDuration: 5
   _roundCount: 1
   _roundDuration: 20
-  _placementPoints: 0a0000000700000005000000030000000100000000000000
+  _placementPoints: 0a0000000800000006000000040000000200000001000000
   _itemPoolContainer: {fileID: 1164430102}
-  _spawnAreaMin: {x: -10, y: -10}
-  _spawnAreaMax: {x: 10, y: 10}
+  _spawnAreaMin: {x: -9, y: -9}
+  _spawnAreaMax: {x: 9, y: 9}
   _spawnGroundY: 0
   _minItemSpacing: 1.5
   _minClusters: 1
@@ -2909,7 +2909,7 @@ MonoBehaviour:
   _minClusterSize: 3
   _maxClusterSize: 6
   _clusterRadius: 2.5
-  _minClusterSpacing: 4
+  _minClusterSpacing: 2
   _maxPlacementAttempts: 30
   _punchLatencyBuffer: 0.5
   _minStolenItems: 1

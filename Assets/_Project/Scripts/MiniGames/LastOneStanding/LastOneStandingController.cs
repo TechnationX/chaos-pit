@@ -64,13 +64,8 @@ namespace ChaosPit.Minigames.LastOneStanding
             new TileWave { tileCount = 100, waveDelay =  6f, warningDuration = 1f,   dangerDuration = 0.5f },
         };
 
-        [Header("Scoring — Points Per Placement")]
-        [SerializeField] private int _points1st = 10;
-        [SerializeField] private int _points2nd = 8;
-        [SerializeField] private int _points3rd = 6;
-        [SerializeField] private int _points4th = 4;
-        [SerializeField] private int _points5th = 2;
-        [SerializeField] private int _points6th = 1;
+        [Header("Career Score — Points Per Final Placement")]
+        [SerializeField] private int[] _placementPoints = { 10, 8, 6, 3, 2, 1 };
 
         [Header("Shove")]
         [SerializeField] private float _shoveForce = 12f;
@@ -473,12 +468,11 @@ namespace ChaosPit.Minigames.LastOneStanding
             var sorted = new List<EliminationRecord>(_roundEliminations);
             sorted.Sort((a, b) => b.EliminationOrder.CompareTo(a.EliminationOrder));
 
-            int[] pts = { _points1st, _points2nd, _points3rd, _points4th, _points5th, _points6th };
-
             for (int i = 0; i < sorted.Count; i++)
             {
                 int playerId = sorted[i].Player.PlayerId;
-                int points = (i < pts.Length) ? pts[i] : 0;
+                int standing = i + 1;
+                int points = CalculatePlacementPoints(standing, sorted.Count);
 
                 if (!_totalScores.ContainsKey(playerId))
                     _totalScores[playerId] = 0;
@@ -486,7 +480,6 @@ namespace ChaosPit.Minigames.LastOneStanding
                 _totalScores[playerId] += points;
             }
 
-            // Send updated scores to all clients
             GameRoomManager.Instance.RpcMinigameMessage("los_scores", BuildScoresPayload());
         }
 
@@ -513,7 +506,6 @@ namespace ChaosPit.Minigames.LastOneStanding
 
         private List<RoundResult> BuildFinalResults()
         {
-            // Sort players by total accumulated score descending
             var sorted = new List<PlayerObject>(_players);
             sorted.Sort((a, b) =>
             {
@@ -527,12 +519,20 @@ namespace ChaosPit.Minigames.LastOneStanding
             {
                 PlayerObject player = sorted[i];
                 int standing = i + 1;
-                int total = _totalScores.TryGetValue(player.PlayerId, out int s) ? s : 0;
+                int career = CalculatePlacementPoints(standing, sorted.Count);
 
-                results.Add(new RoundResult(player, standing, total, GetResultLabel(standing)));
+                results.Add(new RoundResult(player, standing, career, GetResultLabel(standing)));
             }
 
             return results;
+        }
+
+        private int CalculatePlacementPoints(int standing, int totalPlayers)
+        {
+            int lastIndex = _placementPoints.Length - 1;
+            int index = lastIndex - totalPlayers + standing;
+            index = Mathf.Clamp(index, 0, lastIndex);
+            return _placementPoints[index];
         }
 
         // ── Results Screen ────────────────────────────────────────

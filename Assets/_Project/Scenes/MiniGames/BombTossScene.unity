@@ -858,7 +858,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: 8c0722ad6460ca244a1173f4cebb6bb0, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -2446,19 +2446,10 @@ MonoBehaviour:
   - {fileID: 702938591}
   _resultsScreenPanel: {fileID: 1348555449}
   _resultsDuration: 5
-  _pointsPerElimination:
-  - 1
-  - 2
-  - 3
-  - 4
-  - 5
-  - 6
-  - 7
-  - 8
+  _placementPoints: 0a0000000800000006000000030000000200000001000000
   _baseFuseTime: 40
   _fuseReductionPerRound: 1
   _minimumFuseTime: 15
-  _passDistance: 1.5
   _eliminationSpawn: {fileID: 1191712606}
   _resultsText: {fileID: 1348555448}
   _countdownText: {fileID: 1348555447}

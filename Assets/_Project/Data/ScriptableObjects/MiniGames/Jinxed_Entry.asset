@@ -15,7 +15,7 @@ MonoBehaviour:
   MiniGameId: jinxed
   MiniGameName: Jinxed
   SceneName: JinxedScene
-  MinPlayers: 2
+  MinPlayers: 1
   MaxPlayers: 6
   Description: Jinxed
   Thumbnail: {fileID: 0}

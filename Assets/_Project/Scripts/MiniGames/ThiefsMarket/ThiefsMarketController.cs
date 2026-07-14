@@ -30,14 +30,14 @@ namespace ChaosPit.Minigames.ThiefsMarket
         [Header("Round Settings")]
         [SerializeField] private int _roundCount = 3;
         [SerializeField] private float _roundDuration = 75f;
-        [SerializeField] private int[] _placementPoints = { 10, 7, 5, 3, 1, 0 };
+        [SerializeField] private int[] _placementPoints = { 10, 8, 6, 3, 2, 1 };
 
         [Header("Item Pool")]
         [SerializeField] private Transform _itemPoolContainer;
 
         [Header("Procedural Item Layout")]
-        // Rectangular spawn bounds in world space (X/Z), fixed Y. Fresh layout
-        // generated every round from a shared seed — see GenerateItemLayout.
+        // Rectangular spawn bounds in LOCAL space relative to _itemPoolContainer —
+        // moves/rotates with the container instead of being fixed world coordinates.
         [SerializeField] private Vector2 _spawnAreaMin = new Vector2(-10f, -10f);
         [SerializeField] private Vector2 _spawnAreaMax = new Vector2(10f, 10f);
         [SerializeField] private float _spawnGroundY = 0f;
@@ -547,13 +547,14 @@ namespace ChaosPit.Minigames.ThiefsMarket
         // ever needs to go over the network.
         private void GenerateAndApplyItemLayout(int roundNum)
         {
-            if (_itemVisualsById.Count == 0) return;
+            if (_itemVisualsById.Count == 0 || _itemPoolContainer == null) return;
 
-            List<Vector3> positions = GenerateItemLayout(_itemVisualsById.Count, _gameSeed + roundNum);
+            List<Vector3> localPositions = GenerateItemLayout(_itemVisualsById.Count, _gameSeed + roundNum);
 
             for (int i = 0; i < _itemVisualsById.Count; i++)
             {
-                _itemVisualsById[i].SetPosition(positions[i]);
+                Vector3 worldPos = _itemPoolContainer.TransformPoint(localPositions[i]);
+                _itemVisualsById[i].SetPosition(worldPos);
                 _itemVisualsById[i].SetVisible(true);
             }
         }
@@ -725,14 +726,14 @@ namespace ChaosPit.Minigames.ThiefsMarket
 
             foreach (string entry in payload.Split('|'))
             {
-                // standing,id,roundWins,totalItems,steals,stuns
+                // standing,id,points,roundWins,totalItems,steals,stuns
                 string[] p = entry.Split(',');
-                if (p.Length < 6) continue;
+                if (p.Length < 7) continue;
                 if (!int.TryParse(p[0], out int standing)) continue;
                 if (!int.TryParse(p[1], out int id)) continue;
+                if (!int.TryParse(p[2], out int points)) continue;
 
                 string name = _nameMap.TryGetValue(id, out string n) ? n : $"Player_{id}";
-                int points = (standing - 1) < _placementPoints.Length ? _placementPoints[standing - 1] : 0;
                 sb.AppendLine($"{GetResultLabel(standing)}: {name}  +{points}pts");
             }
 
@@ -756,6 +757,15 @@ namespace ChaosPit.Minigames.ThiefsMarket
                 parts.Add($"{p.PlayerId},{name}");
             }
             return string.Join("|", parts);
+        }
+        private int CalculatePlacementPoints(int standing, int totalPlayers)
+        {
+            int lastIndex = _placementPoints.Length - 1;
+            // Last place references the bottom of the array (lowest value) first;
+            // each better standing moves one slot up toward the front (higher value).
+            int index = lastIndex - totalPlayers + standing;
+            index = Mathf.Clamp(index, 0, lastIndex);
+            return _placementPoints[index];
         }
 
         private List<RoundResult> BuildFinalResults()
@@ -793,7 +803,7 @@ namespace ChaosPit.Minigames.ThiefsMarket
                 PlayerObject player = FindPlayerById(ranked[i]);
                 if (player == null) continue;
 
-                int points = (standing - 1) < _placementPoints.Length ? _placementPoints[standing - 1] : 0;
+                int points = CalculatePlacementPoints(standing, ranked.Count);
                 results.Add(new RoundResult(player, standing, points, GetResultLabel(standing)));
             }
 
@@ -814,7 +824,7 @@ namespace ChaosPit.Minigames.ThiefsMarket
             foreach (RoundResult r in _finalResults)
             {
                 int id = r.Player.PlayerId;
-                parts.Add($"{r.Standing},{id},{_roundWins[id]},{_totalItemsAcrossRounds[id]},{_totalSteals[id]},{_totalStuns[id]}");
+                parts.Add($"{r.Standing},{id},{r.ScoreAwarded},{_roundWins[id]},{_totalItemsAcrossRounds[id]},{_totalSteals[id]},{_totalStuns[id]}");
             }
             return string.Join("|", parts);
         }

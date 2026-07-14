@@ -109,6 +109,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Gamepad_Classic
       objectReference: {fileID: 0}
+    - target: {fileID: 3802440325024892399, guid: 7003a920aa61d4c498fc4eddaa293aed, type: 3}
+      propertyPath: m_Layer
+      value: 10
+      objectReference: {fileID: 0}
     - target: {fileID: 4579927693667770197, guid: 7003a920aa61d4c498fc4eddaa293aed, type: 3}
       propertyPath: m_LocalScale.x
       value: 3
@@ -189,11 +193,11 @@ MeshCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: -248363164620982799, guid: 46a48407b230d1042a2208438239e8fb, type: 3}
 --- !u!4 &7993531339859595208 stripped

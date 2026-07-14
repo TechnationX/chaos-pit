@@ -182,11 +182,12 @@ namespace ChaosPit.Minigames.ThiefsMarket
             // Format: standing,id,roundWins,totalItems,steals,stuns|...
             foreach (string entry in payload.Split('|'))
             {
+                // standing,id,points,roundWins,totalItems,steals,stuns
                 string[] p = entry.Split(',');
-                if (p.Length < 6) continue;
+                if (p.Length < 7) continue;
                 if (!int.TryParse(p[0], out int standing)) continue;
                 if (!int.TryParse(p[1], out int id)) continue;
-                if (!int.TryParse(p[2], out int roundWins)) continue;
+                if (!int.TryParse(p[3], out int roundWins)) continue;   // index shifted 2 → 3
 
                 if (_scoreRows.TryGetValue(id, out var row))
                     row.SetFinalStanding(standing, roundWins);

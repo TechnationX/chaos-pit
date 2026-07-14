@@ -161,6 +161,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: TV_Retro
       objectReference: {fileID: 0}
+    - target: {fileID: 6393484124639422824, guid: c19362f7599b71a4f9271692e6b4d15c, type: 3}
+      propertyPath: m_Layer
+      value: 10
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -194,10 +198,10 @@ MeshCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 3045395508877502395, guid: 0eee83f82202fb14da609ed45c7f0a67, type: 3}

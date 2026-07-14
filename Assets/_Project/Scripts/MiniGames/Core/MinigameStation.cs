@@ -45,6 +45,7 @@ public class MinigameStation : MonoBehaviour, IInteractable
     private bool _syncedGameSelected = false;
     private int _syncedMinPlayers = 0;
     private List<int> _syncedClientIds = new List<int>();
+    private string _syncedSelectedGameId = string.Empty;
 
     public int StationIndex => _stationIndex;
     public Transform[] WaitingAreaPoints => _waitingAreaPoints;
@@ -281,7 +282,7 @@ public class MinigameStation : MonoBehaviour, IInteractable
             TextMeshProUGUI label = btn.GetComponentInChildren<TextMeshProUGUI>();
             if (label != null) label.text = entry.MiniGameName;
 
-            bool isSelected = _currentSession?.SelectedGame?.MiniGameId == entry.MiniGameId;
+            bool isSelected = entry.MiniGameId == _syncedSelectedGameId;
             btn.interactable = !isSelected;
 
             string id = entry.MiniGameId;
@@ -333,9 +334,8 @@ public class MinigameStation : MonoBehaviour, IInteractable
     }
 
     public void UpdateSessionState(int hostClientId, List<string> playerNames,
-        List<int> clientIds, GameRoomState state, bool gameSelected, int minPlayers)
+    List<int> clientIds, GameRoomState state, bool gameSelected, int minPlayers, string selectedGameId)
     {
-        //Debug.Log($"[MinigameStation] UpdateSessionState — hostId: {hostClientId}, state: {state}");
         _hostClientId = hostClientId;
         _syncedPlayerNames = playerNames;
         _syncedClientIds = clientIds;
@@ -343,8 +343,8 @@ public class MinigameStation : MonoBehaviour, IInteractable
         _syncedPlayerCount = playerNames.Count;
         _syncedGameSelected = gameSelected;
         _syncedMinPlayers = minPlayers;
+        _syncedSelectedGameId = selectedGameId;
 
-        // Close panel when game is starting or in progress
         if (state == GameRoomState.Loading ||
             state == GameRoomState.InProgress ||
             state == GameRoomState.Returning ||
