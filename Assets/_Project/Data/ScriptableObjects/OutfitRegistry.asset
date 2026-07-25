@@ -1,0 +1,190 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc742f43accbbcd4c9a9378eef66c7d6, type: 3}
+  m_Name: OutfitRegistry
+  m_EditorClassIdentifier: Assembly-CSharp::OutfitRegistry
+  slots:
+  - type: {fileID: 11400000, guid: 11451b38f6824a84d8e8c9afe9bbc832, type: 2}
+    resourcePaths:
+    - Body/Body_BasicBody
+    - Body/Body_StrongBody
+  - type: {fileID: 11400000, guid: 8b51e8ff650f1344ba44bbb2b9eb83e6, type: 2}
+    resourcePaths:
+    - Bottom/Bottom_ApronSkirt
+    - Bottom/Bottom_CuffedLeggings
+    - Bottom/Bottom_DevoutPants
+    - Bottom/Bottom_GarterSlacks
+    - Bottom/Bottom_MeditativePants
+    - Bottom/Bottom_MeditativeSkirt
+    - Bottom/Bottom_RusticSkirt
+    - Bottom/Bottom_SharpGreaves
+    - Bottom/Bottom_SteelGreaves
+    - Bottom/Bottom_StrappedLeggings
+    - Bottom/Bottom_TatteredPants
+    - Bottom/Bottom_TightTravelPants
+    - Bottom/Bottom_VillagerLongPants
+    - Bottom/Bottom_VillagerSlacks
+  - type: {fileID: 11400000, guid: ffd4717f49b79c74aa1f234222365f79, type: 2}
+    resourcePaths:
+    - Ears/Ears_DeerEars
+  - type: {fileID: 11400000, guid: 56f941da801bb944cba868df9db79435, type: 2}
+    resourcePaths:
+    - Eyes/Eyes_BasicEyes
+    - Eyes/Eyes_BasicIris
+  - type: {fileID: 11400000, guid: 4cab820ca50ef9940a3151e1723ef0f5, type: 2}
+    resourcePaths:
+    - FaceDetails/FaceDetail_Freakles
+    - FaceDetails/FaceDetail_FullFreakles
+  - type: {fileID: 11400000, guid: 0e4e820936308e84487fc607e27aad31, type: 2}
+    resourcePaths:
+    - Feet/Feet_CuffedBoots
+    - Feet/Feet_FearsomeBoots
+    - Feet/Feet_FencingBoots
+    - Feet/Feet_ForestLongBoots
+    - Feet/Feet_PointedShoes
+    - Feet/Feet_SharpBoots
+    - Feet/Feet_SteelSabatons
+    - Feet/Feet_TiedBoots
+    - Feet/Feet_TravelSandal
+    - Feet/Feet_VillagerBoots
+  - type: {fileID: 11400000, guid: 903f6a47401e8d946a5143db62cf2cae, type: 2}
+    resourcePaths:
+    - Gloves/Gloves_ClothHandwraps
+    - Gloves/Gloves_CuffedGloves
+    - Gloves/Gloves_FearsomeBracers
+    - Gloves/Gloves_LeatherArmbands
+    - Gloves/Gloves_LeatherGloves
+    - Gloves/Gloves_MagicBracers
+    - Gloves/Gloves_OrnateGloves
+    - Gloves/Gloves_RusticGloves
+    - Gloves/Gloves_SharpGauntlets
+    - Gloves/Gloves_SteelGauntlets
+  - type: {fileID: 11400000, guid: 3781f2a69b931724b9a19deab41d2f45, type: 2}
+    resourcePaths:
+    - HairBack/HairBack_DolphinTail
+    - HairBack/HairBack_DragonCut
+    - HairBack/HairBack_ElvishLong
+    - HairBack/HairBack_FearsomeSideCut
+    - HairBack/HairBack_LooseLong
+    - HairBack/HairBack_NobleBraid
+    - HairBack/HairBack_PhenoixSpikes
+    - HairBack/HairBack_ProperUndercut
+    - HairBack/HairBack_SchalorTail
+    - HairBack/HairBack_ShortChoppy
+    - HairBack/HairBack_ShortShag
+    - HairBack/HairBack_TotalCurls
+    - HairBack/HairBack_WarriorWolfTail
+  - type: {fileID: 11400000, guid: 025dcbe78cc533044936dbb48c1c30e3, type: 2}
+    resourcePaths:
+    - HairFront/HairFront_DesolateHair
+    - HairFront/HairFront_FreeTussle
+    - HairFront/HairFront_HeroCut
+    - HairFront/HairFront_ProperPart
+    - HairFront/HairFront_PureCut
+    - HairFront/HairFront_ScholarPart
+    - HairFront/HairFront_StarChild
+    - HairFront/HairFront_TightCurls
+    - HairFront/HairFront_TuffCuff
+    - HairFront/HairFront_UnkeptLoose
+  - type: {fileID: 11400000, guid: adf65c8e9cddf6e4eb8117a2d67d37c3, type: 2}
+    resourcePaths:
+    - Hat/Hat_ChainHelmet
+    - Hat/Hat_FullHood
+    - Hat/Hat_KettleHelmet
+    - Hat/Hat_RusticHood
+    - Hat/Hat_SharpHelmet
+    - Hat/Hat_SolidersHelm
+    - Hat/Hat_SteelHelmet
+    - Hat/Hat_StrudyHelmet
+    - Hat/Hat_WitchesHat
+    - Hat/Hat_WizardHat
+  - type: {fileID: 11400000, guid: 480ce04c1d1586c44b495f52ce52adc8, type: 2}
+    resourcePaths:
+    - Head/Head_BasicHead
+    - Head/Head_SharpHead
+    - Head/Head_Stern
+    - Head/Head_YoungSharpHead
+  - type: {fileID: 11400000, guid: 2afba4aeb1706534c9c209d946390096, type: 2}
+    resourcePaths:
+    - HeadAcc/HeadAcc_DeerAntlers
+  - type: {fileID: 11400000, guid: 1327d52b4eb897a4b8d6838bff33e6b7, type: 2}
+    resourcePaths:
+    - Leggings/Leggings_Stocking
+  - type: {fileID: 11400000, guid: 1b19472c53ac54741b33f86e7ecd368d, type: 2}
+    resourcePaths:
+    - LowerFace/LowerFace_CommandingBeard
+    - LowerFace/LowerFace_RogueMask
+    - LowerFace/LowerFace_SquareBeard
+    - LowerFace/LowerFace_TiedBeard
+    - LowerFace/LowerFace_WizzendBeard
+  - type: {fileID: 11400000, guid: 9272634e92d3380458926acf8c791ac2, type: 2}
+    resourcePaths:
+    - MakeUpCheeks/MakeUpCheeks_BasicBlush
+  - type: {fileID: 11400000, guid: d7ef079491b244e41a9ecbe9d6b455e1, type: 2}
+    resourcePaths:
+    - MakeUpEyes/MakeUpEyes_BasicEyeLiner
+  - type: {fileID: 11400000, guid: 1978635c96bf86141852f5f309468ebf, type: 2}
+    resourcePaths:
+    - MakeUpLips/MakeUpLips_BasicLipstick
+  - type: {fileID: 11400000, guid: 3ec095cfc3c138c45b2fbfdc7131682d, type: 2}
+    resourcePaths:
+    - Neck/Neck_HoodedCape
+    - Neck/Neck_LooseScarf
+    - Neck/Neck_TatteredMuffler
+  - type: {fileID: 11400000, guid: 3bf3759a9e6cce040910c0aad65b40d3, type: 2}
+    resourcePaths:
+    - Pupil/Pupil_BasicPupil
+    - Pupil/Pupil_SharpPupil
+  - type: {fileID: 11400000, guid: 78106d16c97ada048b643b5b2b2eaf1f, type: 2}
+    resourcePaths:
+    - Shoulders/Shoulder_SharpPauldrons
+    - Shoulders/Shoulders_DevoutShawl
+    - Shoulders/Shoulders_FierceShoulders
+    - Shoulders/Shoulders_HomelyShawl
+    - Shoulders/Shoulders_SoldiersPauldrons
+    - Shoulders/Shoulders_SolidShoulders
+    - Shoulders/Shoulders_StrongShoulders
+  - type: {fileID: 11400000, guid: b66be6ff56f8871448262fbf9d83ee91, type: 2}
+    resourcePaths:
+    - Socks/Socks_AnkleSocks
+    - Socks/Socks_BasicSocks
+    - Socks/Socks_KneeHighs
+    - Socks/Socks_StripedKneeHighs
+    - Socks/Socks_StripedThighHighs
+    - Socks/Socks_ThighHigh
+  - type: {fileID: 11400000, guid: 6708e088db9d4b14caa291b19c953b71, type: 2}
+    resourcePaths:
+    - Top/Top_BattleDress
+    - Top/Top_DevoutCoat
+    - Top/Top_FearsomeGarb
+    - Top/Top_MeditativeVest
+    - Top/Top_RangerVest
+    - Top/Top_RusticCorset
+    - Top/Top_RusticTunic
+    - Top/Top_SharpArmor
+    - Top/Top_SteelArmor
+    - Top/Top_VanguardCoat
+    - Top/Top_VillagerTunic
+    - Top/Top_WitchBlouse
+  - type: {fileID: 11400000, guid: e56e5c1caeb450e45a10017ec49e5c4e, type: 2}
+    resourcePaths:
+    - UnderLower/UnderLower_SimpleBoxers
+    - UnderLower/UnderLower_SimplePanties
+  - type: {fileID: 11400000, guid: a781ca08053c0ba41a7a6816b6e7e199, type: 2}
+    resourcePaths:
+    - UnderUpper/UnderUpper_SimpleBra
+    - UnderUpper/UnderUpper_SimpleUnderShirt
+  - type: {fileID: 11400000, guid: ffad910d2e77d9342b9f96d19728b5a5, type: 2}
+    resourcePaths:
+    - UpperFace/UpperFace_Blindfold
+    - UpperFace/UpperFace_ClothEyeWrap
+    - UpperFace/UpperFace_EyePatch

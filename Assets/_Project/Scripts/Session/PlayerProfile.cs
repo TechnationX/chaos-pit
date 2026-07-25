@@ -8,6 +8,7 @@ public class PlayerProfile
     public int ClientId;
     public string DisplayName;
     public int CareerScore;
+    public byte[] CurrentLoadout;
 
     // TODO: BACKEND — add SteamId field here when Steam integration is added
     // public ulong SteamId;

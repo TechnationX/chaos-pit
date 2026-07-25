@@ -25,6 +25,9 @@ public class PlayerCamera : NetworkBehaviour
     [Header("Third Person Settings")]
     [SerializeField] private float _followDistance = 4f;
 
+    [Header("Hand Socket")]
+    [SerializeField] private Transform _handSocketPivot;
+
     private PlayerObject _player;
     private CameraMode _currentMode;
     private float _verticalRotation;
@@ -81,6 +84,9 @@ public class PlayerCamera : NetworkBehaviour
         _verticalRotation -= mouseY;
         _verticalRotation = Mathf.Clamp(_verticalRotation, _verticalClampMin, _verticalClampMax);
         _vcamFirstPerson.transform.localRotation = Quaternion.Euler(_verticalRotation, 0f, 0f);
+
+        if (_handSocketPivot != null)
+            _handSocketPivot.localRotation = Quaternion.Euler(_verticalRotation, 0f, 0f);
     }
 
     private void SetupFirstPersonCam()

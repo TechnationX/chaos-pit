@@ -32,6 +32,9 @@ public class MainMenuManager : MonoBehaviour
     [SerializeField] private Button settingsButton;
     [SerializeField] private Button quitButton;
 
+    [Header("Character Creator")]
+    [SerializeField] private string characterCreatorSceneName = "CharacterCreator";
+
     [Header("Disconnect Popup")]
     [SerializeField] private GameObject disconnectPopup;
     [SerializeField] private TMP_Text disconnectMessageText;
@@ -65,7 +68,7 @@ public class MainMenuManager : MonoBehaviour
     {
         createSessionButton.onClick.AddListener(() => ShowScreen(createSessionScreen));
         joinSessionButton.onClick.AddListener(() => ShowScreen(joinSessionScreen));
-        customizationButton.onClick.AddListener(() => ShowScreen(customizationScreen));
+        customizationButton.onClick.AddListener(LoadCharacterCreator);
         settingsButton.onClick.AddListener(() => ShowScreen(settingsScreen));
         quitButton.onClick.AddListener(() => QuitGame());
     }
@@ -128,6 +131,13 @@ public class MainMenuManager : MonoBehaviour
         #else
             Application.Quit();
         #endif
+    }
+
+    // ─── Character Creator ────────────────────────────────────────────────────
+
+    private void LoadCharacterCreator()
+    {
+        UnityEngine.SceneManagement.SceneManager.LoadScene(characterCreatorSceneName);
     }
 
     public void ShowDisconnectPopup(string message)

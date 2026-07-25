@@ -38,6 +38,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_Project/Scenes/MiniGames/BombTossScene.unity
     guid: 26f94303264be74429cbc4f550740de3
+  - enabled: 1
+    path: Assets/_Project/Scenes/CharacterCreator.unity
+    guid: a0eecd959a864d346bf7a211db6d9cb6
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

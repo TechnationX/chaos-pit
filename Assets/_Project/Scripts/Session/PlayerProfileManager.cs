@@ -80,6 +80,15 @@ public class PlayerProfileManager : MonoBehaviour
         // Example: await PlayFabManager.SavePlayerScore(profile.SteamId, profile.CareerScore)
     }
 
+    public void SetLoadout(NetworkConnection conn, byte[] packedData)
+    {
+        if (!_profiles.TryGetValue(conn.ClientId, out PlayerProfile profile)) return;
+        profile.CurrentLoadout = packedData;
+
+        // TODO: BACKEND — persist loadout to database here
+        // Example: await PlayFabManager.SaveLoadout(profile.SteamId, profile.CurrentLoadout)
+    }
+
     // TODO: BACKEND — add local save/load methods here when persistence between sessions is needed
     // For now scores only persist for the duration of the server session
 }
