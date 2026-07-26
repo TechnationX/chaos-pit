@@ -102,9 +102,11 @@ public static class CharacterLoadout
         {
             var type = registry.GetTypeByIndex(s.typeIndex);
             var path = registry.GetPath(type, s.outfitId);
+            //Debug.Log($"[CharacterLoadout] Applying slot typeIndex={s.typeIndex}, outfitId={s.outfitId}, resolved path='{path}'");
             if (path == null) continue;
 
             var prefab = Resources.Load<Outfit>(path);
+            //Debug.Log($"[CharacterLoadout] Resources.Load<Outfit>('{path}') returned: {(prefab == null ? "NULL" : prefab.name)}");
             if (prefab == null) continue;
 
             var inst = Object.Instantiate(prefab, system.transform);
@@ -114,6 +116,8 @@ public static class CharacterLoadout
                 inst.SetColor(s.colors[c], c + 1);
         }
 
+        //Debug.Log($"[CharacterLoadout] All {slots.Count} outfits attached, starting MergeCharacter...");
         await system.MergeCharacter();
+        //Debug.Log($"[CharacterLoadout] MergeCharacter completed.");
     }
 }

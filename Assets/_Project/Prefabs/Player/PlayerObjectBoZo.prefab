@@ -29,7 +29,7 @@ Transform:
   m_GameObject: {fileID: 620739584008641160}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.148704, z: -3.048091}
+  m_LocalPosition: {x: 0, y: 1.069704, z: -3.048091}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -339,7 +339,7 @@ Transform:
   m_GameObject: {fileID: 1519795901807361416}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.149, y: 1.231, z: 0.66499996}
+  m_LocalPosition: {x: 0.149, y: -0.406, z: 0.401}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -370,7 +370,7 @@ Transform:
   m_GameObject: {fileID: 1567264074503972197}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 1.621, z: 0.236}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -420,6 +420,7 @@ Transform:
   - {fileID: 823742138251311513}
   - {fileID: 149817626557562899}
   - {fileID: 4613309945795704367}
+  - {fileID: 4492696681795499465}
   - {fileID: 1696979339290945896}
   - {fileID: 8441125347356796218}
   - {fileID: 7477013232000041145}
@@ -628,6 +629,7 @@ MonoBehaviour:
   _interactionManager: {fileID: 4571975280494835051}
   _characterModel: {fileID: 675420075707996841}
   _handSocket: {fileID: 2841485608747275214}
+  _handSocketStatic: {fileID: 4492696681795499465}
   _cameraRoot: {fileID: 1696979339290945896}
 --- !u!114 &4406292158570597787
 MonoBehaviour:
@@ -681,7 +683,7 @@ MonoBehaviour:
   _vcamFirstPerson: {fileID: 1878657980072444159}
   _vcamThirdPerson: {fileID: 2416079227321590371}
   _firstPersonAnchor: {fileID: 5870261802652006702}
-  _mouseSensitivity: 2
+  _mouseSensitivity: 1
   _verticalClampMin: -80
   _verticalClampMax: 80
   _followDistance: 2
@@ -931,6 +933,37 @@ MonoBehaviour:
       BarrelClipping: 0.25
       Anamorphism: 0
   BlendHint: 0
+--- !u!1 &9156452947264246301
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4492696681795499465}
+  m_Layer: 9
+  m_Name: HandSocketStatic
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4492696681795499465
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9156452947264246301}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 1, z: 0.75}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 582226080397840070}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &928933811499048562
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1301,6 +1334,14 @@ PrefabInstance:
     - target: {fileID: 7288174367802448652, guid: 828d2ce3c8fb74f498e8bb757fa113a6, type: 3}
       propertyPath: m_Name
       value: BSMC_CharacterBase
+      objectReference: {fileID: 0}
+    - target: {fileID: 7630683439406129268, guid: 828d2ce3c8fb74f498e8bb757fa113a6, type: 3}
+      propertyPath: loadMode
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 7630683439406129268, guid: 828d2ce3c8fb74f498e8bb757fa113a6, type: 3}
+      propertyPath: characterData
+      value: 
       objectReference: {fileID: 0}
     - target: {fileID: 7957609120742801846, guid: 828d2ce3c8fb74f498e8bb757fa113a6, type: 3}
       propertyPath: m_LocalPosition.x

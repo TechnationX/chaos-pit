@@ -23,6 +23,9 @@ public class PlayerObject : NetworkBehaviour
     [SerializeField] private Transform _handSocket;
     public Transform HandSocket => _handSocket;
 
+    [SerializeField] private Transform _handSocketStatic;
+    public Transform HandSocketStatic => _handSocketStatic;
+
     [Header("Transforms")]
     [SerializeField] private Transform _cameraRoot;
     public Transform CameraRoot => _cameraRoot;

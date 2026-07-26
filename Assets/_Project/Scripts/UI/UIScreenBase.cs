@@ -26,6 +26,7 @@ public class UIScreenBase : MonoBehaviour
     public bool IsVisible { get; private set; } = false;
 
     private CanvasGroup _canvasGroup;
+    private CanvasGroup CanvasGroupRef => _canvasGroup != null ? _canvasGroup : (_canvasGroup = GetComponent<CanvasGroup>());
     private Coroutine _fadeCoroutine;
     private MainMenuManager _mainMenuManager;
 
@@ -33,7 +34,6 @@ public class UIScreenBase : MonoBehaviour
 
     protected virtual void Awake()
     {
-        _canvasGroup = GetComponent<CanvasGroup>();
         _mainMenuManager = FindFirstObjectByType<MainMenuManager>();
 
         if (backButton != null)
@@ -60,9 +60,9 @@ public class UIScreenBase : MonoBehaviour
 
         if (instant)
         {
-            _canvasGroup.alpha = visible ? 1f : 0f;
-            _canvasGroup.interactable = visible;
-            _canvasGroup.blocksRaycasts = visible;
+            CanvasGroupRef.alpha = visible ? 1f : 0f;
+            CanvasGroupRef.interactable = visible;
+            CanvasGroupRef.blocksRaycasts = visible;
             gameObject.SetActive(visible);
         }
         else
@@ -81,18 +81,18 @@ public class UIScreenBase : MonoBehaviour
         if (fadeIn)
         {
             gameObject.SetActive(true);
-            _canvasGroup.interactable = false;
-            _canvasGroup.blocksRaycasts = false;
+            CanvasGroupRef.interactable = false;
+            CanvasGroupRef.blocksRaycasts = false;
         }
 
         while (elapsed < fadeDuration)
         {
             elapsed += Time.deltaTime;
-            _canvasGroup.alpha = Mathf.Lerp(startAlpha, targetAlpha, elapsed / fadeDuration);
+            CanvasGroupRef.alpha = Mathf.Lerp(startAlpha, targetAlpha, elapsed / fadeDuration);
             yield return null;
         }
 
-        _canvasGroup.alpha = targetAlpha;
+        CanvasGroupRef.alpha = targetAlpha;
 
         if (!fadeIn)
         {
@@ -100,8 +100,8 @@ public class UIScreenBase : MonoBehaviour
         }
         else
         {
-            _canvasGroup.interactable = true;
-            _canvasGroup.blocksRaycasts = true;
+            CanvasGroupRef.interactable = true;
+            CanvasGroupRef.blocksRaycasts = true;
         }
 
         _fadeCoroutine = null;

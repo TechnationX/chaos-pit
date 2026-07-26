@@ -32,7 +32,7 @@ namespace ChaosPit.Minigames.BombToss
                 return;
             }         
 
-            _bombInstance.transform.SetParent(holder.HandSocket, false);
+            _bombInstance.transform.SetParent(holder.HandSocketStatic, false);
             //Debug.Log($"[BombVisual] Parented to {holder.name} — socket: {holder.HandSocket.name}, active: {_bombInstance.activeSelf}, pos: {_bombInstance.transform.position}");
             
             _bombInstance.transform.localPosition = Vector3.zero;

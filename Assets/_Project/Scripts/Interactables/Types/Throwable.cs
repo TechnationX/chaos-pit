@@ -37,7 +37,10 @@ public class Throwable : Grabbable
 
         // Right click to throw while held
         if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
-            ServerThrow(_holdingPlayer);
+        {
+            Vector3 aimDirection = transform.forward; // object's current world forward, following HandSocketPivot's pitch
+            ServerThrow(_holdingPlayer, aimDirection);
+        }
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -79,22 +82,16 @@ public class Throwable : Grabbable
     }
 
     [ServerRpc(RequireOwnership = false)]
-    private void ServerThrow(PlayerObject player)
+    private void ServerThrow(PlayerObject player, Vector3 throwDirection)
     {
-        //Debug.Log($"[Throwable] ServerThrow called on server");
         if (!_isHeld || _holdingPlayer != player) return;
-
-        foreach (var conn in NetworkObject.Observers)
-           // Debug.Log($"[Throwable] Throw observer clientId: {conn.ClientId}");
 
         _isHeld = false;
         PlayerObject prevPlayer = _holdingPlayer;
         _holdingPlayer = null;
         prevPlayer.SetServerHeldObject(null);
 
-        Vector3 throwDirection = player.transform.forward;
-
-        ObserversThrow(prevPlayer.NetworkObject, throwDirection);
+        ObserversThrow(prevPlayer.NetworkObject, throwDirection.normalized);
     }
 
     [ObserversRpc]

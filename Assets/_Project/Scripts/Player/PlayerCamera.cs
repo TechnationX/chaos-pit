@@ -4,6 +4,7 @@ using FishNet.Object;
 using Unity.Cinemachine;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using FishNet.Object.Synchronizing;
 
 public class PlayerCamera : NetworkBehaviour
 {
@@ -32,6 +33,8 @@ public class PlayerCamera : NetworkBehaviour
     private CameraMode _currentMode;
     private float _verticalRotation;
     private CinemachineCamera _activeMiniGameCam;
+    private readonly SyncVar<float> _syncedPitch = new SyncVar<float>(
+        new SyncTypeSettings(WritePermission.ClientUnsynchronized));
 
     private const int PRIORITY_ACTIVE = 20;
     private const int PRIORITY_INACTIVE = 0;
@@ -51,6 +54,7 @@ public class PlayerCamera : NetworkBehaviour
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+        _syncedPitch.OnChange += OnSyncedPitchChanged;
     }
 
     private void Update()
@@ -87,6 +91,8 @@ public class PlayerCamera : NetworkBehaviour
 
         if (_handSocketPivot != null)
             _handSocketPivot.localRotation = Quaternion.Euler(_verticalRotation, 0f, 0f);
+
+        _syncedPitch.Value = _verticalRotation;
     }
 
     private void SetupFirstPersonCam()
@@ -202,5 +208,12 @@ public class PlayerCamera : NetworkBehaviour
     {
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+    }
+
+    private void OnSyncedPitchChanged(float prev, float next, bool asServer)
+    {
+        if (IsOwner) return; // owner already drives this locally, avoid double-applying
+        if (_handSocketPivot == null) return;
+        _handSocketPivot.localRotation = Quaternion.Euler(next, 0f, 0f);
     }
 }
