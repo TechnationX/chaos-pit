@@ -140,6 +140,7 @@ namespace ChaosPit.Minigames.PaintTheTown
         {
             if (_gameLoopCoroutine != null) StopCoroutine(_gameLoopCoroutine);
             if (_syncCoroutine != null) StopCoroutine(_syncCoroutine);
+            StopAllCoroutines();
 
             _players.Clear();
             _colorMap.Clear();

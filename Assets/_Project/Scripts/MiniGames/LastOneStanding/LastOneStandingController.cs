@@ -7,12 +7,11 @@
 //   - Players respawn at their assigned spawn point between rounds
 //   - Points accumulate across all rounds; final results ranked by total score
 
+using FishNet.Component.Transforming;
+using FishNet.Connection;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using FishNet.Object;
-using FishNet.Connection;
-using FishNet.Component.Transforming;
 
 namespace ChaosPit.Minigames.LastOneStanding
 {
@@ -107,8 +106,9 @@ namespace ChaosPit.Minigames.LastOneStanding
             _spawnIndex.Clear();
             for (int i = 0; i < _players.Count; i++)
             {
-                _totalScores[_players[i].PlayerId] = 0;
-                _spawnIndex[_players[i].PlayerId] = i;
+                int clientId = _players[i].Owner.ClientId;
+                _totalScores[clientId] = 0;
+                _spawnIndex[clientId] = i;
             }
 
             _arenaGrid.BuildGrid();
@@ -143,7 +143,7 @@ namespace ChaosPit.Minigames.LastOneStanding
             RespawnAllPlayers();
 
             GameRoomManager.Instance.RpcMinigameMessage("los_round_start",
-                _roundDuration.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                $"{_currentRound},{_totalRounds},{_roundDuration.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
 
             //Debug.Log($"[LOS] StartRound {_currentRound}.");
         }
@@ -176,6 +176,7 @@ namespace ChaosPit.Minigames.LastOneStanding
         {
             if (_gameLoopCoroutine != null) StopCoroutine(_gameLoopCoroutine);
             if (_waveCoroutine != null) StopCoroutine(_waveCoroutine);
+            StopAllCoroutines();
 
             _players.Clear();
             _nameMap.Clear();
@@ -208,8 +209,8 @@ namespace ChaosPit.Minigames.LastOneStanding
             switch (messageType)
             {
                 case "los_kill_request":
-                    if (int.TryParse(payload, out int killId))
-                        ProcessKillRequest(killId);
+                    if (int.TryParse(payload, out int clientId))
+                        ProcessKillRequest(clientId);
                     break;
 
                 case "los_shove_request":
@@ -223,6 +224,7 @@ namespace ChaosPit.Minigames.LastOneStanding
 
         public override void OnNetworkMessage(string messageType, string payload)
         {
+            //Debug.Log($"[LOS Client] OnNetworkMessage: {messageType}");
             switch (messageType)
             {
                 case "los_players":
@@ -234,11 +236,14 @@ namespace ChaosPit.Minigames.LastOneStanding
                     break;
 
                 case "los_round_start":
-                    if (float.TryParse(payload,
-                        System.Globalization.NumberStyles.Float,
-                        System.Globalization.CultureInfo.InvariantCulture,
-                        out float dur))
-                        _hud?.OnRoundStart(dur);
+                    string[] rp = payload.Split(',');
+                    if (rp.Length < 3) break;
+                    if (!int.TryParse(rp[0], out int roundNum)) break;
+                    if (!int.TryParse(rp[1], out int totalRounds)) break;
+                    if (!float.TryParse(rp[2], System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out float dur)) break;
+                    _hud?.OnRoundStart(dur);
+                    _hud?.SetRoundInfo(roundNum, totalRounds);
                     break;
 
                 case "los_round_end":
@@ -317,12 +322,14 @@ namespace ChaosPit.Minigames.LastOneStanding
                 // Only end early if more than one player started this round
                 if (startingCount > 1 && GetAliveCount() <= 1)
                 {
+                    Debug.Log("[LOS] Round ended — last player standing");
                     _roundActive = false;
                     break;
                 }
 
                 if (elapsed >= _roundDuration)
                 {
+                    Debug.Log("[LOS] Round ended — timer expired");
                     _roundActive = false;
                     break;
                 }
@@ -350,11 +357,21 @@ namespace ChaosPit.Minigames.LastOneStanding
                 List<int> tilesToDrop = _arenaGrid.PickRandomSafeTiles(wave.tileCount);
                 if (tilesToDrop.Count == 0) continue;
 
+                // Apply on server grid
                 foreach (int idx in tilesToDrop)
                     _arenaGrid.BeginTileDrop(idx, wave.warningDuration, wave.dangerDuration);
 
-                string wavePayload = BuildWavePayload(tilesToDrop, wave.warningDuration, wave.dangerDuration);
-                GameRoomManager.Instance.RpcMinigameMessage("los_wave", wavePayload);
+                // Send in chunks of 20 to avoid oversized RPC payloads
+                const int chunkSize = 20;
+                for (int i = 0; i < tilesToDrop.Count; i += chunkSize)
+                {
+                    List<int> chunk = tilesToDrop.GetRange(i, Mathf.Min(chunkSize, tilesToDrop.Count - i));
+                    string wavePayload = BuildWavePayload(chunk, wave.warningDuration, wave.dangerDuration);
+                    GameRoomManager.Instance.RpcMinigameMessage("los_wave", wavePayload);
+
+                    // Small yield between chunks to avoid flooding
+                    yield return null;
+                }
             }
         }
 
@@ -383,8 +400,11 @@ namespace ChaosPit.Minigames.LastOneStanding
 
             foreach (PlayerObject player in _players)
             {
-                int idx = _spawnIndex.TryGetValue(player.PlayerId, out int si)
+                int clientId = player.Owner.ClientId;
+                int idx = _spawnIndex.TryGetValue(clientId, out int si)
                     ? si % spawns.Length : 0;
+
+                //Debug.Log($"[LOS] Respawning PlayerId:{player.PlayerId} ClientId:{player.Owner?.ClientId} to spawn {idx}");
 
                 Vector3 pos = spawns[idx].position;
                 Quaternion rot = spawns[idx].rotation;
@@ -400,14 +420,16 @@ namespace ChaosPit.Minigames.LastOneStanding
 
         // ── Elimination ───────────────────────────────────────────
 
-        private void ProcessKillRequest(int playerId)
+        private void ProcessKillRequest(int clientId)
         {
             if (!FishNet.InstanceFinder.IsServerStarted) return;
-            if (_eliminatedThisRound.Contains(playerId)) return;
             if (!_roundActive) return;
 
-            PlayerObject player = FindPlayerById(playerId);
+            PlayerObject player = FindPlayerByClientId(clientId);
             if (player == null) return;
+
+            int playerId = player.PlayerId;
+            if (_eliminatedThisRound.Contains(playerId)) return;
 
             _eliminatedThisRound.Add(playerId);
 
@@ -438,10 +460,17 @@ namespace ChaosPit.Minigames.LastOneStanding
                     _eliminatedWaitPoint.rotation);
             }
 
-            Debug.Log($"[LOS] Player {playerId} eliminated. Order: {order}, Survival: {survivalTime:F1}s");
+            //Debug.Log($"[LOS] Player {playerId} eliminated. Order: {order}, Survival: {survivalTime:F1}s");
 
             if (GetAliveCount() <= 1)
                 _roundActive = false;
+        }
+
+        private PlayerObject FindPlayerByClientId(int clientId)
+        {
+            foreach (PlayerObject p in _players)
+                if (p.Owner != null && p.Owner.ClientId == clientId) return p;
+            return null;
         }
 
         private void AssignSurvivors()
@@ -470,14 +499,14 @@ namespace ChaosPit.Minigames.LastOneStanding
 
             for (int i = 0; i < sorted.Count; i++)
             {
-                int playerId = sorted[i].Player.PlayerId;
+                int clientId = sorted[i].Player.Owner.ClientId;
                 int standing = i + 1;
                 int points = CalculatePlacementPoints(standing, sorted.Count);
 
-                if (!_totalScores.ContainsKey(playerId))
-                    _totalScores[playerId] = 0;
+                if (!_totalScores.ContainsKey(clientId))
+                    _totalScores[clientId] = 0;
 
-                _totalScores[playerId] += points;
+                _totalScores[clientId] += points;
             }
 
             GameRoomManager.Instance.RpcMinigameMessage("los_scores", BuildScoresPayload());
@@ -737,6 +766,7 @@ namespace ChaosPit.Minigames.LastOneStanding
 
         private void ApplyResultsPayload(string payload)
         {
+            Debug.Log($"[LOS] ApplyResultsPayload called, IsServer: {FishNet.InstanceFinder.IsServerStarted}");
             if (string.IsNullOrEmpty(payload)) return;
 
             var sb = new System.Text.StringBuilder();

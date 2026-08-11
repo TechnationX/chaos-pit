@@ -17,6 +17,9 @@ MonoBehaviour:
     resourcePaths:
     - Body/Body_BasicBody
     - Body/Body_StrongBody
+    includeInRandomDefault: 1
+    requiredLevels: 0100000005000000
+    defaultOutfitId: 0
   - type: {fileID: 11400000, guid: 8b51e8ff650f1344ba44bbb2b9eb83e6, type: 2}
     resourcePaths:
     - Bottom/Bottom_ApronSkirt
@@ -33,17 +36,29 @@ MonoBehaviour:
     - Bottom/Bottom_TightTravelPants
     - Bottom/Bottom_VillagerLongPants
     - Bottom/Bottom_VillagerSlacks
+    includeInRandomDefault: 1
+    requiredLevels: 0100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: ffd4717f49b79c74aa1f234222365f79, type: 2}
     resourcePaths:
     - Ears/Ears_DeerEars
+    includeInRandomDefault: 0
+    requiredLevels: 01000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 56f941da801bb944cba868df9db79435, type: 2}
     resourcePaths:
     - Eyes/Eyes_BasicEyes
     - Eyes/Eyes_BasicIris
+    includeInRandomDefault: 1
+    requiredLevels: 0100000001000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 4cab820ca50ef9940a3151e1723ef0f5, type: 2}
     resourcePaths:
     - FaceDetails/FaceDetail_Freakles
     - FaceDetails/FaceDetail_FullFreakles
+    includeInRandomDefault: 1
+    requiredLevels: 0100000001000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 0e4e820936308e84487fc607e27aad31, type: 2}
     resourcePaths:
     - Feet/Feet_CuffedBoots
@@ -56,6 +71,9 @@ MonoBehaviour:
     - Feet/Feet_TiedBoots
     - Feet/Feet_TravelSandal
     - Feet/Feet_VillagerBoots
+    includeInRandomDefault: 1
+    requiredLevels: 01000000010000000100000001000000010000000100000001000000020000000300000005000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 903f6a47401e8d946a5143db62cf2cae, type: 2}
     resourcePaths:
     - Gloves/Gloves_ClothHandwraps
@@ -68,6 +86,9 @@ MonoBehaviour:
     - Gloves/Gloves_RusticGloves
     - Gloves/Gloves_SharpGauntlets
     - Gloves/Gloves_SteelGauntlets
+    includeInRandomDefault: 0
+    requiredLevels: 01000000010000000100000001000000010000000100000001000000010000000100000001000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 3781f2a69b931724b9a19deab41d2f45, type: 2}
     resourcePaths:
     - HairBack/HairBack_DolphinTail
@@ -83,6 +104,9 @@ MonoBehaviour:
     - HairBack/HairBack_ShortShag
     - HairBack/HairBack_TotalCurls
     - HairBack/HairBack_WarriorWolfTail
+    includeInRandomDefault: 1
+    requiredLevels: 01000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 025dcbe78cc533044936dbb48c1c30e3, type: 2}
     resourcePaths:
     - HairFront/HairFront_DesolateHair
@@ -95,6 +119,9 @@ MonoBehaviour:
     - HairFront/HairFront_TightCurls
     - HairFront/HairFront_TuffCuff
     - HairFront/HairFront_UnkeptLoose
+    includeInRandomDefault: 1
+    requiredLevels: 01000000010000000100000001000000010000000100000001000000010000000100000001000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: adf65c8e9cddf6e4eb8117a2d67d37c3, type: 2}
     resourcePaths:
     - Hat/Hat_ChainHelmet
@@ -107,18 +134,30 @@ MonoBehaviour:
     - Hat/Hat_StrudyHelmet
     - Hat/Hat_WitchesHat
     - Hat/Hat_WizardHat
+    includeInRandomDefault: 0
+    requiredLevels: 01000000010000000100000001000000010000000100000001000000010000000100000001000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 480ce04c1d1586c44b495f52ce52adc8, type: 2}
     resourcePaths:
     - Head/Head_BasicHead
     - Head/Head_SharpHead
     - Head/Head_Stern
     - Head/Head_YoungSharpHead
+    includeInRandomDefault: 1
+    requiredLevels: 01000000010000000100000001000000
+    defaultOutfitId: 0
   - type: {fileID: 11400000, guid: 2afba4aeb1706534c9c209d946390096, type: 2}
     resourcePaths:
     - HeadAcc/HeadAcc_DeerAntlers
+    includeInRandomDefault: 0
+    requiredLevels: 01000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 1327d52b4eb897a4b8d6838bff33e6b7, type: 2}
     resourcePaths:
     - Leggings/Leggings_Stocking
+    includeInRandomDefault: 1
+    requiredLevels: 01000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 1b19472c53ac54741b33f86e7ecd368d, type: 2}
     resourcePaths:
     - LowerFace/LowerFace_CommandingBeard
@@ -126,24 +165,42 @@ MonoBehaviour:
     - LowerFace/LowerFace_SquareBeard
     - LowerFace/LowerFace_TiedBeard
     - LowerFace/LowerFace_WizzendBeard
+    includeInRandomDefault: 1
+    requiredLevels: 0100000001000000010000000100000001000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 9272634e92d3380458926acf8c791ac2, type: 2}
     resourcePaths:
     - MakeUpCheeks/MakeUpCheeks_BasicBlush
+    includeInRandomDefault: 0
+    requiredLevels: 01000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: d7ef079491b244e41a9ecbe9d6b455e1, type: 2}
     resourcePaths:
     - MakeUpEyes/MakeUpEyes_BasicEyeLiner
+    includeInRandomDefault: 0
+    requiredLevels: 01000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 1978635c96bf86141852f5f309468ebf, type: 2}
     resourcePaths:
     - MakeUpLips/MakeUpLips_BasicLipstick
+    includeInRandomDefault: 0
+    requiredLevels: 01000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 3ec095cfc3c138c45b2fbfdc7131682d, type: 2}
     resourcePaths:
     - Neck/Neck_HoodedCape
     - Neck/Neck_LooseScarf
     - Neck/Neck_TatteredMuffler
+    includeInRandomDefault: 1
+    requiredLevels: 010000000100000001000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 3bf3759a9e6cce040910c0aad65b40d3, type: 2}
     resourcePaths:
     - Pupil/Pupil_BasicPupil
     - Pupil/Pupil_SharpPupil
+    includeInRandomDefault: 1
+    requiredLevels: 0100000001000000
+    defaultOutfitId: 0
   - type: {fileID: 11400000, guid: 78106d16c97ada048b643b5b2b2eaf1f, type: 2}
     resourcePaths:
     - Shoulders/Shoulder_SharpPauldrons
@@ -153,6 +210,9 @@ MonoBehaviour:
     - Shoulders/Shoulders_SoldiersPauldrons
     - Shoulders/Shoulders_SolidShoulders
     - Shoulders/Shoulders_StrongShoulders
+    includeInRandomDefault: 0
+    requiredLevels: 01000000010000000100000001000000010000000100000001000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: b66be6ff56f8871448262fbf9d83ee91, type: 2}
     resourcePaths:
     - Socks/Socks_AnkleSocks
@@ -161,6 +221,9 @@ MonoBehaviour:
     - Socks/Socks_StripedKneeHighs
     - Socks/Socks_StripedThighHighs
     - Socks/Socks_ThighHigh
+    includeInRandomDefault: 0
+    requiredLevels: 010000000100000001000000010000000100000001000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 6708e088db9d4b14caa291b19c953b71, type: 2}
     resourcePaths:
     - Top/Top_BattleDress
@@ -175,16 +238,28 @@ MonoBehaviour:
     - Top/Top_VanguardCoat
     - Top/Top_VillagerTunic
     - Top/Top_WitchBlouse
+    includeInRandomDefault: 1
+    requiredLevels: 010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: e56e5c1caeb450e45a10017ec49e5c4e, type: 2}
     resourcePaths:
     - UnderLower/UnderLower_SimpleBoxers
     - UnderLower/UnderLower_SimplePanties
+    includeInRandomDefault: 1
+    requiredLevels: 0100000001000000
+    defaultOutfitId: 0
   - type: {fileID: 11400000, guid: a781ca08053c0ba41a7a6816b6e7e199, type: 2}
     resourcePaths:
     - UnderUpper/UnderUpper_SimpleBra
     - UnderUpper/UnderUpper_SimpleUnderShirt
+    includeInRandomDefault: 1
+    requiredLevels: 0100000001000000
+    defaultOutfitId: 1
   - type: {fileID: 11400000, guid: ffad910d2e77d9342b9f96d19728b5a5, type: 2}
     resourcePaths:
     - UpperFace/UpperFace_Blindfold
     - UpperFace/UpperFace_ClothEyeWrap
     - UpperFace/UpperFace_EyePatch
+    includeInRandomDefault: 1
+    requiredLevels: 010000000100000001000000
+    defaultOutfitId: -1

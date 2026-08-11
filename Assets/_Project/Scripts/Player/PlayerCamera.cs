@@ -35,6 +35,10 @@ public class PlayerCamera : NetworkBehaviour
     private CinemachineCamera _activeMiniGameCam;
     private readonly SyncVar<float> _syncedPitch = new SyncVar<float>(
         new SyncTypeSettings(WritePermission.ClientUnsynchronized));
+    private float _sensitivityMultiplier = 1f;
+    private bool _invertY = false;
+    private void HandleSensitivityChanged(float value) => _sensitivityMultiplier = value;
+    private void HandleInvertYChanged(bool inverted) => _invertY = inverted;
 
     private const int PRIORITY_ACTIVE = 20;
     private const int PRIORITY_INACTIVE = 0;
@@ -55,6 +59,17 @@ public class PlayerCamera : NetworkBehaviour
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
         _syncedPitch.OnChange += OnSyncedPitchChanged;
+
+        if (SettingsManager.Instance != null)
+        {
+            _sensitivityMultiplier = SettingsManager.Instance.Current.mouseSensitivity;
+            _invertY = SettingsManager.Instance.Current.invertYAxis;
+            ApplyFOV(SettingsManager.Instance.Current.fieldOfView);
+        }
+
+        SettingsManager.OnSensitivityChanged += HandleSensitivityChanged;
+        SettingsManager.OnInvertYChanged += HandleInvertYChanged;
+        SettingsManager.OnFOVChanged += ApplyFOV;
     }
 
     private void Update()
@@ -78,14 +93,15 @@ public class PlayerCamera : NetworkBehaviour
 
         Vector2 delta = mouse.delta.ReadValue();
 
-        float mouseX = delta.x * _mouseSensitivity * 0.1f;
-        float mouseY = delta.y * _mouseSensitivity * 0.1f;
+        float mouseX = delta.x * _mouseSensitivity * _sensitivityMultiplier * 0.1f;
+        float mouseY = delta.y * _mouseSensitivity * _sensitivityMultiplier * 0.1f;
 
         // Rotate player body horizontally
         _player.transform.Rotate(Vector3.up * mouseX);
 
         // Rotate vertical directly on the VCam
-        _verticalRotation -= mouseY;
+        float ySign = _invertY ? 1f : -1f;
+        _verticalRotation += mouseY * ySign;
         _verticalRotation = Mathf.Clamp(_verticalRotation, _verticalClampMin, _verticalClampMax);
         _vcamFirstPerson.transform.localRotation = Quaternion.Euler(_verticalRotation, 0f, 0f);
 
@@ -101,6 +117,16 @@ public class PlayerCamera : NetworkBehaviour
         _vcamFirstPerson.Follow = _firstPersonAnchor;
         _vcamFirstPerson.transform.position = _firstPersonAnchor.position;
         _vcamFirstPerson.transform.rotation = _firstPersonAnchor.rotation;
+    }
+
+    private void ApplyFOV(float fov)
+    {
+        if (_vcamFirstPerson != null)
+        {
+            var lens = _vcamFirstPerson.Lens;
+            lens.FieldOfView = fov;
+            _vcamFirstPerson.Lens = lens;
+        }
     }
 
     private void SetupThirdPersonCam()
@@ -215,5 +241,14 @@ public class PlayerCamera : NetworkBehaviour
         if (IsOwner) return; // owner already drives this locally, avoid double-applying
         if (_handSocketPivot == null) return;
         _handSocketPivot.localRotation = Quaternion.Euler(next, 0f, 0f);
+    }
+
+    private void OnDestroy()
+    {
+        if (!IsOwner) return;
+
+        SettingsManager.OnSensitivityChanged -= HandleSensitivityChanged;
+        SettingsManager.OnInvertYChanged -= HandleInvertYChanged;
+        SettingsManager.OnFOVChanged -= ApplyFOV;
     }
 }

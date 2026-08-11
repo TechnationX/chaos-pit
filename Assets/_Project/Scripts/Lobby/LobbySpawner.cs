@@ -51,7 +51,6 @@ public class LobbySpawner : MonoBehaviour
         PlayerProfile profile = PlayerProfileManager.Instance.GetProfile(conn);
         string displayName = profile?.DisplayName ?? $"Player_{conn.ClientId}";
         playerObj?.SetPlayerData(displayName, conn.ClientId);
-        GameRoomManager.Instance?.RpcSetLocalPlayerName(conn, displayName);
         GameRoomManager.Instance?.SyncLeaderboardToClients();
     }
 #endif
@@ -173,7 +172,6 @@ public class LobbySpawner : MonoBehaviour
         PlayerProfile profile = PlayerProfileManager.Instance.GetProfile(conn);
         string displayName = profile?.DisplayName ?? $"Player_{conn.ClientId}";
         playerObj?.SetPlayerData(displayName, conn.ClientId);
-        GameRoomManager.Instance?.RpcSetLocalPlayerName(conn, displayName);
         //Debug.Log($"[LobbySpawner] Calling LeaderboardManager.Refresh — instance: {LeaderboardManager.Instance != null}");
         GameRoomManager.Instance?.SyncLeaderboardToClients();
     }

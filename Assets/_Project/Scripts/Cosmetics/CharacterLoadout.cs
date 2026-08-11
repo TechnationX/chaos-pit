@@ -102,22 +102,54 @@ public static class CharacterLoadout
         {
             var type = registry.GetTypeByIndex(s.typeIndex);
             var path = registry.GetPath(type, s.outfitId);
-            //Debug.Log($"[CharacterLoadout] Applying slot typeIndex={s.typeIndex}, outfitId={s.outfitId}, resolved path='{path}'");
             if (path == null) continue;
 
             var prefab = Resources.Load<Outfit>(path);
-            //Debug.Log($"[CharacterLoadout] Resources.Load<Outfit>('{path}') returned: {(prefab == null ? "NULL" : prefab.name)}");
             if (prefab == null) continue;
 
             var inst = Object.Instantiate(prefab, system.transform);
             inst.Attach(system);
 
             for (int c = 0; c < s.colors.Length; c++)
-                inst.SetColor(s.colors[c], c + 1);
+            {
+                try
+                {
+                    inst.SetColor(s.colors[c], c + 1);
+                }
+                catch (System.Exception)
+                {
+                    break; // outfit has fewer color channels than we tried to set — not an error worth logging
+                }
+            }
         }
 
-        //Debug.Log($"[CharacterLoadout] All {slots.Count} outfits attached, starting MergeCharacter...");
         await system.MergeCharacter();
-        //Debug.Log($"[CharacterLoadout] MergeCharacter completed.");
+    }
+
+    // Builds the fixed starting loadout, using each slot's registry-defined default item.
+    // Used when a player has no saved appearance yet (first launch, no LocalPlayer.json).
+    public static List<SlotLoadout> BuildDefaultLoadout(OutfitRegistry registry)
+    {
+        var result = new List<SlotLoadout>();
+        if (registry.slots == null) return result;
+
+        foreach (var entry in registry.slots)
+        {
+            if (entry.defaultOutfitId < 0) continue; // slot intentionally starts empty
+            if (entry.resourcePaths == null || entry.defaultOutfitId >= entry.resourcePaths.Length) continue;
+
+            int typeIndex = registry.GetTypeIndex(entry.type);
+            if (typeIndex < 0) continue;
+
+            result.Add(new SlotLoadout
+            {
+                typeIndex = (byte)typeIndex,
+                outfitId = (short)entry.defaultOutfitId,
+                swatch = 0,
+                colors = new Color32[0]
+            });
+        }
+
+        return result;
     }
 }

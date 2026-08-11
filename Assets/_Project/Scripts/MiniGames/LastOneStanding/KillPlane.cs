@@ -6,18 +6,14 @@ namespace ChaosPit.Minigames.LastOneStanding
     {
         private void OnTriggerEnter(Collider other)
         {
-            Debug.Log($"[KillPlane] Trigger entered by: {other.name}, tag: {other.tag}");
-
-            PlayerObject player = other.GetComponent<PlayerObject>();
-            Debug.Log($"[KillPlane] PlayerObject found: {player != null}");
-
+            // Search up the hierarchy — catches child colliders on the character model
+            PlayerObject player = other.GetComponentInParent<PlayerObject>();
             if (player == null) return;
 
-            Debug.Log($"[KillPlane] IsOwner: {player.IsOwner}, PlayerId: {player.PlayerId}");
+            Debug.Log($"[KillPlane] Found player: {player.name}, ClientId: {player.Owner?.ClientId}, PlayerId: {player.PlayerId}");
 
-            Debug.Log($"[KillPlane] Sending kill request for: {player.PlayerId}");
             GameRoomManager.Instance.RequestMinigameAction(
-                "los_kill_request", player.PlayerId.ToString());
+                "los_kill_request", player.Owner.ClientId.ToString());
         }
     }
 }

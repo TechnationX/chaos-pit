@@ -61,8 +61,9 @@ public class PlayerAppearance : NetworkBehaviour
     private List<SlotLoadout> LoadLocalLoadout()
     {
         var packed = LocalPlayerLoadout.Instance?.PendingLoadoutData;
-        //Debug.Log($"[PlayerAppearance] LoadLocalLoadout — Instance null? {LocalPlayerLoadout.Instance == null}, packed null? {packed == null}, length: {packed?.Length ?? -1}");
-        if (packed == null || packed.Length == 0) return null;
+        if (packed == null || packed.Length == 0)
+            return CharacterLoadout.BuildDefaultLoadout(registry);
+
         return CharacterLoadout.Unpack(packed);
     }
 }

@@ -15,6 +15,7 @@ namespace ChaosPit.Minigames.LastOneStanding
         // ── Inspector ─────────────────────────────────────────────
         [Header("Timer")]
         [SerializeField] private TextMeshProUGUI _timerText;
+        [SerializeField] private TextMeshProUGUI _roundInfoText;
         [SerializeField] private Color _timerNormalColor  = Color.white;
         [SerializeField] private Color _timerWarningColor = Color.red;
         [SerializeField] private float _warningThreshold  = 15f;
@@ -45,6 +46,8 @@ namespace ChaosPit.Minigames.LastOneStanding
         private bool      _timerRunning;
         private Coroutine _timerCoroutine;
         private Coroutine _bannerCoroutine;
+        private int _totalRounds;
+        private int _currentRound;
 
         private Dictionary<int, LastOneStandingScoreRow> _scoreRows = new();
         private int _totalPlayers;
@@ -80,7 +83,20 @@ namespace ChaosPit.Minigames.LastOneStanding
         {
             _timerRunning = false;
             if (_timerCoroutine != null) { StopCoroutine(_timerCoroutine); _timerCoroutine = null; }
-            SetTimerDisplay(0f);
+            if (_timerText != null) _timerText.text = "0:00";
+        }
+
+        public void SetRoundInfo(int currentRound, int totalRounds)
+        {
+            _currentRound = currentRound;
+            _totalRounds = totalRounds;
+            UpdateRoundDisplay();
+        }
+
+        private void UpdateRoundDisplay()
+        {
+            if (_roundInfoText != null)
+                _roundInfoText.text = $"Round {_currentRound} of {_totalRounds}";
         }
 
         // ── Timer ─────────────────────────────────────────────────
@@ -91,18 +107,24 @@ namespace ChaosPit.Minigames.LastOneStanding
             {
                 _timeRemaining -= Time.deltaTime;
                 if (_timeRemaining < 0f) _timeRemaining = 0f;
-                SetTimerDisplay(_timeRemaining);
+
+                // Optional background timer display
+                if (_timerText != null)
+                {
+                    int mins = Mathf.FloorToInt(_timeRemaining / 60f);
+                    int secs = Mathf.FloorToInt(_timeRemaining % 60f);
+                    _timerText.text = $"{mins}:{secs:00}";
+                    _timerText.color = _timeRemaining <= _warningThreshold
+                        ? _timerWarningColor : _timerNormalColor;
+                }
+
+                // Flash round info text as warning when time is low
+                if (_roundInfoText != null)
+                    _roundInfoText.color = _timeRemaining <= _warningThreshold
+                        ? _timerWarningColor : _timerNormalColor;
+
                 yield return null;
             }
-        }
-
-        private void SetTimerDisplay(float seconds)
-        {
-            if (_timerText == null) return;
-            int mins = Mathf.FloorToInt(seconds / 60f);
-            int secs = Mathf.FloorToInt(seconds % 60f);
-            _timerText.text  = $"{mins}:{secs:00}";
-            _timerText.color = seconds <= _warningThreshold ? _timerWarningColor : _timerNormalColor;
         }
 
         // ── Score Rows ────────────────────────────────────────────

@@ -105,6 +105,7 @@ namespace ChaosPit.Minigames.BombToss
 
         public override void CleanUp()
         {
+            StopAllCoroutines();
             _activePlayers.Clear();
             _eliminatedPlayers.Clear();
             _cumulativeScores.Clear();

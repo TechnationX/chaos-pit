@@ -111,6 +111,7 @@ namespace ChaosPit.Minigames.ThiefsMarket
 
             _players = new List<PlayerObject>(players);
             _currentRound = 0;
+            //Debug.Log($"[TM-DEBUG] StartGame — instance {GetInstanceID()}, round reset to {_currentRound}");
             _gameActive = true;
 
             _nameMap.Clear();
@@ -170,6 +171,7 @@ namespace ChaosPit.Minigames.ThiefsMarket
 
         public override void CleanUp()
         {
+            StopAllCoroutines();
             _items.Clear();
             _itemVisualsById.Clear();
             _heldItemsByPlayer.Clear();
@@ -181,9 +183,11 @@ namespace ChaosPit.Minigames.ThiefsMarket
             _nameMap.Clear();
             _lastPlayersPayload = string.Empty;
             _finalResults.Clear();
+            _currentRound = 0;   
+            //Debug.Log($"[TM-DEBUG] CleanUp — instance {GetInstanceID()}, round was {_currentRound}");
             _roundActive = false;
             _gameActive = false;
-            Debug.Log("[ThiefsMarket] CleanUp complete.");
+            //Debug.Log("[ThiefsMarket] CleanUp complete.");
         }
 
         public override void ClientInit()

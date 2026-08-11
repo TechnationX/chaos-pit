@@ -31,6 +31,8 @@ public class GameRoomManager : NetworkBehaviour
 
     private static List<MinigameStation> _pendingStations = new List<MinigameStation>();
     private Dictionary<int, HashSet<int>> _loadedClients = new Dictionary<int, HashSet<int>>();
+    private Dictionary<int, System.Action<ClientPresenceChangeEventArgs>> _loadListeners
+        = new Dictionary<int, System.Action<ClientPresenceChangeEventArgs>>();
     private Dictionary<int, int> _unloadedClientCounts = new Dictionary<int, int>();
     private Dictionary<int, System.Action<ClientPresenceChangeEventArgs>> _unloadListeners
         = new Dictionary<int, System.Action<ClientPresenceChangeEventArgs>>();
@@ -149,8 +151,11 @@ public class GameRoomManager : NetworkBehaviour
 
         if (loaded < expected) return;
 
-        InstanceFinder.NetworkManager.SceneManager.OnClientPresenceChangeEnd -=
-            (a) => OnClientPresenceChangeEnd(a, stationIndex);
+        if (_loadListeners.TryGetValue(stationIndex, out var storedLoadListener))
+        {
+            InstanceFinder.NetworkManager.SceneManager.OnClientPresenceChangeEnd -= storedLoadListener;
+            _loadListeners.Remove(stationIndex);
+        }
 
         _loadedClients.Remove(stationIndex);
         StartCoroutine(StartGameAfterLoad(stationIndex));
@@ -178,6 +183,8 @@ public class GameRoomManager : NetworkBehaviour
 
         session.ActiveController = controller;
         controller.StartGame(session.Players);
+
+        Debug.Log($"[GameRoomManager] GAME LIVE — station {stationIndex}, controller: {controller.GetType().Name}, time: {Time.realtimeSinceStartup:F1}s");
 
         foreach (PlayerObject player in session.Players)
             RpcInitMinigame(player.Owner, player.NetworkObject);
@@ -289,6 +296,8 @@ public class GameRoomManager : NetworkBehaviour
             return;
         }
 
+        Debug.Log($"[GameRoomManager] GAME STARTING — station {stationIndex}, game: {session.SelectedGame?.SceneName}, players: {session.Players.Count}, time: {Time.realtimeSinceStartup:F1}s");
+
         session.State = GameRoomState.Loading;
         string sessionId = GetSessionId(stationIndex);
 
@@ -306,8 +315,9 @@ public class GameRoomManager : NetworkBehaviour
             RpcSetLobbyCanvasVisible(player.Owner, false);
         }
 
-        InstanceFinder.NetworkManager.SceneManager.OnClientPresenceChangeEnd +=
-            (args) => OnClientPresenceChangeEnd(args, stationIndex);
+        void loadListener(ClientPresenceChangeEventArgs args) => OnClientPresenceChangeEnd(args, stationIndex);
+        _loadListeners[stationIndex] = loadListener;
+        InstanceFinder.NetworkManager.SceneManager.OnClientPresenceChangeEnd += loadListener;
 
         SceneLoadData sld = new SceneLoadData(session.SelectedGame.SceneName)
         {
@@ -334,6 +344,8 @@ public class GameRoomManager : NetworkBehaviour
     {
         if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) return;
 
+        Debug.Log($"[GameRoomManager] GAME COMPLETE — station {stationIndex}, results count: {results?.Count ?? 0}, time: {Time.realtimeSinceStartup:F1}s");
+
         session.State = GameRoomState.Results;
         string sessionId = GetSessionId(stationIndex);
 
@@ -341,7 +353,7 @@ public class GameRoomManager : NetworkBehaviour
         ResultsData data = BuildResultsData(sessionId, results);
         session.ActiveController?.ShowResults(data);
 
-        Debug.Log($"[GameRoomManager] Game complete for station {stationIndex} — showing results");
+        //Debug.Log($"[GameRoomManager] Game complete for station {stationIndex} — showing results");
     }
 
     private ResultsData BuildResultsData(string sessionId, List<RoundResult> results)
@@ -398,6 +410,8 @@ public class GameRoomManager : NetworkBehaviour
     {
         if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) return;
 
+        Debug.Log($"[GameRoomManager] RETURNING TO LOBBY — station {stationIndex}, unloading scene: {session.SelectedGame?.SceneName}, time: {Time.realtimeSinceStartup:F1}s");
+
         _sessionToken++;
         RpcSyncSessionToken(_sessionToken);
 
@@ -438,7 +452,7 @@ public class GameRoomManager : NetworkBehaviour
 
         _unloadedClientCounts[stationIndex]++;
 
-        Debug.Log($"[GameRoomManager] Scene unload progress — {_unloadedClientCounts[stationIndex]}/{players.Count}");
+        //Debug.Log($"[GameRoomManager] Scene unload progress — {_unloadedClientCounts[stationIndex]}/{players.Count}");
 
         if (_unloadedClientCounts[stationIndex] < players.Count) return;
 
@@ -457,6 +471,8 @@ public class GameRoomManager : NetworkBehaviour
     private IEnumerator ReturnPlayersDelayed(List<PlayerObject> players, string sessionId, int stationIndex)
     {
         yield return new WaitForSeconds(0.3f);
+
+        Debug.Log($"[GameRoomManager] BACK IN LOBBY — station {stationIndex}, players: {players.Count}, time: {Time.realtimeSinceStartup:F1}s");
 
         foreach (PlayerObject player in players)
             ReturnPlayerToLobby(player);
@@ -630,10 +646,9 @@ public class GameRoomManager : NetworkBehaviour
         if (player == null) return;
 
         NetworkTransform nt = player.GetComponent<NetworkTransform>();
-        if (nt != null) nt.enabled = false;
+        if (nt != null) nt.Teleport();
         player.transform.position = position;
         player.transform.rotation = rotation;
-        StartCoroutine(ReenableNetworkTransform(nt));
     }
 
     [TargetRpc]

@@ -4,6 +4,7 @@ using FishNet.Example.ColliderRollbacks;
 using FishNet.Object;
 using FishNet.Connection;
 using UnityEngine;
+using FishNet.Object.Synchronizing;
 
 public class PlayerObject : NetworkBehaviour
 {
@@ -16,8 +17,11 @@ public class PlayerObject : NetworkBehaviour
     [SerializeField] private GameObject _characterModel;
 
     [Header("Player Data")]
-    public string PlayerName { get; private set; }
-    public int PlayerId { get; private set; }
+    private readonly SyncVar<int> _playerId = new SyncVar<int>();
+    private readonly SyncVar<string> _playerName = new SyncVar<string>();
+    public int PlayerId => _playerId.Value;
+    public string PlayerName => _playerName.Value;
+    private void OnPlayerDataChanged(int prev, int next, bool asServer) { }
 
     [Header("Sockets")]
     [SerializeField] private Transform _handSocket;
@@ -96,8 +100,8 @@ public class PlayerObject : NetworkBehaviour
     // Called by external systems to set identity data
     public void SetPlayerData(string playerName, int playerId)
     {
-        PlayerName = playerName;
-        PlayerId = playerId;
+        _playerName.Value = playerName;
+        _playerId.Value = playerId;
     }
 
     public void SetHeldObject(Grabbable obj)

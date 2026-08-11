@@ -76,6 +76,9 @@ public class PlayerProfileManager : MonoBehaviour
         profile.CareerScore += points;
         Debug.Log($"[PlayerProfileManager] +{points} pts to {profile.DisplayName} — Total: {profile.CareerScore}");
 
+        var sync = conn.FirstObject?.GetComponent<PlayerProfileSync>();
+        if (sync != null) sync.CareerScore.Value = profile.CareerScore;
+
         // TODO: BACKEND — push updated score to database here
         // Example: await PlayFabManager.SavePlayerScore(profile.SteamId, profile.CareerScore)
     }
@@ -87,6 +90,47 @@ public class PlayerProfileManager : MonoBehaviour
 
         // TODO: BACKEND — persist loadout to database here
         // Example: await PlayFabManager.SaveLoadout(profile.SteamId, profile.CurrentLoadout)
+    }
+
+    // --- Display Name ---
+
+    public void SetDisplayName(NetworkConnection conn, string newName)
+    {
+        if (!_profiles.TryGetValue(conn.ClientId, out PlayerProfile profile)) return;
+
+        profile.DisplayName = newName;
+        Debug.Log($"[PlayerProfileManager] ClientId {conn.ClientId} renamed to: {newName}");
+
+        // TODO: BACKEND — persist display name once Steam/account integration exists
+    }
+
+    // --- Career Reset (testing only) ---
+
+    public void ResetCareerScore(NetworkConnection conn)
+    {
+        if (!_profiles.TryGetValue(conn.ClientId, out PlayerProfile profile)) return;
+
+        profile.CareerScore = 0;
+        Debug.LogWarning($"[PlayerProfileManager] Career score reset for ClientId {conn.ClientId} (testing only)");
+
+        var sync = conn.FirstObject?.GetComponent<PlayerProfileSync>();
+        if (sync != null) sync.CareerScore.Value = 0;
+
+        // TODO: BACKEND — clear persisted score in database once backend exists
+    }
+
+    public void SetInitialCareerScore(NetworkConnection conn, int score)
+    {
+        if (!_profiles.TryGetValue(conn.ClientId, out PlayerProfile profile)) return;
+
+        profile.CareerScore = score;
+
+        var sync = conn.FirstObject?.GetComponent<PlayerProfileSync>();
+        if (sync != null) sync.CareerScore.Value = score;
+
+        GameRoomManager.Instance?.SyncLeaderboardToClients();
+
+        Debug.Log($"[PlayerProfileManager] Initialized CareerScore for ClientId {conn.ClientId} from local save: {score}");
     }
 
     // TODO: BACKEND — add local save/load methods here when persistence between sessions is needed

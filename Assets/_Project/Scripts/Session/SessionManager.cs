@@ -144,7 +144,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
             // Connect client after Relay is configured
             InstanceFinder.ClientManager.StartConnection();
 
-            //Debug.Log($"[SessionManager] Joined session with code: {joinCode}");
+            Debug.Log($"[SessionManager] Joined session with code: {joinCode}");
 
             // Connected — session is now active
             SetState(SessionState.Active);
@@ -168,7 +168,7 @@ public class SessionManager : SingletonBehaviour<SessionManager>
 
         RelayManager.Instance?.ClearAllocation();
 
-        //Debug.Log("[SessionManager] Session ended.");
+        Debug.Log("[SessionManager] Session ended.");
         SetState(SessionState.Idle);
     }
 
@@ -208,6 +208,8 @@ public class SessionManager : SingletonBehaviour<SessionManager>
 
     private void OnClientConnectionState(FishNet.Transporting.ClientConnectionStateArgs args)
     {
+        //Debug.Log($"[SessionManager] OnClientConnectionState — state: {args.ConnectionState}, CurrentState: {CurrentState}");
+
         if (args.ConnectionState == FishNet.Transporting.LocalConnectionState.Stopped && CurrentState == SessionState.Active)
         {
             Debug.LogWarning("[SessionManager] Client connection stopped unexpectedly.");

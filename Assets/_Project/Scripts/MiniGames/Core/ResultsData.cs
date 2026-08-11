@@ -17,9 +17,5 @@ public class PlayerResultEntry
     public int CareerScore;
     public int CareerLevel;
 
-    public static int CalculateLevel(int careerScore)
-    {
-        // TODO: BACKEND — replace with full leveling curve when system is built
-        return 1 + (careerScore / 100);
-    }
+    public static int CalculateLevel(int careerScore) => CareerLevelSystem.CalculateLevel(careerScore);
 }

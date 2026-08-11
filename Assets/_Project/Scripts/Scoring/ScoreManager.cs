@@ -78,7 +78,7 @@ public class ScoreManager : MonoBehaviour
         }
 
         _processingQueues[sessionId].Enqueue(results);
-        Debug.Log($"[ScoreManager] Results queued for session {sessionId} — queue depth: {_processingQueues[sessionId].Count}");
+        //Debug.Log($"[ScoreManager] Results queued for session {sessionId} — queue depth: {_processingQueues[sessionId].Count}");
 
         if (!_processingActive[sessionId])
             StartCoroutine(ProcessQueue(sessionId));

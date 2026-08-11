@@ -397,6 +397,7 @@ GameObject:
   - component: {fileID: 4571975280494835051}
   - component: {fileID: 389311790973839631}
   - component: {fileID: 7850362941537905089}
+  - component: {fileID: 5771011698147605862}
   m_Layer: 9
   m_Name: PlayerObjectBoZo
   m_TagString: Untagged
@@ -750,6 +751,21 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 0}
   registry: {fileID: 11400000, guid: 00fbf948d5804084781bdb4f36ccec69, type: 2}
   outfitSystem: {fileID: 405037180155912657}
+--- !u!114 &5771011698147605862
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3076198636859094392}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3c4c2a1bf9070ad4e8e592e5fbb8f64d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerProfileSync
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4854047822952305378}
+  _networkObjectCache: {fileID: 0}
 --- !u!1 &4462422390393396489
 GameObject:
   m_ObjectHideFlags: 0
