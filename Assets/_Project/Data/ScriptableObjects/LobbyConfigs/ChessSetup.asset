@@ -1,0 +1,212 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f70fcaadffdd3a64384671123f4f76cf, type: 3}
+  m_Name: ChessSetup
+  m_EditorClassIdentifier: Assembly-CSharp::PropSetupConfig
+  SetupLabel: Chess Set
+  Patterns:
+  - PatternName: Normal Game Setup
+    Entries:
+    - Label: Bishop Black 1
+      Prefab: {fileID: 8126226300151574470, guid: 5b9ead6bcaab3f149996256ff6fa5baf, type: 3}
+      Type: 1
+      Position: {x: 1.5, y: 0.6, z: 3.5}
+      Rotation: {x: 0, y: 90, z: 0}
+      Scale: {x: 1.5, y: 1.5, z: 1.5}
+    - Label: Bishop Black 2
+      Prefab: {fileID: 8126226300151574470, guid: 5b9ead6bcaab3f149996256ff6fa5baf, type: 3}
+      Type: 1
+      Position: {x: -1.5, y: 0.6, z: 3.5}
+      Rotation: {x: 0, y: 90, z: 0}
+      Scale: {x: 1.5, y: 1.5, z: 1.5}
+    - Label: Bishop White 1
+      Prefab: {fileID: 8693954680070546340, guid: 4f5af2ddd942bcc4ab30cdf97abbdf59, type: 3}
+      Type: 0
+      Position: {x: 1.5, y: 0.6, z: -3.5}
+      Rotation: {x: 0, y: 90, z: 0}
+      Scale: {x: 1.5, y: 1.5, z: 1.5}
+    - Label: Bishop White 2
+      Prefab: {fileID: 8693954680070546340, guid: 4f5af2ddd942bcc4ab30cdf97abbdf59, type: 3}
+      Type: 0
+      Position: {x: -1.5, y: 0.6, z: -3.5}
+      Rotation: {x: 0, y: 90, z: 0}
+      Scale: {x: 1.5, y: 1.5, z: 1.5}
+    - Label: King Black
+      Prefab: {fileID: 5605916707935460796, guid: 6dfbff0d5a1fc634882f2d8bb2bcbeb0, type: 3}
+      Type: 0
+      Position: {x: 0.5, y: 0.6, z: 3.5}
+      Rotation: {x: 0, y: 90, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: King White
+      Prefab: {fileID: 9106263594602304800, guid: 59bd627586039e743891bd11cb56319d, type: 3}
+      Type: 0
+      Position: {x: 0.5, y: 0.6, z: -3.5}
+      Rotation: {x: 0, y: 90, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Knight Black 1
+      Prefab: {fileID: 673525640334049272, guid: 7eaaab7d7b8ec944c8353675b5821129, type: 3}
+      Type: 0
+      Position: {x: 2.5, y: 0.6, z: 3.5}
+      Rotation: {x: 0, y: 180, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Knight Black 2
+      Prefab: {fileID: 673525640334049272, guid: 7eaaab7d7b8ec944c8353675b5821129, type: 3}
+      Type: 0
+      Position: {x: -2.5, y: 0.6, z: 3.5}
+      Rotation: {x: 0, y: 180, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Knight White 1
+      Prefab: {fileID: 3175176300860913369, guid: b138c3cd9cff8944f878be3c7f58d855, type: 3}
+      Type: 0
+      Position: {x: 2.5, y: 0.6, z: -3.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Knight White 2
+      Prefab: {fileID: 3175176300860913369, guid: b138c3cd9cff8944f878be3c7f58d855, type: 3}
+      Type: 0
+      Position: {x: -2.5, y: 0.6, z: -3.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn Black 1
+      Prefab: {fileID: 1856702941469244295, guid: 858e74585f9ced54d8327b214cb66047, type: 3}
+      Type: 0
+      Position: {x: 0.5, y: 0.6, z: 2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn Black 2
+      Prefab: {fileID: 1856702941469244295, guid: 858e74585f9ced54d8327b214cb66047, type: 3}
+      Type: 0
+      Position: {x: 1.5, y: 0.6, z: 2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn Black 3
+      Prefab: {fileID: 1856702941469244295, guid: 858e74585f9ced54d8327b214cb66047, type: 3}
+      Type: 0
+      Position: {x: 2.5, y: 0.6, z: 2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn Black 4
+      Prefab: {fileID: 1856702941469244295, guid: 858e74585f9ced54d8327b214cb66047, type: 3}
+      Type: 0
+      Position: {x: 3.5, y: 0.6, z: 2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn Black 5
+      Prefab: {fileID: 1856702941469244295, guid: 858e74585f9ced54d8327b214cb66047, type: 3}
+      Type: 0
+      Position: {x: -0.5, y: 0.6, z: 2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn Black 6
+      Prefab: {fileID: 1856702941469244295, guid: 858e74585f9ced54d8327b214cb66047, type: 3}
+      Type: 0
+      Position: {x: -1.5, y: 0.6, z: 2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn Black 7
+      Prefab: {fileID: 1856702941469244295, guid: 858e74585f9ced54d8327b214cb66047, type: 3}
+      Type: 0
+      Position: {x: -2.5, y: 0.6, z: 2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn Black 8
+      Prefab: {fileID: 1856702941469244295, guid: 858e74585f9ced54d8327b214cb66047, type: 3}
+      Type: 0
+      Position: {x: -3.5, y: 0.6, z: 2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn White 1
+      Prefab: {fileID: 5546320639773053895, guid: 9f894201dfcf59e40b6a40bba716445a, type: 3}
+      Type: 0
+      Position: {x: 0.5, y: 0.6, z: -2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn White 2
+      Prefab: {fileID: 5546320639773053895, guid: 9f894201dfcf59e40b6a40bba716445a, type: 3}
+      Type: 0
+      Position: {x: 1.5, y: 0.6, z: -2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn White 3
+      Prefab: {fileID: 5546320639773053895, guid: 9f894201dfcf59e40b6a40bba716445a, type: 3}
+      Type: 0
+      Position: {x: 2.5, y: 0.6, z: -2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn White 4
+      Prefab: {fileID: 5546320639773053895, guid: 9f894201dfcf59e40b6a40bba716445a, type: 3}
+      Type: 0
+      Position: {x: 3.5, y: 0.6, z: -2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn White 5
+      Prefab: {fileID: 5546320639773053895, guid: 9f894201dfcf59e40b6a40bba716445a, type: 3}
+      Type: 0
+      Position: {x: -0.5, y: 0.6, z: -2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn White 6
+      Prefab: {fileID: 5546320639773053895, guid: 9f894201dfcf59e40b6a40bba716445a, type: 3}
+      Type: 0
+      Position: {x: -1.5, y: 0.6, z: -2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn White 7
+      Prefab: {fileID: 5546320639773053895, guid: 9f894201dfcf59e40b6a40bba716445a, type: 3}
+      Type: 0
+      Position: {x: 0.5, y: 0.6, z: -2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Pawn White 8
+      Prefab: {fileID: 5546320639773053895, guid: 9f894201dfcf59e40b6a40bba716445a, type: 3}
+      Type: 0
+      Position: {x: 0.5, y: 0.6, z: -2.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Queen Black
+      Prefab: {fileID: 6500820546244359044, guid: fa31ef64459346a43b9a8b7b1d0f35b3, type: 3}
+      Type: 1
+      Position: {x: -0.5, y: 0.6, z: 3.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Queen White
+      Prefab: {fileID: 4436296987696325929, guid: cf4f4f9df35a28841a123f49f2df1bb5, type: 3}
+      Type: 1
+      Position: {x: -0.5, y: 0.6, z: -3.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Rook Black 1
+      Prefab: {fileID: 2480671543117846818, guid: 821ce4732280fdc41a43b3609fb12651, type: 3}
+      Type: 1
+      Position: {x: 3.5, y: 0.6, z: 3.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Rook Black 2
+      Prefab: {fileID: 2480671543117846818, guid: 821ce4732280fdc41a43b3609fb12651, type: 3}
+      Type: 1
+      Position: {x: -3.5, y: 0.6, z: 3.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Rook White 1
+      Prefab: {fileID: 2087302236181027148, guid: 97fa84f424e9a864d8dab017d80f1be3, type: 3}
+      Type: 1
+      Position: {x: 3.5, y: 0.6, z: -3.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+    - Label: Rook White 2
+      Prefab: {fileID: 2087302236181027148, guid: 97fa84f424e9a864d8dab017d80f1be3, type: 3}
+      Type: 1
+      Position: {x: -3.5, y: 0.6, z: -3.5}
+      Rotation: {x: 0, y: 0, z: 0}
+      Scale: {x: 1, y: 1, z: 1}
+  RandomizePattern: 0
+  ActivePatternIndex: 0

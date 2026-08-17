@@ -66,6 +66,7 @@ public class PlayerMovement : NetworkBehaviour
 
     private float _jumpCooldown = 0f;
     private const float JumpCooldownDuration = 0.2f;
+    private float _standUpJumpBlockTimer = 0f;
     private float _shoveCooldown = 0f;
 
     private float _moveX;
@@ -126,6 +127,9 @@ public class PlayerMovement : NetworkBehaviour
             // Debug.Log("Standing from seat");
             _currentSeat.ForceStand(_player);
             _currentSeat = null;
+
+            // Prevent the same/next space press from immediately registering as a jump
+            _standUpJumpBlockTimer = 0.3f;
         }
     }
 
@@ -289,6 +293,12 @@ public class PlayerMovement : NetworkBehaviour
         if (keyboard == null) return;
 
         // Debug.Log($"HandleJump — CurrentSeat: {_currentSeat?.name ?? "null"}, IsGrounded: {_isGrounded}");
+
+        if (_standUpJumpBlockTimer > 0f)
+        {
+            _standUpJumpBlockTimer -= Time.deltaTime;
+            return;
+        }
 
         if (_jumpCooldown > 0f)
         {

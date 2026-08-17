@@ -266,5 +266,11 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 154590522881514737}
   _promptLabel: Grab
   _dropPromptLabel: Drop
+  _impactClips:
+  - {fileID: 8300000, guid: 07f9fc07c09caeb4889eaf5eaef900f5, type: 3}
+  - {fileID: 8300000, guid: 205a4f9b7894c94458ae921100ea93ff, type: 3}
+  - {fileID: 8300000, guid: f0e90db5242772b43957a91ee096e768, type: 3}
+  _minImpactVelocity: 2
+  _impactCooldown: 0.2
   _throwForce: 5
   _throwPromptLabel: 'Throw [RMB]'

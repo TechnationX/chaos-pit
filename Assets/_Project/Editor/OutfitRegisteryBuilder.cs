@@ -26,6 +26,32 @@ public static class OutfitRegistryBuilder
         var path = AssetDatabase.GUIDToAssetPath(guids[0]);
         var registry = AssetDatabase.LoadAssetAtPath<OutfitRegistry>(path);
 
+        // Snapshot existing per-item data before rebuilding, keyed by resource path so it
+        // survives even if array order/indices shift when new items are added.
+        var oldRequiredLevelByPath = new Dictionary<(OutfitType, string), int>();
+        var oldDefaultPathByType = new Dictionary<OutfitType, string>();
+        var oldIncludeInRandomByType = new Dictionary<OutfitType, bool>();
+
+        if (registry.slots != null)
+        {
+            foreach (var entry in registry.slots)
+            {
+                if (entry.type == null || entry.resourcePaths == null) continue;
+
+                oldIncludeInRandomByType[entry.type] = entry.includeInRandomDefault;
+
+                for (int i = 0; i < entry.resourcePaths.Length; i++)
+                {
+                    int level = (entry.requiredLevels != null && i < entry.requiredLevels.Length)
+                        ? entry.requiredLevels[i] : 1;
+                    oldRequiredLevelByPath[(entry.type, entry.resourcePaths[i])] = level;
+                }
+
+                if (entry.defaultOutfitId >= 0 && entry.defaultOutfitId < entry.resourcePaths.Length)
+                    oldDefaultPathByType[entry.type] = entry.resourcePaths[entry.defaultOutfitId];
+            }
+        }
+
         // Find every prefab in the project, filter down to ones with an Outfit component
         // sitting inside a folder named "Resources"
         var prefabGuids = AssetDatabase.FindAssets("t:Prefab");
@@ -63,14 +89,43 @@ public static class OutfitRegistryBuilder
             }
         }
 
-        // Rebuild slots array from scratch
+        // Rebuild slots array, restoring preserved per-item data by matching path strings
         var slots = new List<OutfitRegistry.OutfitEntry>();
+        int newItemsFound = 0;
+
         foreach (var kvp in bucket.OrderBy(k => k.Key.name))
         {
+            var type = kvp.Key;
+            var sortedPaths = kvp.Value.OrderBy(p => p).ToArray();
+
+            var requiredLevels = new int[sortedPaths.Length];
+            int defaultOutfitId = -1;
+
+            for (int i = 0; i < sortedPaths.Length; i++)
+            {
+                if (oldRequiredLevelByPath.TryGetValue((type, sortedPaths[i]), out int level))
+                {
+                    requiredLevels[i] = level;
+                }
+                else
+                {
+                    requiredLevels[i] = 1; // new item, default to unlocked
+                    newItemsFound++;
+                }
+
+                if (oldDefaultPathByType.TryGetValue(type, out string oldDefaultPath) && oldDefaultPath == sortedPaths[i])
+                    defaultOutfitId = i;
+            }
+
+            bool includeInRandom = oldIncludeInRandomByType.TryGetValue(type, out bool oldVal) ? oldVal : true;
+
             slots.Add(new OutfitRegistry.OutfitEntry
             {
-                type = kvp.Key,
-                resourcePaths = kvp.Value.OrderBy(p => p).ToArray()
+                type = type,
+                resourcePaths = sortedPaths,
+                includeInRandomDefault = includeInRandom,
+                requiredLevels = requiredLevels,
+                defaultOutfitId = defaultOutfitId
             });
         }
 
@@ -79,7 +134,7 @@ public static class OutfitRegistryBuilder
         EditorUtility.SetDirty(registry);
         AssetDatabase.SaveAssets();
 
-        Debug.Log($"Outfit Registry built: scanned {scanned} prefabs under Resources folders, matched {matched} Outfit prefabs across {slots.Count} outfit types.");
+        Debug.Log($"Outfit Registry built: scanned {scanned} prefabs under Resources folders, matched {matched} Outfit prefabs across {slots.Count} outfit types. {newItemsFound} new item(s) added at default level 1.");
     }
 
     private static string GetResourcesRelativePath(string assetPath)

@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b84bd9b10cc5db4ca4ac70d780d956d, type: 3}
+  m_Name: PoolSetupConfig
+  m_EditorClassIdentifier: Assembly-CSharp::PoolSetupConfig
+  SetupLabel: Pool Setup
+  RackPrefab: {fileID: 0}
+  Patterns:
+  - PatternName: 8 Ball
+    SlotAssignments:
+    - SlotName: BallHolder_1
+      BallPrefab: {fileID: 5335767370467131007, guid: 37186eeee4a8cba439aebd51619165a5, type: 3}
+    - SlotName: BallHolder_2
+      BallPrefab: {fileID: 5229312441426159462, guid: 1b53bc5264c5aa2408634bb44480693d, type: 3}
+    - SlotName: BallHolder_3
+      BallPrefab: {fileID: 1735466751573950495, guid: 2937018b78db2f8419bb14ed5b54d795, type: 3}
+    - SlotName: BallHolder_4
+      BallPrefab: {fileID: 9082062743729295587, guid: 565038c2db81606468bf9a6a02a44138, type: 3}
+    - SlotName: BallHolder_5
+      BallPrefab: {fileID: 6058722752062277322, guid: 1580e3a92621fde47a1e51fd52281fe3, type: 3}
+    - SlotName: BallHolder_6
+      BallPrefab: {fileID: 9172100272294704388, guid: fa1a8ecd5c1b7a54b9bb420509be50f5, type: 3}
+    - SlotName: BallHolder_7
+      BallPrefab: {fileID: 5378675375350782611, guid: 8ea6e25a78da7b145a9249da4047e1a7, type: 3}
+    - SlotName: BallHolder_8
+      BallPrefab: {fileID: 3353899848545635176, guid: e6851a973399be94397a8bb00d8d1504, type: 3}
+    - SlotName: BallHolder_9
+      BallPrefab: {fileID: 578186754484963663, guid: 457bd068fdd9bc04c90c4adf84d774e8, type: 3}
+    - SlotName: BallHolder_10
+      BallPrefab: {fileID: 8257831183127333013, guid: 1a9d0547af6f0fa489872c47d93f802d, type: 3}
+    - SlotName: BallHolder_11
+      BallPrefab: {fileID: 7176174913165011802, guid: 133b9425ab79cf944a1105d80b87897f, type: 3}
+    - SlotName: BallHolder_12
+      BallPrefab: {fileID: 447436752454575614, guid: 110c139a945edd8409f40e96c46cc0a2, type: 3}
+    - SlotName: BallHolder_13
+      BallPrefab: {fileID: 5539900582769897424, guid: f1f253bb11add1b48aa24ec078e788c8, type: 3}
+    - SlotName: BallHolder_14
+      BallPrefab: {fileID: 8032826863554552155, guid: 457d3f545cae43b46aa293e4025adf6d, type: 3}
+    - SlotName: BallHolder_15
+      BallPrefab: {fileID: 1016823407571269396, guid: 9f43e964d9dfbbf4c950c99626bd0562, type: 3}
+  RandomizePattern: 0
+  ActivePatternIndex: 0

@@ -1,7 +1,4 @@
 // AudioManager.cs
-// Place in: Assets/_Project/Scripts/Audio/
-// Owns music playback, SFX playback, and volume settings.
-// Singleton. Lives in Bootstrap scene.
 
 using UnityEngine;
 
@@ -14,6 +11,14 @@ public class AudioManager : SingletonBehaviour<AudioManager>
     [Header("Default Volume")]
     [Range(0f, 1f)][SerializeField] private float defaultMusicVolume = 0.5f;
     [Range(0f, 1f)][SerializeField] private float defaultSFXVolume = 1f;
+
+    [Header("Mixer Routing")]
+    [SerializeField] private UnityEngine.Audio.AudioMixerGroup musicMixerGroup;
+    [SerializeField] private UnityEngine.Audio.AudioMixerGroup sfxMixerGroup;
+
+    [Header("Default SFX")]
+    [SerializeField] private AudioClip defaultClickClip;
+    public AudioClip DefaultClickClip => defaultClickClip;
 
     protected override void Awake()
     {
@@ -33,6 +38,9 @@ public class AudioManager : SingletonBehaviour<AudioManager>
             sfxSource.loop = false;
             sfxSource.playOnAwake = false;
         }
+
+        musicSource.outputAudioMixerGroup = musicMixerGroup;
+        sfxSource.outputAudioMixerGroup = sfxMixerGroup;
 
         SetMusicVolume(defaultMusicVolume);
         SetSFXVolume(defaultSFXVolume);
@@ -71,5 +79,14 @@ public class AudioManager : SingletonBehaviour<AudioManager>
     public void SetSFXVolume(float volume)
     {
         sfxSource.volume = Mathf.Clamp01(volume);
+    }
+
+    // Slight pitch variance so repeated impacts (e.g. objects hitting the ground) don't sound identical
+    public void PlaySFXVaried(AudioClip clip, float pitchRange = 0.05f)
+    {
+        if (clip == null) return;
+        sfxSource.pitch = 1f + Random.Range(-pitchRange, pitchRange);
+        sfxSource.PlayOneShot(clip);
+        sfxSource.pitch = 1f; // reset for other SFX calls that don't want variance
     }
 }

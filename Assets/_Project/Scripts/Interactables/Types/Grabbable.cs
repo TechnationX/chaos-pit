@@ -11,6 +11,13 @@ public class Grabbable : NetworkBehaviour, IInteractable
     [SerializeField] private string _promptLabel = "Grab";
     [SerializeField] private string _dropPromptLabel = "Drop";
 
+    [Header("Impact SFX")]
+    [SerializeField] private AudioClip[] _impactClips;
+    [SerializeField] private float _minImpactVelocity = 2f;
+    [SerializeField] private float _impactCooldown = 0.2f;
+
+    private float _lastImpactTime = -999f;
+
     protected Rigidbody _rigidbody;
     protected PlayerObject _holdingPlayer;
 
@@ -159,5 +166,22 @@ public class Grabbable : NetworkBehaviour, IInteractable
             transform.position = _originalPosition;
             transform.rotation = _originalRotation;
         }
+    }
+
+    protected virtual void OnCollisionEnter(Collision collision)
+    {
+        if (_isHeld) return; // don't play impact SFX while being carried (bumping walls etc.)
+        if (_impactClips == null || _impactClips.Length == 0) return;
+        if (Time.time - _lastImpactTime < _impactCooldown) return;
+
+        float impactSpeed = collision.relativeVelocity.magnitude;
+        if (impactSpeed < _minImpactVelocity) return;
+
+        _lastImpactTime = Time.time;
+
+        AudioClip clip = _impactClips[Random.Range(0, _impactClips.Length)];
+        float volume = Mathf.Clamp01(impactSpeed / 10f); // harder hits = louder, capped at 1
+
+        AudioManager.Instance?.PlaySFXVaried(clip, 0.05f);
     }
 }

@@ -783,6 +783,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   AttachInEditMode: 0
   OutfitName: Golf Shirt
+  PackName: 
   OutfitIcon: {fileID: 0}
   ColorChannels:
   - Base
@@ -819,6 +820,7 @@ MonoBehaviour:
   - CoverChest
   - CoverStomach
   - CoverShoulders
+  requiredTags: []
   categories: []
   optionalPieces: []
   additionalBones: []
@@ -1220,6 +1222,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   AttachInEditMode: 0
   OutfitName: Golf Gloves
+  PackName: 
   OutfitIcon: {fileID: 0}
   ColorChannels:
   - Base
@@ -1253,6 +1256,7 @@ MonoBehaviour:
   decalDatas: []
   tags:
   - CoverHands
+  requiredTags: []
   categories: []
   optionalPieces: []
   additionalBones: []
@@ -1873,6 +1877,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   AttachInEditMode: 0
   OutfitName: 
+  PackName: 
   OutfitIcon: {fileID: 0}
   ColorChannels:
   - Base
@@ -1906,6 +1911,7 @@ MonoBehaviour:
   decalDatas: []
   tags:
   - CoverFeet
+  requiredTags: []
   categories: []
   optionalPieces: []
   additionalBones: []
@@ -8362,7 +8368,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 535371661833056997, guid: ea2fe905d7c97ae4fa12767c519ece3e, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0.000012258424
+      value: -0.00013480424
       objectReference: {fileID: 0}
     - target: {fileID: 580839681862461868, guid: ea2fe905d7c97ae4fa12767c519ece3e, type: 3}
       propertyPath: m_AnchorMax.x
@@ -8418,6 +8424,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 671636047636239475, guid: ea2fe905d7c97ae4fa12767c519ece3e, type: 3}
       propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 717387585874005705, guid: ea2fe905d7c97ae4fa12767c519ece3e, type: 3}
+      propertyPath: m_ActiveFontFeatures.Array.size
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 734747603658060468, guid: ea2fe905d7c97ae4fa12767c519ece3e, type: 3}
@@ -9149,6 +9159,26 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2876666037717113433, guid: ea2fe905d7c97ae4fa12767c519ece3e, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2977693345455720623, guid: ea2fe905d7c97ae4fa12767c519ece3e, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2977693345455720623, guid: ea2fe905d7c97ae4fa12767c519ece3e, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2977693345455720623, guid: ea2fe905d7c97ae4fa12767c519ece3e, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2977693345455720623, guid: ea2fe905d7c97ae4fa12767c519ece3e, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2977693345455720623, guid: ea2fe905d7c97ae4fa12767c519ece3e, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
@@ -10583,6 +10613,10 @@ PrefabInstance:
     - target: {fileID: 7856061335131669343, guid: ea2fe905d7c97ae4fa12767c519ece3e, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: -11.123535
+      objectReference: {fileID: 0}
+    - target: {fileID: 7876107824321845878, guid: ea2fe905d7c97ae4fa12767c519ece3e, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 48.575195
       objectReference: {fileID: 0}
     - target: {fileID: 7881498849185623456, guid: ea2fe905d7c97ae4fa12767c519ece3e, type: 3}
       propertyPath: m_SizeDelta.x

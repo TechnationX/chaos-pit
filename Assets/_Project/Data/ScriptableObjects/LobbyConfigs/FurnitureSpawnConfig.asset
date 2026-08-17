@@ -13,23 +13,53 @@ MonoBehaviour:
   m_Name: FurnitureSpawnConfig
   m_EditorClassIdentifier: Assembly-CSharp::FurnitureSpawnConfig
   Entries:
-  - Label: Couch_01
-    Prefab: {fileID: 334569156917715922, guid: cc5a888bde444244a854e3847cb114cf, type: 3}
-    Position: {x: 0, y: 0, z: 8}
+  - Label: Closet Big
+    Prefab: {fileID: 8387792330663407722, guid: 9d4494b8b100519479f9699c5a7390a9, type: 3}
+    Position: {x: 11.5, y: 0, z: -11}
+    Rotation: {x: 0, y: -90, z: 0}
+    Scale: {x: 1, y: 1, z: 1}
+  - Label: 3 Seat Leather
+    Prefab: {fileID: 8757825814237500909, guid: d9e6213ffc5943b4db8396985aa3f894, type: 3}
+    Position: {x: 7.5, y: 0, z: 6}
     Rotation: {x: 0, y: 180, z: 0}
-    Scale: {x: 4, y: 4, z: 4}
-  - Label: Small_Table_01
-    Prefab: {fileID: 8180459787196399639, guid: db60947f7e4a342449ce30609657471b, type: 3}
-    Position: {x: 8, y: 0, z: 5}
+    Scale: {x: 0.75, y: 0.75, z: 0.75}
+  - Label: Couch Fancy
+    Prefab: {fileID: 7624070237541074139, guid: 2d5da6ebed3d1dc4db41b66b5eac1997, type: 3}
+    Position: {x: 11, y: 0, z: 9}
+    Rotation: {x: 0, y: -90, z: 0}
+    Scale: {x: 0.75, y: 0.75, z: 0.75}
+  - Label: Chair Outside
+    Prefab: {fileID: 2329903055860046251, guid: 41cf0c45f4ecbd0469567b5a28e21395, type: 3}
+    Position: {x: -5, y: 0, z: -10}
+    Rotation: {x: 0, y: -90, z: 0}
+    Scale: {x: 0.75, y: 0.75, z: 0.75}
+  - Label: Couch Outside
+    Prefab: {fileID: 920908881386834159, guid: 2c59b54db7aeb3d438ea1c0bf9694519, type: 3}
+    Position: {x: -8, y: 0, z: -7}
+    Rotation: {x: 0, y: 180, z: 0}
+    Scale: {x: 0.75, y: 0.75, z: 0.75}
+  - Label: 3 Seat Basic
+    Prefab: {fileID: 6165582997407286407, guid: 4da9f6017c5c2954282fe23c8f297ec2, type: 3}
+    Position: {x: 9, y: 0, z: -7}
+    Rotation: {x: 0, y: 0, z: 0}
+    Scale: {x: 0.75, y: 0.75, z: 0.75}
+  - Label: Chair Basic
+    Prefab: {fileID: 1806843409170209191, guid: 0a94bd08074ccfd4e938cda201930e63, type: 3}
+    Position: {x: 5, y: 0, z: -10}
+    Rotation: {x: 0, y: -90, z: 0}
+    Scale: {x: 0.75, y: 0.75, z: 0.75}
+  - Label: Table Metal
+    Prefab: {fileID: 1970964019002176582, guid: 204da6aadc13e164eac745605815a273, type: 3}
+    Position: {x: -8, y: 0, z: -10}
+    Rotation: {x: 0, y: 0, z: 0}
+    Scale: {x: 1, y: 1, z: 1}
+  - Label: Table Metal 2
+    Prefab: {fileID: 1970964019002176582, guid: 204da6aadc13e164eac745605815a273, type: 3}
+    Position: {x: 10, y: 0, z: 0}
     Rotation: {x: 0, y: 90, z: 0}
-    Scale: {x: 4, y: 4, z: 4}
-  - Label: Arm_Chair_01
-    Prefab: {fileID: 1250258544513006647, guid: 70ab780d8d83431468f70f4cbbf91820, type: 3}
-    Position: {x: -8, y: 0, z: 0}
-    Rotation: {x: 0, y: 90, z: 0}
-    Scale: {x: 4, y: 4, z: 4}
-  - Label: Large_Table_01
-    Prefab: {fileID: 5914605485070678643, guid: 91dd1e587877893479c1d9b7bf40c784, type: 3}
-    Position: {x: 8, y: 0, z: 0}
-    Rotation: {x: 0, y: 90, z: 0}
-    Scale: {x: 4, y: 4, z: 4}
+    Scale: {x: 1, y: 1, z: 1}
+  - Label: Table Round
+    Prefab: {fileID: 7690519952026649423, guid: 6f43b2566a8dcad4aa8e75125eeda38e, type: 3}
+    Position: {x: 9, y: 0, z: -10}
+    Rotation: {x: 0, y: 0, z: 0}
+    Scale: {x: 1, y: 1, z: 1}

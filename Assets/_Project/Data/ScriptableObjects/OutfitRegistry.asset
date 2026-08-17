@@ -15,13 +15,16 @@ MonoBehaviour:
   slots:
   - type: {fileID: 11400000, guid: 11451b38f6824a84d8e8c9afe9bbc832, type: 2}
     resourcePaths:
+    - Body/Body_AnimeBasic
     - Body/Body_BasicBody
     - Body/Body_StrongBody
     includeInRandomDefault: 1
-    requiredLevels: 0100000005000000
-    defaultOutfitId: 0
+    requiredLevels: 010000000100000005000000
+    defaultOutfitId: 1
   - type: {fileID: 11400000, guid: 8b51e8ff650f1344ba44bbb2b9eb83e6, type: 2}
     resourcePaths:
+    - Bottom/BMSC_Bottom_StripedPants
+    - Bottom/BMSC_Bottom_YogaPants
     - Bottom/Bottom_ApronSkirt
     - Bottom/Bottom_CuffedLeggings
     - Bottom/Bottom_DevoutPants
@@ -36,8 +39,22 @@ MonoBehaviour:
     - Bottom/Bottom_TightTravelPants
     - Bottom/Bottom_VillagerLongPants
     - Bottom/Bottom_VillagerSlacks
+    - Bottom/BSMC_Bottom_BaggyPantsAnkles
+    - Bottom/BSMC_Bottom_BaggyPantsLong
+    - Bottom/BSMC_Bottom_BaggyPantsShort
+    - Bottom/BSMC_Bottom_BigShorts
+    - Bottom/BSMC_Bottom_CargoPants
+    - Bottom/BSMC_Bottom_CargoPantsShort
+    - Bottom/BSMC_Bottom_DressPants
+    - Bottom/BSMC_Bottom_Jeans
+    - Bottom/BSMC_Bottom_JeanSkirt
+    - Bottom/BSMC_Bottom_LooseJeans
+    - Bottom/BSMC_Bottom_PleatedSkirt
+    - Bottom/BSMC_Bottom_Shorts
+    - Bottom/BSMC_Bottom_ShortShorts
+    - Bottom/BSMC_Bottom_Skirt
     includeInRandomDefault: 1
-    requiredLevels: 0100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
+    requiredLevels: 050000000100000007000000010000000100000002000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
     defaultOutfitId: -1
   - type: {fileID: 11400000, guid: ffd4717f49b79c74aa1f234222365f79, type: 2}
     resourcePaths:
@@ -45,10 +62,31 @@ MonoBehaviour:
     includeInRandomDefault: 0
     requiredLevels: 01000000
     defaultOutfitId: -1
+  - type: {fileID: 11400000, guid: 70b68bf129de91e41b56f6152609654e, type: 2}
+    resourcePaths:
+    - EyeBrows/Brows_BasicBrows
+    includeInRandomDefault: 1
+    requiredLevels: 01000000
+    defaultOutfitId: -1
+  - type: {fileID: 11400000, guid: f88b1fbe28a6f74498ee9e8baec76b0e, type: 2}
+    resourcePaths:
+    - EyeLashes/EyeLashes_LongLashes
+    - EyeLashes/EyeLashes_ShortLashes
+    includeInRandomDefault: 1
+    requiredLevels: 0100000001000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 56f941da801bb944cba868df9db79435, type: 2}
     resourcePaths:
+    - Eyes/Eyes_AnimeBasic
     - Eyes/Eyes_BasicEyes
     - Eyes/Eyes_BasicIris
+    includeInRandomDefault: 1
+    requiredLevels: 010000000100000001000000
+    defaultOutfitId: -1
+  - type: {fileID: 11400000, guid: 6c8ac31a96ebe3e499857674ba077672, type: 2}
+    resourcePaths:
+    - EyeShine/EyeShine_DoubleRound
+    - EyeShine/EyeShine_StylizedDoubleShine
     includeInRandomDefault: 1
     requiredLevels: 0100000001000000
     defaultOutfitId: -1
@@ -56,15 +94,31 @@ MonoBehaviour:
     resourcePaths:
     - FaceDetails/FaceDetail_Freakles
     - FaceDetails/FaceDetail_FullFreakles
+    - FaceDetails/FaceDetails_FrecklesHeavy
+    - FaceDetails/FaceDetails_FrecklesLight
+    - FaceDetails/FaceDetails_FrecklesMedium
     includeInRandomDefault: 1
-    requiredLevels: 0100000001000000
+    requiredLevels: 0100000001000000010000000100000001000000
     defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 0e4e820936308e84487fc607e27aad31, type: 2}
     resourcePaths:
+    - Feet/BMSC_Feet_SportsShoes
+    - Feet/BSMC_Feet_BigBoots
+    - Feet/BSMC_Feet_ComfyShoes
+    - Feet/BSMC_Feet_CoolShoes
+    - Feet/BSMC_Feet_OfficeShoes
+    - Feet/BSMC_Feet_Sandals
+    - Feet/BSMC_Feet_SchoolShoes
+    - Feet/BSMC_Feet_ShortBoots
+    - Feet/BSMC_Feet_ShowerSandal
+    - Feet/BSMC_Feet_SlipOns
+    - Feet/BSMC_Feet_StreetShoes
+    - Feet/BSMC_Feet_WorkBoots
     - Feet/Feet_CuffedBoots
     - Feet/Feet_FearsomeBoots
     - Feet/Feet_FencingBoots
     - Feet/Feet_ForestLongBoots
+    - Feet/Feet_HighLaceShoe
     - Feet/Feet_PointedShoes
     - Feet/Feet_SharpBoots
     - Feet/Feet_SteelSabatons
@@ -72,10 +126,13 @@ MonoBehaviour:
     - Feet/Feet_TravelSandal
     - Feet/Feet_VillagerBoots
     includeInRandomDefault: 1
-    requiredLevels: 01000000010000000100000001000000010000000100000001000000020000000300000005000000
+    requiredLevels: 0100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000020000000300000005000000
     defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 903f6a47401e8d946a5143db62cf2cae, type: 2}
     resourcePaths:
+    - Gloves/BSMC_Gloves_Fingerless
+    - Gloves/BSMC_Gloves_WorkGloves
+    - Gloves/Gloves_ArmWarmers
     - Gloves/Gloves_ClothHandwraps
     - Gloves/Gloves_CuffedGloves
     - Gloves/Gloves_FearsomeBracers
@@ -87,10 +144,25 @@ MonoBehaviour:
     - Gloves/Gloves_SharpGauntlets
     - Gloves/Gloves_SteelGauntlets
     includeInRandomDefault: 0
-    requiredLevels: 01000000010000000100000001000000010000000100000001000000010000000100000001000000
+    requiredLevels: 01000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
     defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 3781f2a69b931724b9a19deab41d2f45, type: 2}
     resourcePaths:
+    - HairBack/BSMC_HairBack_Buzzed
+    - HairBack/BSMC_HairBack_DreadBack
+    - HairBack/BSMC_HairBack_Flare
+    - HairBack/BSMC_HairBack_LongDreads
+    - HairBack/BSMC_HairBack_LongStreight
+    - HairBack/BSMC_HairBack_PonyTailLong
+    - HairBack/BSMC_HairBack_PonyTailShort
+    - HairBack/BSMC_HairBack_Punk
+    - HairBack/BSMC_HairBack_Scrappy
+    - HairBack/BSMC_HairBack_Short
+    - HairBack/BSMC_HairBack_ShortBob
+    - HairBack/BSMC_HairBack_TwinTailLong
+    - HairBack/BSMC_HairBack_TwinTailShort
+    - HairBack/BSMC_HairBack_Wild
+    - HairBack/BSMC_HairBack_WildTail
     - HairBack/HairBack_DolphinTail
     - HairBack/HairBack_DragonCut
     - HairBack/HairBack_ElvishLong
@@ -105,10 +177,20 @@ MonoBehaviour:
     - HairBack/HairBack_TotalCurls
     - HairBack/HairBack_WarriorWolfTail
     includeInRandomDefault: 1
-    requiredLevels: 01000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
+    requiredLevels: 01000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
     defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 025dcbe78cc533044936dbb48c1c30e3, type: 2}
     resourcePaths:
+    - HairFront/BSMC_HairFront_BangSideFlicks
+    - HairFront/BSMC_HairFront_Fohawk
+    - HairFront/BSMC_HairFront_HangingDreads
+    - HairFront/BSMC_HairFront_Hime
+    - HairFront/BSMC_HairFront_LongSweeps
+    - HairFront/BSMC_HairFront_Messy
+    - HairFront/BSMC_HairFront_QuicklyHair
+    - HairFront/BSMC_HairFront_SweaptBack
+    - HairFront/BSMC_HairFront_SweaptDreads
+    - HairFront/BSMC_HairFront_WolfCut
     - HairFront/HairFront_DesolateHair
     - HairFront/HairFront_FreeTussle
     - HairFront/HairFront_HeroCut
@@ -120,10 +202,15 @@ MonoBehaviour:
     - HairFront/HairFront_TuffCuff
     - HairFront/HairFront_UnkeptLoose
     includeInRandomDefault: 1
-    requiredLevels: 01000000010000000100000001000000010000000100000001000000010000000100000001000000
+    requiredLevels: 0100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
     defaultOutfitId: -1
   - type: {fileID: 11400000, guid: adf65c8e9cddf6e4eb8117a2d67d37c3, type: 2}
     resourcePaths:
+    - Hat/BSMC_Hat_Ballcap
+    - Hat/BSMC_Hat_Beanie
+    - Hat/BSMC_Hat_Bucket
+    - Hat/BSMC_Hat_Fedora
+    - Hat/BSMC_Hat_SunHat
     - Hat/Hat_ChainHelmet
     - Hat/Hat_FullHood
     - Hat/Hat_KettleHelmet
@@ -135,22 +222,25 @@ MonoBehaviour:
     - Hat/Hat_WitchesHat
     - Hat/Hat_WizardHat
     includeInRandomDefault: 0
-    requiredLevels: 01000000010000000100000001000000010000000100000001000000010000000100000001000000
+    requiredLevels: 010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
     defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 480ce04c1d1586c44b495f52ce52adc8, type: 2}
     resourcePaths:
+    - Head/Head_AnimeYoung
     - Head/Head_BasicHead
     - Head/Head_SharpHead
     - Head/Head_Stern
     - Head/Head_YoungSharpHead
     includeInRandomDefault: 1
-    requiredLevels: 01000000010000000100000001000000
-    defaultOutfitId: 0
+    requiredLevels: 0100000001000000010000000100000001000000
+    defaultOutfitId: 1
   - type: {fileID: 11400000, guid: 2afba4aeb1706534c9c209d946390096, type: 2}
     resourcePaths:
+    - HeadAcc/BSMC_Head_AlienAttena
+    - HeadAcc/BSMC_Head_Horns
     - HeadAcc/HeadAcc_DeerAntlers
     includeInRandomDefault: 0
-    requiredLevels: 01000000
+    requiredLevels: 010000000100000001000000
     defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 1327d52b4eb897a4b8d6838bff33e6b7, type: 2}
     resourcePaths:
@@ -160,19 +250,26 @@ MonoBehaviour:
     defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 1b19472c53ac54741b33f86e7ecd368d, type: 2}
     resourcePaths:
+    - LowerFace/BSMC_LowerFace_BushyBeard
+    - LowerFace/BSMC_LowerFace_ChinGoatee
+    - LowerFace/BSMC_LowerFace_FullBeard
+    - LowerFace/BSMC_LowerFace_Goatee
+    - LowerFace/BSMC_LowerFace_Mustashe
+    - LowerFace/BSMC_LowerFace_MustasheChin
     - LowerFace/LowerFace_CommandingBeard
     - LowerFace/LowerFace_RogueMask
     - LowerFace/LowerFace_SquareBeard
     - LowerFace/LowerFace_TiedBeard
     - LowerFace/LowerFace_WizzendBeard
     includeInRandomDefault: 1
-    requiredLevels: 0100000001000000010000000100000001000000
+    requiredLevels: 0100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
     defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 9272634e92d3380458926acf8c791ac2, type: 2}
     resourcePaths:
     - MakeUpCheeks/MakeUpCheeks_BasicBlush
+    - MakeUpCheeks/MakeUpCheeks_SimpleBlush
     includeInRandomDefault: 0
-    requiredLevels: 01000000
+    requiredLevels: 0100000001000000
     defaultOutfitId: -1
   - type: {fileID: 11400000, guid: d7ef079491b244e41a9ecbe9d6b455e1, type: 2}
     resourcePaths:
@@ -183,8 +280,9 @@ MonoBehaviour:
   - type: {fileID: 11400000, guid: 1978635c96bf86141852f5f309468ebf, type: 2}
     resourcePaths:
     - MakeUpLips/MakeUpLips_BasicLipstick
+    - MakeUpLips/MakeUpLips_SimpleLipstick
     includeInRandomDefault: 0
-    requiredLevels: 01000000
+    requiredLevels: 0100000001000000
     defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 3ec095cfc3c138c45b2fbfdc7131682d, type: 2}
     resourcePaths:
@@ -194,12 +292,22 @@ MonoBehaviour:
     includeInRandomDefault: 1
     requiredLevels: 010000000100000001000000
     defaultOutfitId: -1
+  - type: {fileID: 11400000, guid: 70da74ce935284d419fd8fcf6f8f3306, type: 2}
+    resourcePaths:
+    - Overall/BSMC_Overall_Overall
+    - Overall/BSMC_Overall_SmartDress
+    - Overall/BSMC_Overall_Sundress
+    includeInRandomDefault: 1
+    requiredLevels: 010000000100000001000000
+    defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 3bf3759a9e6cce040910c0aad65b40d3, type: 2}
     resourcePaths:
     - Pupil/Pupil_BasicPupil
+    - Pupil/Pupil_Round
     - Pupil/Pupil_SharpPupil
+    - Pupil/Pupil_StylizedRoundRinged
     includeInRandomDefault: 1
-    requiredLevels: 0100000001000000
+    requiredLevels: 01000000010000000100000001000000
     defaultOutfitId: 0
   - type: {fileID: 11400000, guid: 78106d16c97ada048b643b5b2b2eaf1f, type: 2}
     resourcePaths:
@@ -221,11 +329,31 @@ MonoBehaviour:
     - Socks/Socks_StripedKneeHighs
     - Socks/Socks_StripedThighHighs
     - Socks/Socks_ThighHigh
+    - Socks/Socks_ThighHighSturrips
     includeInRandomDefault: 0
-    requiredLevels: 010000000100000001000000010000000100000001000000
+    requiredLevels: 01000000010000000100000001000000010000000100000001000000
     defaultOutfitId: -1
   - type: {fileID: 11400000, guid: 6708e088db9d4b14caa291b19c953b71, type: 2}
     resourcePaths:
+    - Top/BSMC_Top_CasualJacket
+    - Top/BSMC_Top_DressShirt
+    - Top/BSMC_Top_Hoodie
+    - Top/BSMC_Top_OpenJacket
+    - Top/BSMC_Top_Seifuku
+    - Top/BSMC_Top_SeifukuShort
+    - Top/BSMC_Top_Shirt
+    - Top/BSMC_Top_SuitJacket
+    - Top/BSMC_Top_Suspenders
+    - Top/BSMC_Top_Sweater
+    - Top/BSMC_Top_TankTop
+    - Top/BSMC_Top_TurtleNeck
+    - Top/Outfit_Top_ButtonUp
+    - Top/Outfit_Top_ButtonUpShort
+    - Top/Outfit_Top_Henley
+    - Top/Outfit_Top_OpenShoulder
+    - Top/Outfit_Top_OpenShoulder_Crop
+    - Top/Outfit_Top_OpenShoulder_Straps
+    - Top/Outfit_Top_OpenShoulder_Strapsless
     - Top/Top_BattleDress
     - Top/Top_DevoutCoat
     - Top/Top_FearsomeGarb
@@ -239,27 +367,33 @@ MonoBehaviour:
     - Top/Top_VillagerTunic
     - Top/Top_WitchBlouse
     includeInRandomDefault: 1
-    requiredLevels: 010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
+    requiredLevels: 01000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
     defaultOutfitId: -1
   - type: {fileID: 11400000, guid: e56e5c1caeb450e45a10017ec49e5c4e, type: 2}
     resourcePaths:
+    - UnderLower/Underlower_ShortSpats
     - UnderLower/UnderLower_SimpleBoxers
     - UnderLower/UnderLower_SimplePanties
     includeInRandomDefault: 1
-    requiredLevels: 0100000001000000
-    defaultOutfitId: 0
+    requiredLevels: 010000000100000001000000
+    defaultOutfitId: 1
   - type: {fileID: 11400000, guid: a781ca08053c0ba41a7a6816b6e7e199, type: 2}
     resourcePaths:
     - UnderUpper/UnderUpper_SimpleBra
     - UnderUpper/UnderUpper_SimpleUnderShirt
+    - UnderUpper/UnderUpper_SimpleUnderShirt2
     includeInRandomDefault: 1
-    requiredLevels: 0100000001000000
+    requiredLevels: 010000000100000001000000
     defaultOutfitId: 1
   - type: {fileID: 11400000, guid: ffad910d2e77d9342b9f96d19728b5a5, type: 2}
     resourcePaths:
+    - UpperFace/BSMC_Face_RoundGlasses
+    - UpperFace/BSMC_Face_RoundShaded
+    - UpperFace/BSMC_Face_ShadedGlasses
+    - UpperFace/BSMC_Face_SimpleGlasses
     - UpperFace/UpperFace_Blindfold
     - UpperFace/UpperFace_ClothEyeWrap
     - UpperFace/UpperFace_EyePatch
     includeInRandomDefault: 1
-    requiredLevels: 010000000100000001000000
+    requiredLevels: 01000000010000000100000001000000010000000100000001000000
     defaultOutfitId: -1
