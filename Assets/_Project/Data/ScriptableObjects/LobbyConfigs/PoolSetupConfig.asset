@@ -88,7 +88,7 @@ MonoBehaviour:
       BallPrefab: {fileID: 5539900582769897424, guid: f1f253bb11add1b48aa24ec078e788c8, type: 3}
       Scale: {x: 1, y: 1, z: 1}
     - SlotName: BallHolder_13
-      BallPrefab: {fileID: 8032826863554552155, guid: 457d3f545cae43b46aa293e4025adf6d, type: 3}
+      BallPrefab: {fileID: 1016823407571269396, guid: 9f43e964d9dfbbf4c950c99626bd0562, type: 3}
       Scale: {x: 1, y: 1, z: 1}
   RandomizePattern: 0
   ActivePatternIndex: 0

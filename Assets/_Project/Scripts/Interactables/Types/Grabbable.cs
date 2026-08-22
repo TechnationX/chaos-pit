@@ -28,6 +28,21 @@ public class Grabbable : NetworkBehaviour, IInteractable
         set => _isHeldSync.Value = value;
     }
 
+    // Carries WHO is holding this object to every peer. Deliberately a
+    // SyncVar rather than an ObserversRpc parameter — passing a
+    // NetworkObject reference as an RPC argument doesn't reliably resolve
+    // on remote clients (no guarantee the target is already known locally
+    // at the moment the RPC is processed), whereas SyncVars holding
+    // NetworkObject/NetworkBehaviour references are resolved by FishNet
+    // itself, including deferring delivery until the reference is
+    // resolvable. Same reasoning that makes _isHeldSync above reliable.
+    protected readonly FishNet.Object.Synchronizing.SyncVar<NetworkObject> _holdingPlayerNetObjSync = new FishNet.Object.Synchronizing.SyncVar<NetworkObject>();
+
+    // Tracks what we've already visually applied, so ApplyHeldVisualState()
+    // below can skip redundant re-application when called more than once
+    // for the same underlying state.
+    private NetworkObject _lastAppliedHolder;
+
     private Vector3 _originalPosition;
     private Quaternion _originalRotation;
 
@@ -42,10 +57,22 @@ public class Grabbable : NetworkBehaviour, IInteractable
         _originalRotation = transform.rotation;
     }
 
+    // Polling instead of reacting to _holdingPlayerNetObjSync.OnChange — the
+    // event-driven version went through three iterations and still didn't
+    // apply reliably on the host's own observer pass (grab visuals applied,
+    // drop visuals never did, confirmed via debug logging). Every peer just
+    // checks once a frame whether the synced value matches what it's
+    // currently showing and self-corrects if not — same "read the SyncVar's
+    // current value directly" principle _isHeld already relies on at
+    // interaction time, just running continuously instead of on-demand.
+    // Negligible cost for the small number of grabbable props in this game.
+    protected virtual void Update()
+    {
+        ApplyHeldVisualState();
+    }
+
     public virtual void OnInteract(PlayerObject player)
     {
-        //Debug.Log($"[Grabbable] OnInteract — IsServer: {IsServerInitialized}, IsClient: {IsClientInitialized}, IsHeld: {_isHeld}");
-
         if (_isHeld)
         {
             if (player.IsHoldingObject && player.HeldObject == this)
@@ -72,7 +99,6 @@ public class Grabbable : NetworkBehaviour, IInteractable
     [ServerRpc(RequireOwnership = false)]
     protected virtual void ServerGrab(PlayerObject player)
     {
-        //Debug.Log($"[Grabbable] ServerGrab called — IsHeld: {_isHeld}, Player: {player?.name}");
         if (_isHeld) return;
         if (player.ServerIsHoldingObject) return;
 
@@ -80,35 +106,46 @@ public class Grabbable : NetworkBehaviour, IInteractable
         _holdingPlayer = player;
         player.SetServerHeldObject(this);
 
-        foreach (var conn in NetworkObject.Observers)
-        {
-            Debug.Log($"[Grabbable] Observer: {conn.ClientId}");
-        }
-        //Debug.Log($"[Grabbable] Grabbing player connection: {player.Owner?.ClientId}");
-
-        ObserversGrab(player.NetworkObject);
+        _holdingPlayerNetObjSync.Value = player.NetworkObject;
     }
 
     [Server]
     protected virtual void ServerDrop()
     {
-        //Debug.Log($"[Grabbable] ServerDrop — IsHeld before: {_isHeld}");
         if (!_isHeld) return;
 
         _isHeld = false;
-        //Debug.Log($"[Grabbable] ServerDrop — IsHeld after: {_isHeld}");
 
-        PlayerObject prevPlayer = _holdingPlayer;
-        _holdingPlayer = null;
-        prevPlayer.SetServerHeldObject(null);
+        // Deliberately NOT nulling _holdingPlayer here (used to). On host,
+        // this [Server]-only method and the observer-side OnObserversDrop()
+        // run in the same process against the same object — OnObserversDrop()
+        // runs later (once Update()'s poll below detects the SyncVar change)
+        // and needs _holdingPlayer to still be valid to know what to detach
+        // from. Nulling it here was clearing it out from under host's own
+        // drop visuals before they ever ran, which is why drop looked correct
+        // on remote clients but silently no-op'd on host. OnObserversDrop()
+        // clears _holdingPlayer itself once it's done using it — that's the
+        // only place this should happen now.
+        _holdingPlayer.SetServerHeldObject(null);
 
-        ObserversDrop(prevPlayer.NetworkObject);
+        _holdingPlayerNetObjSync.Value = null;
     }
 
-    [ObserversRpc]
-    protected void ObserversGrab(NetworkObject playerNetObj)  // NOT virtual
+    // Reads _holdingPlayerNetObjSync's CURRENT value directly every frame
+    // (called from Update() above) rather than reacting to an OnChange
+    // event, with the dedupe guard so we only actually apply a transition
+    // once per real change.
+    private void ApplyHeldVisualState()
     {
-        OnObserversGrab(playerNetObj);  // call virtual hook
+        NetworkObject currentHolder = _holdingPlayerNetObjSync.Value;
+        if (currentHolder == _lastAppliedHolder) return;
+
+        _lastAppliedHolder = currentHolder;
+
+        if (currentHolder != null)
+            OnObserversGrab(currentHolder);
+        else
+            OnObserversDrop(null);
     }
 
     protected virtual void OnObserversGrab(NetworkObject playerNetObj)
@@ -135,18 +172,15 @@ public class Grabbable : NetworkBehaviour, IInteractable
         //Debug.Log($"ObserversGrab called, SetHeldObject on {player.name}");
     }
 
-    [ObserversRpc]
-    protected void ObserversDrop(NetworkObject playerNetObj)  // NOT virtual
-    {
-        OnObserversDrop(playerNetObj);
-    }
-
     protected virtual void OnObserversDrop(NetworkObject playerNetObj)
     {
-        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        // Use the already-cached _holdingPlayer (set in OnObserversGrab)
+        // instead of re-resolving playerNetObj.GetComponent<PlayerObject>()
+        // — that's the same kind of NetworkObject-reference lookup that
+        // wasn't reliable for grab, so don't repeat it here when we already
+        // have a known-good reference from when this was grabbed.
+        PlayerObject player = _holdingPlayer;
         if (player == null) return;
-
-        _holdingPlayer = player;
 
         var nt = GetComponent<NetworkTransform>();
         if (nt != null) nt.enabled = true;
@@ -154,10 +188,19 @@ public class Grabbable : NetworkBehaviour, IInteractable
         _rigidbody.isKinematic = false;
         transform.SetParent(null);
         player.SetHeldObject(null);
+        _holdingPlayer = null;
         //Debug.Log($"ObserversDrop called, cleared held object");
     }
 
-    // Called by lobby bounds system if object leaves play area
+    // Called by lobby bounds system if object leaves play area, and by the
+    // pool table's reset buttons (LobbySpawner.SwitchPoolPattern) to put the
+    // rack back at its spawn point. Setting transform.position/rotation here
+    // only updates the server's own copy of the Transform — relying on
+    // NetworkTransform to auto-sync a big instant jump like this to clients
+    // isn't reliable (same gap as the "Enable Teleport" note for ball
+    // NetworkTransforms), so this also explicitly broadcasts the new
+    // transform to every client, same pattern as
+    // CueBall.ServerResetTo/ObserversResetTo.
     public void ForceReset()
     {
         if (IsServerInitialized)
@@ -165,7 +208,15 @@ public class Grabbable : NetworkBehaviour, IInteractable
             ServerDrop();
             transform.position = _originalPosition;
             transform.rotation = _originalRotation;
+            ObserversForceReset(_originalPosition, _originalRotation);
         }
+    }
+
+    [ObserversRpc]
+    private void ObserversForceReset(Vector3 position, Quaternion rotation)
+    {
+        transform.position = position;
+        transform.rotation = rotation;
     }
 
     protected virtual void OnCollisionEnter(Collision collision)

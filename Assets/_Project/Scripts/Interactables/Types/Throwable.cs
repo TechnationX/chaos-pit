@@ -29,8 +29,14 @@ public class Throwable : Grabbable
             ServerGrab(player);
     }
 
-    private void Update()
+    // Was a plain `private void Update()` — changed to `protected override`
+    // calling base.Update() so Grabbable's per-frame held-state polling
+    // (ApplyHeldVisualState) still runs for Throwable instances instead of
+    // being hidden by this override.
+    protected override void Update()
     {
+        base.Update();
+
         if (!_isHeld || _holdingPlayer == null) return;
         //Debug.Log($"[Throwable] Update — IsOwner: {IsOwner}, holdingPlayer.IsOwner: {_holdingPlayer.IsOwner}");
         if (!_holdingPlayer.IsOwner) return;
@@ -53,12 +59,7 @@ public class Throwable : Grabbable
         _holdingPlayer = player;
         player.SetServerHeldObject(this);
 
-        foreach (var conn in NetworkObject.Observers)
-        {
-            //Debug.Log($"[Throwable] Observer clientId: {conn.ClientId}");
-        }
-
-        ObserversGrab(player.NetworkObject);
+        _holdingPlayerNetObjSync.Value = player.NetworkObject;
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -74,11 +75,13 @@ public class Throwable : Grabbable
         if (!_isHeld) return;
 
         _isHeld = false;
-        PlayerObject prevPlayer = _holdingPlayer;
-        _holdingPlayer = null;
-        prevPlayer.SetServerHeldObject(null);
 
-        ObserversDrop(prevPlayer.NetworkObject); 
+        // Deliberately NOT nulling _holdingPlayer here — see the comment on
+        // Grabbable.ServerDrop(). OnObserversDrop() (called via Update()'s
+        // poll, which also runs on host) still needs it.
+        _holdingPlayer.SetServerHeldObject(null);
+
+        _holdingPlayerNetObjSync.Value = null;
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -87,11 +90,21 @@ public class Throwable : Grabbable
         if (!_isHeld || _holdingPlayer != player) return;
 
         _isHeld = false;
-        PlayerObject prevPlayer = _holdingPlayer;
-        _holdingPlayer = null;
-        prevPlayer.SetServerHeldObject(null);
 
-        ObserversThrow(prevPlayer.NetworkObject, throwDirection.normalized);
+        // Deliberately NOT nulling _holdingPlayer here — see the comment on
+        // Grabbable.ServerDrop(). OnObserversThrow() (invoked via the
+        // ObserversRpc below, which also runs on host) still needs
+        // _holdingPlayer to resolve who to detach from; it clears the field
+        // itself once done.
+        _holdingPlayer.SetServerHeldObject(null);
+
+        // Also clear the holding-player SyncVar here (same as a normal
+        // drop) — a throw ends the "held" state too, so leaving it pointed
+        // at the thrower would misrepresent state for a client that joins
+        // later while this object is lying wherever it landed.
+        _holdingPlayerNetObjSync.Value = null;
+
+        ObserversThrow(_holdingPlayer.NetworkObject, throwDirection.normalized);
     }
 
     [ObserversRpc]
@@ -103,7 +116,9 @@ public class Throwable : Grabbable
 
     protected void OnObserversThrow(NetworkObject playerNetObj, Vector3 direction)
     {
-        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        // Use the cached _holdingPlayer instead of re-resolving playerNetObj
+        // — same reasoning as OnObserversDrop below.
+        PlayerObject player = _holdingPlayer;
 
         var nt = GetComponent<NetworkTransform>();
         if (nt != null) nt.enabled = true;
@@ -121,6 +136,7 @@ public class Throwable : Grabbable
         if (player != null)
             player.SetHeldObject(null);
 
+        _holdingPlayer = null;
         _readyToThrow = false;
     }
 
@@ -151,7 +167,9 @@ public class Throwable : Grabbable
 
     protected override void OnObserversDrop(NetworkObject playerNetObj)
     {
-        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        // Use the cached _holdingPlayer instead of re-resolving playerNetObj
+        // — same reasoning as Grabbable.OnObserversDrop.
+        PlayerObject player = _holdingPlayer;
         if (player == null) return;
 
         var nt = GetComponent<NetworkTransform>();
@@ -160,6 +178,7 @@ public class Throwable : Grabbable
         _rigidbody.isKinematic = false;
         transform.SetParent(null);
         player.SetHeldObject(null);
+        _holdingPlayer = null;
         _readyToThrow = false;
     }
 }

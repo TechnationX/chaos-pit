@@ -86,8 +86,16 @@ public class Cue : Grabbable
         ServerGrab(player);
     }
 
-    private void Update()
+    // Was a plain `private void Update()` — changed to `protected override`
+    // calling base.Update() so Grabbable's per-frame held-state polling
+    // (ApplyHeldVisualState) still runs for Cue instances instead of being
+    // hidden by this override. Same fix already applied to Throwable.cs;
+    // Cue.cs was missed the first time since it extends Grabbable directly
+    // rather than Throwable.
+    protected override void Update()
     {
+        base.Update();
+
         if (!_isHeld || _holdingPlayer == null) return;
         if (!_holdingPlayer.IsOwner) return;
 

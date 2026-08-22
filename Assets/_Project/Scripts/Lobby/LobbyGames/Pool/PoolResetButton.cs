@@ -56,7 +56,11 @@ public class PoolResetButton : NetworkBehaviour, IInteractable
 
     public void OnInteract(PlayerObject player)
     {
-        if (!IsServerInitialized) return;
+        // No IsServerInitialized gate here — this must be callable by ANY
+        // client's local interaction, same as Pushable/Grabbable. The old
+        // gate checked whether the PRESSING player's own machine was the
+        // server, which is only ever true for host — so a client's press
+        // was silently dropped before the ServerRpc below even fired.
         ServerActivate();
     }
 

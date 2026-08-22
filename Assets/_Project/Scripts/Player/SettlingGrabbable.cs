@@ -74,16 +74,21 @@ public class SettlingGrabbable : Grabbable
     // intercept just that one line.
     protected override void OnObserversDrop(NetworkObject playerNetObj)
     {
-        PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
+        // Use the already-cached _holdingPlayer instead of re-resolving
+        // playerNetObj — same reasoning as Grabbable.OnObserversDrop. This
+        // was the actual cause of the rack getting stuck in a client's
+        // hand: when the re-resolve failed, this whole method no-opped
+        // before reaching transform.SetParent(null), so the rack just
+        // stayed parented to the hand socket forever.
+        PlayerObject player = _holdingPlayer;
         if (player == null) return;
-
-        _holdingPlayer = player;
 
         var nt = GetComponent<NetworkTransform>();
         if (nt != null) nt.enabled = true;
 
         transform.SetParent(null);
         player.SetHeldObject(null);
+        _holdingPlayer = null;
 
         StopAllCoroutines();
         StartCoroutine(SettleRoutine());
@@ -94,7 +99,8 @@ public class SettlingGrabbable : Grabbable
         Vector3 startPos = transform.position;
         Vector3 targetPos;
 
-        if (Physics.Raycast(startPos, Vector3.down, out RaycastHit hit, _settleMaxDropDistance, _settleGroundLayer, QueryTriggerInteraction.Ignore))
+        bool hitGround = Physics.Raycast(startPos, Vector3.down, out RaycastHit hit, _settleMaxDropDistance, _settleGroundLayer, QueryTriggerInteraction.Ignore);
+        if (hitGround)
             targetPos = hit.point + Vector3.up * _settleRestOffset;
         else
             targetPos = startPos + Vector3.down * _settleMaxDropDistance; // fallback so it never just hangs in midair

@@ -562,6 +562,10 @@ public class LobbySpawner : MonoBehaviour
     // that list isn't updated by PoolPocket, so it always reflects every
     // ball from the setup that's currently live), so nothing gets left
     // behind floating in the holding rack after a mode switch.
+    //
+    // Validates synchronously, then hands off to a coroutine (below) that
+    // does the actual despawn/spawn work spread across multiple frames —
+    // see SwitchPoolPatternRoutine for why.
     public void SwitchPoolPattern(int setupIndex, int patternIndex)
     {
         if (_poolSetups == null || setupIndex < 0 || setupIndex >= _poolSetups.Count)
@@ -582,6 +586,32 @@ public class LobbySpawner : MonoBehaviour
             return;
         }
 
+        // Stop any switch already in progress for this setup before starting
+        // a new one — otherwise two overlapping coroutines could both end up
+        // despawning/spawning against the same instance.SpawnedNumberedBalls
+        // list at once.
+        if (instance.ActiveSwitchRoutine != null)
+            StopCoroutine(instance.ActiveSwitchRoutine);
+        instance.ActiveSwitchRoutine = StartCoroutine(SwitchPoolPatternRoutine(instance, setup, patternIndex, setupIndex));
+    }
+
+    // Does the actual despawn-old/spawn-new work for SwitchPoolPattern, one
+    // ball per frame instead of firing every Despawn()/Spawn() in a single
+    // synchronous burst. A full re-rack can mean up to ~30 reliable network
+    // messages at once (15 despawns + 15 spawns + the rack's ForceReset
+    // broadcast + the cue ball's reset broadcast) — bursting all of that in
+    // one server frame was found to reliably stall a connected client:
+    // the client would receive NONE of it (confirmed via PoolBall's
+    // OnStartNetwork/OnStopNetwork never firing on that client), and —
+    // notably — grab/drop RPCs for completely unrelated props would then
+    // also stop working for that same client afterward, which points at the
+    // reliable channel getting stuck/backed up rather than any single
+    // message being malformed. Spreading the same work across multiple
+    // frames avoids the burst entirely. Duplicates SpawnRackedBalls()'s spawn
+    // loop rather than reusing it, since that helper runs synchronously and
+    // has no way to yield mid-loop.
+    private IEnumerator SwitchPoolPatternRoutine(PoolSetupInstance instance, PoolSetupConfig setup, int patternIndex, int setupIndex)
+    {
         // Rack back to its spawn spot — a pattern switch starts a fresh
         // rack, not wherever a player last left it.
         instance.SpawnedRack.ForceReset();
@@ -597,16 +627,55 @@ public class LobbySpawner : MonoBehaviour
                 NetworkObject ballNetObj = ball.GetComponent<NetworkObject>();
                 if (ballNetObj != null && ballNetObj.IsSpawned)
                     InstanceFinder.ServerManager.Despawn(ballNetObj);
+                yield return null;
             }
         }
 
         PoolRackPattern pattern = setup.Patterns[patternIndex];
-        List<PoolBall> rackedBalls = SpawnRackedBalls(instance, setup, instance.SpawnedRack.gameObject, pattern);
+        List<PoolBall> rackedBalls = new List<PoolBall>();
+
+        foreach (var assignment in pattern.SlotAssignments)
+        {
+            if (string.IsNullOrEmpty(assignment.SlotName))
+            {
+                Debug.LogWarning($"[LobbySpawner] Pool setup '{setup.SetupLabel}' pattern '{pattern.PatternName}' has a slot assignment with no SlotName set.");
+                continue;
+            }
+            if (assignment.BallPrefab == null)
+            {
+                Debug.LogWarning($"[LobbySpawner] Pool setup '{setup.SetupLabel}' pattern '{pattern.PatternName}' slot '{assignment.SlotName}' has no BallPrefab assigned.");
+                continue;
+            }
+            Transform runtimeSlot = instance.SpawnedRack.transform.Find(assignment.SlotName);
+            if (runtimeSlot == null)
+            {
+                Debug.LogWarning($"[LobbySpawner] Pool setup '{setup.SetupLabel}' — couldn't find a child named '{assignment.SlotName}' on the spawned rack. Check spelling/casing against RackPrefab's Hierarchy.");
+                continue;
+            }
+            GameObject ball = Instantiate(assignment.BallPrefab, runtimeSlot.position, runtimeSlot.rotation, _propParent);
+            ball.transform.localScale = assignment.Scale;
+            ball.name = $"{setup.SetupLabel}_{runtimeSlot.name}";
+            NetworkObject ballNetObj = ball.GetComponent<NetworkObject>();
+            if (ballNetObj != null)
+                InstanceFinder.ServerManager.Spawn(ballNetObj);
+
+            PoolBall poolBall = ball.GetComponent<PoolBall>();
+            if (poolBall != null)
+            {
+                poolBall.ServerSetLocked(true);
+                rackedBalls.Add(poolBall);
+            }
+
+            yield return null;
+        }
+
         instance.SpawnedRack.SetRackedBalls(rackedBalls);
         instance.SpawnedNumberedBalls = rackedBalls;
 
         // Fresh rack means a fresh break — cue ball goes back to its spot too.
         ResetCueBall(setupIndex);
+
+        instance.ActiveSwitchRoutine = null;
     }
 }
 
@@ -662,6 +731,12 @@ public class PoolSetupInstance
     [System.NonSerialized] public PoolRackGrabbable SpawnedRack;
     [System.NonSerialized] public CueBall SpawnedCueBall;
     [System.NonSerialized] public List<PoolBall> SpawnedNumberedBalls = new List<PoolBall>();
+
+    // Tracks the in-progress SwitchPoolPattern coroutine, if any — lets a
+    // re-press stop a still-running switch cleanly instead of letting two
+    // coroutines overlap against the same ball list. See
+    // LobbySpawner.SwitchPoolPatternRoutine.
+    [System.NonSerialized] public Coroutine ActiveSwitchRoutine;
 }
 
 [System.Serializable]
