@@ -16,6 +16,8 @@ public class LobbySpawner : MonoBehaviour
     [SerializeField] private List<PropSetupInstance> _propSetups;
     [Tooltip("Pool rack setups — the rack prefab (e.g. BillardBall_Triangle) supplies its own numbered ball-slot children, unlike the piece-list based Prop Setups above.")]
     [SerializeField] private List<PoolSetupInstance> _poolSetups;
+    [Tooltip("Bowling lane setups — pins are generated procedurally from a head-pin anchor + spacing rather than authored per-slot like the pool rack, see BowlingPinConfig.")]
+    [SerializeField] private List<BowlingLaneInstance> _bowlingLanes;
     [Header("Parents")]
     [SerializeField] private Transform _furnitureParent;
     [SerializeField] private Transform _propParent;
@@ -63,6 +65,7 @@ public class LobbySpawner : MonoBehaviour
             SpawnProps();
             SpawnPropSetups();
             SpawnPoolSetups();
+            SpawnBowlingSetups();
             RegisterSpawnListener();
             InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
         }
@@ -83,6 +86,7 @@ public class LobbySpawner : MonoBehaviour
             SpawnProps();
             SpawnPropSetups();
             SpawnPoolSetups();
+            SpawnBowlingSetups();
             RegisterSpawnListener();
             InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
         }
@@ -94,6 +98,18 @@ public class LobbySpawner : MonoBehaviour
     private void Awake()
     {
         Instance = this;
+    }
+    private void Update()
+    {
+        // Only the server drives pin hiding — same guard SpawnFurniture()
+        // etc. rely on indirectly via Start()'s ServerManager.Started check,
+        // since LobbySpawner is a plain MonoBehaviour (not a
+        // NetworkBehaviour) and exists on every peer, not just the server.
+        if (InstanceFinder.ServerManager == null || !InstanceFinder.ServerManager.Started) return;
+        if (_bowlingLanes == null) return;
+
+        foreach (var lane in _bowlingLanes)
+            UpdateBowlingPinGroupHide(lane);
     }
     public void PreRegisterConnection(NetworkConnection conn)
     {
@@ -109,6 +125,7 @@ public class LobbySpawner : MonoBehaviour
         SpawnProps();
         SpawnPropSetups();
         SpawnPoolSetups();
+        SpawnBowlingSetups();
         RegisterSpawnListener();
         InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
     }
@@ -677,6 +694,251 @@ public class LobbySpawner : MonoBehaviour
 
         instance.ActiveSwitchRoutine = null;
     }
+
+    // --- Bowling Setups (pins generated procedurally from a head-pin anchor + spacing) ---
+
+    // Standard bowling triangle, local (row, col) grid indexed 0-9 in
+    // standard pin numbering order (see BowlingPinConfig's class comment).
+    // Row 0 = pin 1 nearest the head anchor, row 3 = the back row.
+    private static readonly (int row, int col)[] _bowlingPinSlotGrid = new (int, int)[]
+    {
+        (0, 0),                         // 0 = pin 1
+        (1, 0), (1, 1),                 // 1 = pin 2,  2 = pin 3
+        (2, 0), (2, 1), (2, 2),         // 3 = pin 4,  4 = pin 5,  5 = pin 6
+        (3, 0), (3, 1), (3, 2), (3, 3), // 6 = pin 7,  7 = pin 8,  8 = pin 9,  9 = pin 10
+    };
+
+    // Local offset (relative to HeadPinAnchor, +Z down the lane) for a given
+    // slot index. Row spacing uses the equilateral-triangle height
+    // (spacing * sqrt(3)/2) so each row nests properly behind the one in
+    // front instead of sitting in a plain square grid.
+    private Vector3 GetBowlingPinSlotLocalOffset(int slotIndex, float spacing)
+    {
+        (int row, int col) = _bowlingPinSlotGrid[slotIndex];
+        float rowSpacing = spacing * Mathf.Sqrt(3f) * 0.5f;
+        float x = (col - row * 0.5f) * spacing;
+        float z = row * rowSpacing;
+        return new Vector3(x, 0f, z);
+    }
+
+    private void SpawnBowlingSetups()
+    {
+        if (_bowlingLanes == null) return;
+        foreach (var lane in _bowlingLanes)
+            StartCoroutine(SpawnBowlingLaneRoutine(lane));
+    }
+
+    // Spreads the one-time pin + ball spawn across frames — not because a
+    // single lane's ~13 spawns are likely to stall a channel on their own
+    // (SwitchPoolPattern's burst was closer to 30 in one frame), but because
+    // multiple lanes spawning simultaneously at scene start compounds, and
+    // this only runs once per lane ever, so the extra frames cost nothing.
+    private IEnumerator SpawnBowlingLaneRoutine(BowlingLaneInstance lane)
+    {
+        if (lane.HeadPinAnchor == null || lane.PinPrefab == null || lane.PinConfig == null)
+        {
+            Debug.LogWarning($"[LobbySpawner] Bowling lane '{lane.LaneLabel}' is missing HeadPinAnchor/PinPrefab/PinConfig — skipping.");
+            yield break;
+        }
+
+        lane.SpawnedPins.Clear();
+        for (int i = 0; i < _bowlingPinSlotGrid.Length; i++)
+        {
+            Vector3 localOffset = GetBowlingPinSlotLocalOffset(i, lane.PinSpacing);
+            Vector3 worldPos = lane.HeadPinAnchor.position + lane.HeadPinAnchor.rotation * localOffset;
+            Quaternion worldRot = lane.HeadPinAnchor.rotation;
+
+            GameObject pinObj = Instantiate(lane.PinPrefab, worldPos, worldRot, _propParent);
+            pinObj.transform.localScale = lane.PinScale;
+            pinObj.name = $"{lane.LaneLabel}_Pin_{i}";
+            NetworkObject netObj = pinObj.GetComponent<NetworkObject>();
+            if (netObj != null)
+                InstanceFinder.ServerManager.Spawn(netObj);
+
+            Pin pin = pinObj.GetComponent<Pin>();
+            if (pin != null)
+            {
+                pin.SetSlotTransform(worldPos, worldRot);
+                lane.SpawnedPins.Add(pin);
+            }
+            else
+            {
+                Debug.LogWarning($"[LobbySpawner] Bowling lane '{lane.LaneLabel}' PinPrefab has no Pin component.");
+            }
+
+            yield return null;
+        }
+
+        // Balls spawn once and are never despawned — each roll just resets
+        // the ball that was thrown back to its own holder anchor (see
+        // BowlingBall.ServerRegisterRollComplete).
+        lane.SpawnedBalls.Clear();
+        if (lane.BallSlots != null)
+        {
+            foreach (var ballSlot in lane.BallSlots)
+            {
+                if (ballSlot.BallPrefab == null || ballSlot.HolderAnchor == null)
+                {
+                    Debug.LogWarning($"[LobbySpawner] Bowling lane '{lane.LaneLabel}' has a ball slot missing BallPrefab or HolderAnchor — skipping.");
+                    continue;
+                }
+
+                GameObject ballObj = Instantiate(ballSlot.BallPrefab, ballSlot.HolderAnchor.position, ballSlot.HolderAnchor.rotation, _propParent);
+                ballObj.transform.localScale = ballSlot.Scale;
+                ballObj.name = $"{lane.LaneLabel}_{ballSlot.BallPrefab.name}";
+                NetworkObject ballNetObj = ballObj.GetComponent<NetworkObject>();
+                if (ballNetObj != null)
+                    InstanceFinder.ServerManager.Spawn(ballNetObj);
+
+                BowlingBall ball = ballObj.GetComponent<BowlingBall>();
+                if (ball != null)
+                {
+                    // Both are scene references (an anchor Transform and a
+                    // BowlingGameController) that the ball prefab itself
+                    // can't hold — assigned here in code instead. See the
+                    // field comments on BowlingBall.
+                    ball.SetHolderAnchor(ballSlot.HolderAnchor);
+                    ball.SetGameController(lane.GameController);
+                    lane.SpawnedBalls.Add(ball);
+                }
+                else
+                    Debug.LogWarning($"[LobbySpawner] Bowling lane '{lane.LaneLabel}' ball prefab has no BowlingBall component.");
+
+                yield return null;
+            }
+        }
+
+        ApplyBowlingPattern(lane, GetActiveBowlingPatternIndex(lane.PinConfig));
+
+        // Signals BowlingGameController.ServerStartGameRoutine that this
+        // lane is actually fully spawned AND racked — not just "has at
+        // least one pin," which is all a pin-count check could tell it
+        // while this coroutine is still mid-spawn across frames.
+        lane.IsSetupComplete = true;
+    }
+
+    // Hides every fallen pin in a lane together, timed from whichever pin
+    // fell LAST rather than each pin's own fall time — without this, pins
+    // vanish one at a time as their individual fall is confirmed, which
+    // looks staggered/random for a multi-pin hit. Any time a NEW pin joins
+    // the "awaiting hide" group this frame, the countdown restarts; once it
+    // elapses with no new falls, every awaiting pin in the lane hides at once.
+    private void UpdateBowlingPinGroupHide(BowlingLaneInstance lane)
+    {
+        if (lane.SpawnedPins == null || lane.SpawnedPins.Count == 0) return;
+
+        int awaitingCount = 0;
+        foreach (Pin pin in lane.SpawnedPins)
+            if (pin != null && pin.IsAwaitingHide) awaitingCount++;
+
+        if (awaitingCount == 0)
+        {
+            lane.LastAwaitingHideCount = 0;
+            return;
+        }
+
+        if (awaitingCount > lane.LastAwaitingHideCount)
+            lane.PinHideTimer = lane.PinGroupHideDelay;
+
+        lane.LastAwaitingHideCount = awaitingCount;
+
+        lane.PinHideTimer -= Time.deltaTime;
+        if (lane.PinHideTimer <= 0f)
+        {
+            foreach (Pin pin in lane.SpawnedPins)
+                if (pin != null && pin.IsAwaitingHide) pin.ServerHideNow();
+            lane.LastAwaitingHideCount = 0;
+        }
+    }
+
+    private int GetActiveBowlingPatternIndex(BowlingPinConfig config)
+    {
+        if (config == null || config.Patterns == null || config.Patterns.Count == 0) return -1;
+        return config.RandomizePattern
+            ? Random.Range(0, config.Patterns.Count)
+            : Mathf.Clamp(config.ActivePatternIndex, 0, config.Patterns.Count - 1);
+    }
+
+    // Sets every pin in this lane standing or hidden according to which
+    // slots the given pattern includes — never despawns/spawns a pin, just
+    // toggles existing ones. Direct application of the pool-table lesson:
+    // where SwitchPoolPattern had to despawn/respawn because ball prefabs
+    // and counts vary by pattern, every bowling pattern uses the SAME 10
+    // physical pin objects, so a pattern switch is pure state toggling with
+    // zero network spawn/despawn calls — there's no burst to spread across
+    // frames here because there's no burst-prone work to begin with.
+    private void ApplyBowlingPattern(BowlingLaneInstance lane, int patternIndex)
+    {
+        if (lane.PinConfig == null || lane.PinConfig.Patterns == null ||
+            patternIndex < 0 || patternIndex >= lane.PinConfig.Patterns.Count)
+        {
+            Debug.LogWarning($"[LobbySpawner] Bowling lane '{lane.LaneLabel}' — invalid pattern index {patternIndex}.");
+            return;
+        }
+
+        BowlingPinPattern pattern = lane.PinConfig.Patterns[patternIndex];
+        HashSet<int> activeSlots = new HashSet<int>(pattern.ActiveSlotIndices);
+
+        // Tracked so BowlingGameController (and eventually the scoreboard
+        // UI) can know which pattern is actually racked right now without
+        // re-deriving it — every path that changes the rack (initial spawn,
+        // frame reset, an explicit pattern switch) all funnel through here.
+        lane.ActivePatternIndex = patternIndex;
+
+        for (int i = 0; i < lane.SpawnedPins.Count; i++)
+        {
+            Pin pin = lane.SpawnedPins[i];
+            if (pin == null) continue;
+
+            if (activeSlots.Contains(i))
+                pin.ServerSetStanding();
+            else
+                pin.ServerSetHidden();
+        }
+    }
+
+    // --- Bowling Reset (called by a future BowlingResetStation / end-of-frame logic) ---
+    // No [Server] attribute for the same reason as the pool reset methods —
+    // LobbySpawner is a plain MonoBehaviour; callers confirm IsServerInitialized.
+
+    /// Re-racks a lane under whichever pattern is currently configured as
+    /// active on its PinConfig (or picks a new random one if RandomizePattern
+    /// is set) — used for "new frame" resets. Pure state toggling, no
+    /// coroutine needed since there's no spawn/despawn involved (see
+    /// ApplyBowlingPattern).
+    public void ResetBowlingLane(int laneIndex)
+    {
+        if (_bowlingLanes == null || laneIndex < 0 || laneIndex >= _bowlingLanes.Count)
+        {
+            Debug.LogWarning($"[LobbySpawner] ResetBowlingLane — invalid lane index {laneIndex}.");
+            return;
+        }
+        BowlingLaneInstance lane = _bowlingLanes[laneIndex];
+        ApplyBowlingPattern(lane, GetActiveBowlingPatternIndex(lane.PinConfig));
+    }
+
+    /// Switches a lane to a specific pattern by index (e.g. a player-facing
+    /// button choosing "Big Four" for a practice round) rather than whatever
+    /// PinConfig currently has configured as active/random.
+    public void SwitchBowlingPattern(int laneIndex, int patternIndex)
+    {
+        if (_bowlingLanes == null || laneIndex < 0 || laneIndex >= _bowlingLanes.Count)
+        {
+            Debug.LogWarning($"[LobbySpawner] SwitchBowlingPattern — invalid lane index {laneIndex}.");
+            return;
+        }
+        ApplyBowlingPattern(_bowlingLanes[laneIndex], patternIndex);
+    }
+
+    // Used by BowlingGameController to find its lane's spawned pins/balls —
+    // same purpose and pattern as GetHoldingRack() above, just index-based
+    // since bowling lanes aren't 1:1 with a single scene setup the way the
+    // pool table is.
+    public BowlingLaneInstance GetBowlingLane(int laneIndex)
+    {
+        if (_bowlingLanes == null || laneIndex < 0 || laneIndex >= _bowlingLanes.Count) return null;
+        return _bowlingLanes[laneIndex];
+    }
 }
 
 [System.Serializable]
@@ -745,5 +1007,66 @@ public class PoolCueSlot
     public GameObject CuePrefab;
     [Tooltip("Scene Transform marking where this cue spawns — e.g. a spot on a wall-mounted cue rack.")]
     public Transform Anchor;
+    public Vector3 Scale = Vector3.one;
+}
+
+[System.Serializable]
+public class BowlingLaneInstance
+{
+    [Header("Identity")]
+    public string LaneLabel;
+
+    [Header("Pin Deck")]
+    [Tooltip("Pattern data — which of the 10 standard slots are active. See BowlingPinConfig's class comment for the index-to-pin map.")]
+    public BowlingPinConfig PinConfig;
+    [Tooltip("Empty Transform positioned exactly where the #1 (head) pin sits, with local forward pointing down the lane toward the back row. All 10 pin positions are generated from this.")]
+    public Transform HeadPinAnchor;
+    public GameObject PinPrefab;
+    [Tooltip("Distance between adjacent pin centers. Standard bowling spacing is 0.3048m (12 inches) — tune to match your pin prefab's actual footprint.")]
+    public float PinSpacing = 0.3048f;
+    public Vector3 PinScale = Vector3.one;
+
+    [Header("Balls")]
+    [Tooltip("One entry per ball — prefab plus the anchor it returns to after a roll.")]
+    public List<BowlingBallSlot> BallSlots = new List<BowlingBallSlot>();
+
+    [Header("Scoring")]
+    [Tooltip("Optional — the scene BowlingGameController scoring this lane. Pushed onto each spawned ball at spawn time (see SpawnBowlingLaneRoutine) since a ball prefab can't hold a scene reference directly. Leave unassigned for a pure free-play lane with no scoring.")]
+    public BowlingGameController GameController;
+
+    [Header("Pin Cleanup")]
+    [Tooltip("Seconds after the LAST pin falls before every fallen pin in this lane disappears together — see LobbySpawner.UpdateBowlingPinGroupHide(). Replaces the old per-pin disappear delay so pins don't vanish one at a time in a staggered order.")]
+    public float PinGroupHideDelay = 2f;
+
+    // Runtime-only, populated by SpawnBowlingLaneRoutine() — used by
+    // ApplyBowlingPattern()/ResetBowlingLane()/SwitchBowlingPattern() so
+    // they don't need to re-discover the spawned pins/balls each time.
+    [System.NonSerialized] public List<Pin> SpawnedPins = new List<Pin>();
+    [System.NonSerialized] public List<BowlingBall> SpawnedBalls = new List<BowlingBall>();
+
+    // Set true only once SpawnBowlingLaneRoutine has fully finished — pins
+    // AND balls spawned, pattern applied. BowlingGameController waits on
+    // this rather than just "SpawnedPins.Count > 0," which could be true
+    // mid-spawn with the rack only partially set up (see the first-roll
+    // 0-pins bug this fixed).
+    [System.NonSerialized] public bool IsSetupComplete;
+
+    // Set by ApplyBowlingPattern() every time this lane's rack changes
+    // (initial spawn, frame reset, or an explicit pattern switch) — tracks
+    // which BowlingPinConfig.Patterns entry is actually racked right now.
+    // -1 until the first pattern is applied.
+    [System.NonSerialized] public int ActivePatternIndex = -1;
+
+    // Runtime-only state for UpdateBowlingPinGroupHide()'s countdown.
+    [System.NonSerialized] public float PinHideTimer;
+    [System.NonSerialized] public int LastAwaitingHideCount;
+}
+
+[System.Serializable]
+public class BowlingBallSlot
+{
+    public GameObject BallPrefab;
+    [Tooltip("Where this ball spawns and returns to after each roll.")]
+    public Transform HolderAnchor;
     public Vector3 Scale = Vector3.one;
 }
