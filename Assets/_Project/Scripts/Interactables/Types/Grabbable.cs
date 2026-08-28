@@ -233,6 +233,10 @@ public class Grabbable : NetworkBehaviour, IInteractable
         AudioClip clip = _impactClips[Random.Range(0, _impactClips.Length)];
         float volume = Mathf.Clamp01(impactSpeed / 10f); // harder hits = louder, capped at 1
 
-        AudioManager.Instance?.PlaySFXVaried(clip, 0.05f);
+        // Was PlaySFXVaried (non-positional — every player heard this at the
+        // same volume regardless of distance/room). PlaySFXAtPosition gives
+        // it real 3D falloff instead; this also finally wires up `volume`
+        // above, which was computed but never used.
+        AudioManager.Instance?.PlaySFXAtPosition(clip, transform.position, 0.05f, volume);
     }
 }

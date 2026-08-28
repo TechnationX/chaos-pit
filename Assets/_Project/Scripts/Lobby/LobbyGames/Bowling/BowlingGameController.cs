@@ -33,6 +33,12 @@ using UnityEngine;
 /// Wired to a ball via BowlingBall's optional _gameController field —
 /// leave that unassigned on any lane meant to stay pure free-play with no
 /// scoring.
+///
+/// Once every player finishes, the lane doesn't just sit there — after
+/// _winnerScreenDuration (so BowlingScoreboardText has time to show a
+/// winner screen), ServerFinishGameRoutine auto-resets: same roster,
+/// scores cleared, pins re-racked, back to WAITING. An explicit Start
+/// press is still required to actually begin the rematch.
 /// </summary>
 public class BowlingGameController : NetworkBehaviour
 {
@@ -49,6 +55,14 @@ public class BowlingGameController : NetworkBehaviour
 
     [Tooltip("Seconds to wait after a roll completes before counting standing pins — gives any still-toppling pins time to be confirmed fallen (Pin's own ReportPossibleFall/angle-check settling happens within this window). Tune per-lane in the Inspector if 5s is too long/short.")]
     [SerializeField] private float _pinSettleDelay = 5f;
+
+    [Tooltip("Seconds to show the winner/final-standings screen after the last roll before automatically resetting the lane for a new game — same roster, scores cleared, pins re-racked, but still WAITING until someone presses Start again (see ServerFinishGameRoutine).")]
+    [SerializeField] private float _winnerScreenDuration = 10f;
+
+    [Tooltip("Short stinger played at this lane's position the instant the winner screen appears (see ObserversPlayCelebration) — every client runs this locally, but it's 3D/distance-limited like the other bowling SFX, not a flat broadcast, so other rooms don't hear it. Keep it at or under Winner Screen Duration above — a longer clip gets cut short by the auto-reset, and a console warning fires if it's mismatched during testing.")]
+    [SerializeField] private AudioClip _celebrationClip;
+    [Tooltip("Max distance the celebration stinger carries — wider than a single pin-hit/ball-impact sound (see AudioManager's default SFX falloff) since this marks a whole game ending, not one small physical event.")]
+    [SerializeField] private float _celebrationMaxDistance = 30f;
 
     // Cycled through by BowlingPanelButton's CycleFrameCount action, one
     // step per press (no dropdown to pick from directly — see
@@ -107,6 +121,13 @@ public class BowlingGameController : NetworkBehaviour
     /// Live frame count — for BowlingPanelText to display as "Frames: N".
     public int FrameCount => _frameCount.Value;
 
+    /// How long the winner screen stays up before auto-resetting — read by
+    /// BowlingScoreboardText if it wants to show/estimate a countdown.
+    /// Plain field, not a SyncVar: this is a scene-placed, Inspector-set
+    /// config value baked into the saved scene, identical on every peer
+    /// already, not something that changes at runtime.
+    public float WinnerScreenDuration => _winnerScreenDuration;
+
     /// Pin count of the currently-selected pattern — for BowlingPanelText
     /// to display as "Pins: N". Returns 0 if nothing's resolved yet.
     public int PinCount
@@ -118,6 +139,23 @@ public class BowlingGameController : NetworkBehaviour
             if (lane?.PinConfig?.Patterns == null || patternIndex < 0 || patternIndex >= lane.PinConfig.Patterns.Count)
                 return 0;
             return lane.PinConfig.Patterns[patternIndex].ActiveSlotIndices.Count;
+        }
+    }
+
+    /// Name of the currently-selected pin pattern (e.g. "Full Rack",
+    /// whatever PatternName is set to in BowlingPinConfig) — for
+    /// BowlingPanelText to display as "Layout: N" instead of just a pin
+    /// count. Same lookup as PinCount, just reading PatternName instead of
+    /// ActiveSlotIndices.Count. Returns "" if nothing's resolved yet.
+    public string PatternName
+    {
+        get
+        {
+            BowlingLaneInstance lane = LobbySpawner.Instance?.GetBowlingLane(_laneIndex);
+            int patternIndex = _selectedPatternIndex.Value;
+            if (lane?.PinConfig?.Patterns == null || patternIndex < 0 || patternIndex >= lane.PinConfig.Patterns.Count)
+                return "";
+            return lane.PinConfig.Patterns[patternIndex].PatternName;
         }
     }
 
@@ -206,12 +244,12 @@ public class BowlingGameController : NetworkBehaviour
 
         if (_players.Count >= _maxPlayers)
         {
-            Debug.LogWarning($"[BowlingGameController] Lane {_laneIndex}: {player.PlayerName} tried to join, but the lane is full ({_maxPlayers} max).");
+            Debug.LogWarning($"[BowlingGameController] Lane {_laneIndex}: {GetDisplayName(player)} tried to join, but the lane is full ({_maxPlayers} max).");
             return;
         }
 
         _players.Add(new BowlingPlayerEntry { Player = player, IsFinished = false });
-        Debug.Log($"[BowlingGameController] Lane {_laneIndex}: {player.PlayerName} joined ({_players.Count}/{_maxPlayers} player(s) so far).");
+        Debug.Log($"[BowlingGameController] Lane {_laneIndex}: {GetDisplayName(player)} joined ({_players.Count}/{_maxPlayers} player(s) so far).");
         RebuildScoreboardSnapshot();
     }
 
@@ -226,7 +264,7 @@ public class BowlingGameController : NetworkBehaviour
         int removedCount = _players.RemoveAll(p => p.Player == player);
         if (removedCount > 0)
         {
-            Debug.Log($"[BowlingGameController] Lane {_laneIndex}: {player.PlayerName} left ({_players.Count}/{_maxPlayers} player(s) remaining).");
+            Debug.Log($"[BowlingGameController] Lane {_laneIndex}: {GetDisplayName(player)} left ({_players.Count}/{_maxPlayers} player(s) remaining).");
             RebuildScoreboardSnapshot();
         }
     }
@@ -241,7 +279,7 @@ public class BowlingGameController : NetworkBehaviour
 
         if (!_players.Exists(p => p.Player == player))
         {
-            Debug.LogWarning($"[BowlingGameController] Lane {_laneIndex}: {player.PlayerName} tried to start, but hasn't joined.");
+            Debug.LogWarning($"[BowlingGameController] Lane {_laneIndex}: {GetDisplayName(player)} tried to start, but hasn't joined.");
             return;
         }
 
@@ -320,7 +358,7 @@ public class BowlingGameController : NetworkBehaviour
         _standingPinsBeforeRoll = CountStandingPins();
         RebuildScoreboardSnapshot();
 
-        Debug.Log($"[BowlingGameController] Lane {_laneIndex}: game started — {_players.Count} player(s), {_frameCount.Value} frames. {_players[0].Player.PlayerName} goes first.");
+        Debug.Log($"[BowlingGameController] Lane {_laneIndex}: game started — {_players.Count} player(s), {_frameCount.Value} frames. {GetDisplayName(_players[0].Player)} goes first.");
     }
 
     /// Called by BowlingBall.ServerRegisterRollComplete() when a ball on
@@ -349,12 +387,14 @@ public class BowlingGameController : NetworkBehaviour
         {
             current.IsFinished = true;
             int? finalScore = current.Scorer.GetCurrentTotal();
-            Debug.Log($"[BowlingGameController] Lane {_laneIndex}: {current.Player.PlayerName} finished — final score {(finalScore.HasValue ? finalScore.Value.ToString() : "pending")}.");
+            Debug.Log($"[BowlingGameController] Lane {_laneIndex}: {GetDisplayName(current.Player)} finished — final score {(finalScore.HasValue ? finalScore.Value.ToString() : "pending")}.");
 
             if (AllPlayersFinished())
             {
                 LogFinalStandings();
                 RebuildScoreboardSnapshot(); // switches the snapshot's state to FINISHED
+                ObserversPlayCelebration();
+                StartCoroutine(ServerFinishGameRoutine());
                 return;
             }
 
@@ -372,10 +412,19 @@ public class BowlingGameController : NetworkBehaviour
             // passes to the next player, real-bowling style.
             ServerAdvanceToNextPlayer();
         }
-        else if (isLastFrame && (currentFrame.IsStrike || currentFrame.IsSpare))
+        else if (isLastFrame && standingNow == 0)
         {
-            // Bonus roll within the still-open final frame — same player
-            // keeps going, fresh full rack (real 10th-frame rules).
+            // A bonus roll within the still-open final frame just cleared
+            // the rack — re-rack fresh for the next roll (real 10th-frame
+            // rules). Deliberately checking standingNow here rather than
+            // currentFrame.IsStrike: IsStrike reflects ONLY roll 1 and
+            // never changes afterward, so checking it would re-rack fresh
+            // on every remaining bonus roll regardless of what that roll
+            // actually knocked down (e.g. strike, then a 7 that leaves 3
+            // pins standing — that 7 was wrongly getting a fresh rack too,
+            // instead of the 3 pins it actually left). standingNow == 0
+            // correctly covers every case that should re-rack: the strike
+            // itself, a second consecutive strike, and a spare completing.
             LobbySpawner.Instance.ResetBowlingLane(_laneIndex);
             _standingPinsBeforeRoll = CountStandingPins();
         }
@@ -405,7 +454,7 @@ public class BowlingGameController : NetworkBehaviour
         _standingPinsBeforeRoll = CountStandingPins();
 
         BowlingPlayerEntry next = _players[_currentPlayerIndex];
-        Debug.Log($"[BowlingGameController] Lane {_laneIndex}: {next.Player.PlayerName}'s turn — frame {next.Scorer.Frames.Count + 1}.");
+        Debug.Log($"[BowlingGameController] Lane {_laneIndex}: {GetDisplayName(next.Player)}'s turn — frame {next.Scorer.Frames.Count + 1}.");
         RebuildScoreboardSnapshot();
     }
 
@@ -416,6 +465,26 @@ public class BowlingGameController : NetworkBehaviour
         return true;
     }
 
+    // Fired once, right as the snapshot flips to FINISHED — every client
+    // runs this locally, but PlaySFXAtPosition (not the flat PlaySFX) means
+    // it's still distance-limited from this lane's position, same as the
+    // other bowling SFX — otherwise every room in the lobby would hear
+    // every lane's win stinger at full volume.
+    [ObserversRpc]
+    private void ObserversPlayCelebration()
+    {
+        if (_celebrationClip == null) return;
+
+        // Not a hard requirement — just a heads-up while tuning the clip
+        // and Winner Screen Duration together, since ServerFinishGameRoutine
+        // resets the lane at exactly _winnerScreenDuration regardless of
+        // whether the clip is still playing.
+        if (_celebrationClip.length > _winnerScreenDuration)
+            Debug.LogWarning($"[BowlingGameController] Lane {_laneIndex}: celebration clip ({_celebrationClip.length:0.0}s) is longer than Winner Screen Duration ({_winnerScreenDuration:0.0}s) — it'll be cut off by the auto-reset.");
+
+        AudioManager.Instance?.PlaySFXAtPosition(_celebrationClip, transform.position, 0f, 1f, null, _celebrationMaxDistance);
+    }
+
     private void LogFinalStandings()
     {
         StringBuilder sb = new StringBuilder();
@@ -424,10 +493,44 @@ public class BowlingGameController : NetworkBehaviour
         foreach (BowlingPlayerEntry p in _players)
         {
             int? score = p.Scorer.GetCurrentTotal();
-            sb.Append($"{p.Player.PlayerName}: {(score.HasValue ? score.Value.ToString() : "0")}  ");
+            sb.Append($"{GetDisplayName(p.Player)}: {(score.HasValue ? score.Value.ToString() : "0")}  ");
         }
 
         Debug.Log(sb.ToString());
+    }
+
+    // Was: once every player finished, the lane just sat there forever —
+    // _gameStarted never went back to false, so Join/Leave/Start all
+    // silently no-op'd (they all early-return on _gameStarted) and there
+    // was no way to play again without leaving/re-entering the lane
+    // entirely. Fix: after the winner screen has had time to show
+    // (_winnerScreenDuration), automatically reset — keep the same
+    // roster, clear scores, re-rack pins — but land back in WAITING
+    // rather than auto-starting, so a Start press is still required.
+    private IEnumerator ServerFinishGameRoutine()
+    {
+        yield return new WaitForSeconds(_winnerScreenDuration);
+        if (!IsServerInitialized) yield break; // lane could've been despawned mid-countdown
+
+        ServerResetForNewGame();
+    }
+
+    [Server]
+    private void ServerResetForNewGame()
+    {
+        _gameStarted = false;
+        _currentPlayerIndex = 0;
+
+        foreach (BowlingPlayerEntry p in _players)
+        {
+            p.Scorer = null; // BuildPlayersBlock treats a null Scorer as "no frames yet" — same as a freshly-joined player, so this reads as a clean 0
+            p.IsFinished = false;
+        }
+
+        LobbySpawner.Instance.ResetBowlingLane(_laneIndex);
+        RebuildScoreboardSnapshot(); // _gameStarted is false again, so this naturally flips the snapshot's state back to WAITING
+
+        Debug.Log($"[BowlingGameController] Lane {_laneIndex}: game reset for a rematch — same {_players.Count} player(s), scores cleared, waiting on Start.");
     }
 
     private int CountStandingPins()
@@ -439,6 +542,20 @@ public class BowlingGameController : NetworkBehaviour
         foreach (Pin pin in lane.SpawnedPins)
             if (pin != null && pin.IsStanding) count++;
         return count;
+    }
+
+    // PlayerObject.PlayerName is a stale placeholder ("Player_<clientId>")
+    // assigned once at spawn (see LobbySpawner) — it's set before the real
+    // player-chosen name even exists server-side, and nothing ever updates
+    // it afterward. The actual selected name (same one the leaderboard
+    // shows) lives on PlayerProfileSync.DisplayName, on the same
+    // GameObject as PlayerObject. Falls back to the old placeholder only
+    // if PlayerProfileSync is somehow missing, so this never throws/blanks.
+    private static string GetDisplayName(PlayerObject player)
+    {
+        PlayerProfileSync profileSync = player.GetComponent<PlayerProfileSync>();
+        string name = profileSync != null ? profileSync.DisplayName.Value : null;
+        return string.IsNullOrEmpty(name) ? player.PlayerName : name;
     }
 
     // Serializes the whole lane's scoreboard into _scoreboardSnapshot — see
@@ -470,7 +587,7 @@ public class BowlingGameController : NetworkBehaviour
             state = "PLAYING";
             BowlingPlayerEntry current = _players[_currentPlayerIndex];
             int frameNumber = GetDisplayFrameNumber(current.Scorer);
-            currentBlock = $"{SanitizeForSnapshot(current.Player.PlayerName)}:{frameNumber}";
+            currentBlock = $"{SanitizeForSnapshot(GetDisplayName(current.Player))}:{frameNumber}";
         }
 
         string snapshot = $"{state}|{currentBlock}|{BuildPlayersBlock()}";
@@ -540,7 +657,7 @@ public class BowlingGameController : NetworkBehaviour
                     frameTokens.Add($"{rolls}-{total}");
                 }
             }
-            playerBlocks.Add($"{SanitizeForSnapshot(p.Player.PlayerName)}:{string.Join(",", frameTokens)}");
+            playerBlocks.Add($"{SanitizeForSnapshot(GetDisplayName(p.Player))}:{string.Join(",", frameTokens)}");
         }
         return string.Join("~", playerBlocks);
     }
@@ -548,7 +665,7 @@ public class BowlingGameController : NetworkBehaviour
     private void LogScoreboard(BowlingPlayerEntry player, int lastRollPins)
     {
         StringBuilder sb = new StringBuilder();
-        sb.Append($"[BowlingGameController] Lane {_laneIndex} — {player.Player.PlayerName}'s roll: {lastRollPins} pins. ");
+        sb.Append($"[BowlingGameController] Lane {_laneIndex} — {GetDisplayName(player.Player)}'s roll: {lastRollPins} pins. ");
 
         foreach (FrameResult frame in player.Scorer.Frames)
         {

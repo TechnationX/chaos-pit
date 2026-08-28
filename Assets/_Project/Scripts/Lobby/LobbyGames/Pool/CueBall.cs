@@ -28,6 +28,21 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody))]
 public class CueBall : NetworkBehaviour
 {
+    // Impact SFX — no dedicated sound for hitting the rail/table felt (see
+    // OnCollisionEnter below), only cue-strike and ball-vs-ball. Lives here
+    // rather than on Cue.cs since there's only one CueBall prefab but
+    // several cue color variants — putting the clips here avoids
+    // duplicating the same clip assignment across every cue prefab.
+    [Header("Impact SFX")]
+    [Tooltip("Played when the cue strikes this ball — see Cue.OnTipTriggerEnter, which calls PlayCueStrikeSound() directly.")]
+    [SerializeField] private AudioClip[] _cueStrikeClips;
+    [Tooltip("Played when this ball collides with another ball (cue or numbered). Rail/table hits are deliberately skipped — no dedicated sound for those.")]
+    [SerializeField] private AudioClip[] _ballImpactClips;
+    [SerializeField] private float _minBallImpactVelocity = 1f;
+    [SerializeField] private float _ballImpactCooldown = 0.1f;
+
+    private float _lastBallImpactTime = -999f;
+
     private Rigidbody _rigidbody;
 
     private void Awake()
@@ -38,6 +53,49 @@ public class CueBall : NetworkBehaviour
     public void Strike(Vector3 direction, float force)
     {
         _rigidbody.AddForce(direction.normalized * force, ForceMode.Impulse);
+    }
+
+    // Called directly by Cue.OnTipTriggerEnter alongside Strike() — a single,
+    // unambiguous call site (that method already debounces to one hit per
+    // shot via _hasHitThisShot), so no cooldown/velocity gate needed here
+    // the way the ball-vs-ball case below needs one.
+    public void PlayCueStrikeSound()
+    {
+        if (_cueStrikeClips == null || _cueStrikeClips.Length == 0) return;
+        AudioClip clip = _cueStrikeClips[Random.Range(0, _cueStrikeClips.Length)];
+        AudioManager.Instance?.PlaySFXAtPosition(clip, transform.position, 0.05f);
+    }
+
+    // Ball-vs-ball impact only — anything that isn't a CueBall/PoolBall on
+    // the other side (rail, table felt) is silently skipped, which is what
+    // keeps sidewall/rail hits silent without needing a separate exclusion
+    // list. Both balls in a collision fire OnCollisionEnter independently;
+    // only the lower-InstanceID side actually plays the clip so a single
+    // hit doesn't stack two copies of the same sound on top of each other.
+    private void OnCollisionEnter(Collision collision)
+    {
+        GameObject other = ResolveOtherBall(collision.collider);
+        if (other == null) return; // rail/table felt — no dedicated sound for that
+
+        if (gameObject.GetInstanceID() > other.GetInstanceID()) return;
+
+        if (Time.time - _lastBallImpactTime < _ballImpactCooldown) return;
+        float impactSpeed = collision.relativeVelocity.magnitude;
+        if (impactSpeed < _minBallImpactVelocity) return;
+        if (_ballImpactClips == null || _ballImpactClips.Length == 0) return;
+
+        _lastBallImpactTime = Time.time;
+        AudioClip clip = _ballImpactClips[Random.Range(0, _ballImpactClips.Length)];
+        AudioManager.Instance?.PlaySFXAtPosition(clip, transform.position, 0.05f);
+    }
+
+    private static GameObject ResolveOtherBall(Collider other)
+    {
+        CueBall cueBall = other.GetComponentInParent<CueBall>();
+        if (cueBall != null) return cueBall.gameObject;
+        PoolBall poolBall = other.GetComponentInParent<PoolBall>();
+        if (poolBall != null) return poolBall.gameObject;
+        return null;
     }
 
     // Called directly by PoolPocket's server-side trigger logic (not itself

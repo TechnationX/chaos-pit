@@ -651,6 +651,8 @@ MonoBehaviour:
   musicMixerGroup: {fileID: -3128478699777308069, guid: 1b111c98884a9be4cb25d75f153724cc, type: 2}
   sfxMixerGroup: {fileID: 503615427100557720, guid: 1b111c98884a9be4cb25d75f153724cc, type: 2}
   defaultClickClip: {fileID: 8300000, guid: a5783bb260a22f046b4360a7a0bc8ae0, type: 3}
+  _defaultSFXMinDistance: 2
+  _defaultSFXMaxDistance: 15
 --- !u!1 &980644481
 GameObject:
   m_ObjectHideFlags: 0

@@ -33,6 +33,13 @@ using UnityEngine;
 /// This keeps "a ball just vanished and reappeared" a single agreed-on event
 /// across every client instead of something each client's own (possibly
 /// slightly drifted) local physics decides independently.
+///
+/// The sink sound is the exception to that server-gating: it plays directly
+/// off the same OnTriggerEnter that fires locally on every peer, same
+/// reasoning as CueBall/PoolBall's own impact sound (physics is simulated
+/// identically everywhere, so no RPC is needed just to play a local cosmetic
+/// sound in sync) — it fires before the IsServerInitialized check below, not
+/// after, so every client hears their own local trigger event.
 /// </summary>
 [RequireComponent(typeof(Collider))]
 public class PoolPocket : NetworkBehaviour
@@ -45,6 +52,12 @@ public class PoolPocket : NetworkBehaviour
 
     [Header("Timing")]
     [SerializeField] private float _resetDelay = 1.5f;
+
+    [Header("Sink SFX")]
+    [Tooltip("Random pool of clips for a ball dropping into this pocket — one is picked at random each time.")]
+    [SerializeField] private AudioClip[] _sinkClips;
+    [SerializeField] private float _sinkPitchRange = 0.05f;
+    [SerializeField] private float _sinkVolume = 1f;
 
     // Guards against double-queuing a reset if a ball briefly exits and
     // re-enters the trigger volume while already waiting on its delay.
@@ -59,9 +72,14 @@ public class PoolPocket : NetworkBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
+        CueBall cueBall = other.GetComponentInParent<CueBall>();
+        PoolBall poolBall = cueBall == null ? other.GetComponentInParent<PoolBall>() : null;
+
+        if (cueBall != null || poolBall != null)
+            PlaySinkSound();
+
         if (!IsServerInitialized) return; // physics runs on every peer, but only the server acts on it
 
-        CueBall cueBall = other.GetComponentInParent<CueBall>();
         if (cueBall != null)
         {
             if (_pendingReset.Contains(cueBall)) return;
@@ -70,13 +88,19 @@ public class PoolPocket : NetworkBehaviour
             return;
         }
 
-        PoolBall poolBall = other.GetComponentInParent<PoolBall>();
         if (poolBall != null)
         {
             if (_pendingReset.Contains(poolBall)) return;
             _pendingReset.Add(poolBall);
             StartCoroutine(ResetPoolBallAfterDelay(poolBall));
         }
+    }
+
+    private void PlaySinkSound()
+    {
+        if (_sinkClips == null || _sinkClips.Length == 0) return;
+        AudioClip clip = _sinkClips[Random.Range(0, _sinkClips.Length)];
+        AudioManager.Instance?.PlaySFXAtPosition(clip, transform.position, _sinkPitchRange, _sinkVolume);
     }
 
     private IEnumerator ResetCueBallAfterDelay(CueBall cueBall)

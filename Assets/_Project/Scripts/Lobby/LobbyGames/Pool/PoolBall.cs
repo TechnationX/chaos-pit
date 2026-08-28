@@ -24,6 +24,19 @@ public class PoolBall : NetworkBehaviour
     [Tooltip("Disable gravity once parked on the holding rack, so it stays exactly where it's placed with no floor/support needed under the slot. Rigidbody stays non-kinematic the whole time — it can still be pushed by other physics interactions, it just won't fall.")]
     [SerializeField] private bool _disableGravityWhenParked = true;
 
+    // Impact SFX — see CueBall.cs's identical block for the full reasoning
+    // (rail/table hits deliberately skipped, lower-InstanceID side plays to
+    // avoid a double-fire on one hit). No cue-strike clips here — the cue
+    // can only ever hit the cue ball (see Cue.OnTipTriggerEnter), never a
+    // numbered ball directly.
+    [Header("Impact SFX")]
+    [Tooltip("Played when this ball collides with another ball (cue or numbered). Rail/table hits are deliberately skipped — no dedicated sound for those.")]
+    [SerializeField] private AudioClip[] _ballImpactClips;
+    [SerializeField] private float _minBallImpactVelocity = 1f;
+    [SerializeField] private float _ballImpactCooldown = 0.1f;
+
+    private float _lastBallImpactTime = -999f;
+
     private Rigidbody _rigidbody;
 
     // Captured once at spawn, same pattern Grabbable uses for
@@ -96,5 +109,37 @@ public class PoolBall : NetworkBehaviour
     private void ObserversSetLocked(bool locked)
     {
         _rigidbody.isKinematic = locked;
+    }
+
+    // Ball-vs-ball impact only — anything that isn't a CueBall/PoolBall on
+    // the other side (rail, table felt) is silently skipped, which is what
+    // keeps sidewall/rail hits silent without needing a separate exclusion
+    // list. Both balls in a collision fire OnCollisionEnter independently;
+    // only the lower-InstanceID side actually plays the clip so a single
+    // hit doesn't stack two copies of the same sound on top of each other.
+    private void OnCollisionEnter(Collision collision)
+    {
+        GameObject other = ResolveOtherBall(collision.collider);
+        if (other == null) return; // rail/table felt — no dedicated sound for that
+
+        if (gameObject.GetInstanceID() > other.GetInstanceID()) return;
+
+        if (Time.time - _lastBallImpactTime < _ballImpactCooldown) return;
+        float impactSpeed = collision.relativeVelocity.magnitude;
+        if (impactSpeed < _minBallImpactVelocity) return;
+        if (_ballImpactClips == null || _ballImpactClips.Length == 0) return;
+
+        _lastBallImpactTime = Time.time;
+        AudioClip clip = _ballImpactClips[Random.Range(0, _ballImpactClips.Length)];
+        AudioManager.Instance?.PlaySFXAtPosition(clip, transform.position, 0.05f);
+    }
+
+    private static GameObject ResolveOtherBall(Collider other)
+    {
+        CueBall cueBall = other.GetComponentInParent<CueBall>();
+        if (cueBall != null) return cueBall.gameObject;
+        PoolBall poolBall = other.GetComponentInParent<PoolBall>();
+        if (poolBall != null) return poolBall.gameObject;
+        return null;
     }
 }

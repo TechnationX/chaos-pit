@@ -19,14 +19,16 @@ using UnityEngine;
 /// Add directly to a button's "Text (TMP)" object (self-references its own
 /// TextMeshProUGUI) — one instance on FrameCountButton's text with Stat set
 /// to FrameCount and Label Prefix "Frames", another on PinLayoutButton's
-/// text with Stat set to PinCount and Label Prefix "Pins".
+/// text with Stat set to PatternName and Label Prefix "Layout" (or PinCount
+/// with Label Prefix "Pins", if a raw count is preferred over the name).
 /// </summary>
 public class BowlingPanelText : MonoBehaviour
 {
     public enum DisplayStat
     {
         FrameCount,
-        PinCount
+        PinCount,
+        PatternName
     }
 
     [Tooltip("The lane's BowlingGameController to read the live value from.")]
@@ -38,8 +40,9 @@ public class BowlingPanelText : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _text;
 
     // Sentinel so the very first Update() always applies, even if the real
-    // value happens to be 0.
-    private int _lastAppliedValue = int.MinValue;
+    // value happens to be "0"/empty. Compared as text now (not just int) so
+    // the same caching works for PatternName's string value too.
+    private string _lastAppliedValue = null;
 
     private void Awake()
     {
@@ -51,7 +54,13 @@ public class BowlingPanelText : MonoBehaviour
     {
         if (_gameController == null || _text == null) return;
 
-        int value = _stat == DisplayStat.FrameCount ? _gameController.FrameCount : _gameController.PinCount;
+        string value = _stat switch
+        {
+            DisplayStat.FrameCount => _gameController.FrameCount.ToString(),
+            DisplayStat.PinCount => _gameController.PinCount.ToString(),
+            DisplayStat.PatternName => _gameController.PatternName,
+            _ => ""
+        };
         if (value == _lastAppliedValue) return;
 
         _lastAppliedValue = value;

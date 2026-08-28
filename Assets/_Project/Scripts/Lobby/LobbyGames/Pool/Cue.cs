@@ -185,6 +185,7 @@ public class Cue : Grabbable
         // Use the direction the tip is actually travelling this shot, not
         // transform.forward — see _shotWorldDirection's declaration for why.
         cueBall.Strike(_shotWorldDirection, _hitForce);
+        cueBall.PlayCueStrikeSound();
     }
 
     // Guard against a runaway thrust coroutine if the cue gets dropped mid-shot.

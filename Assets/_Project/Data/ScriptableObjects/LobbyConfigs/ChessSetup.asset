@@ -18,13 +18,13 @@ MonoBehaviour:
     Entries:
     - Label: Bishop Black 1
       Prefab: {fileID: 8126226300151574470, guid: 5b9ead6bcaab3f149996256ff6fa5baf, type: 3}
-      Type: 1
+      Type: 0
       Position: {x: 1.5, y: 0.6, z: 3.5}
       Rotation: {x: 0, y: 90, z: 0}
       Scale: {x: 1.5, y: 1.5, z: 1.5}
     - Label: Bishop Black 2
       Prefab: {fileID: 8126226300151574470, guid: 5b9ead6bcaab3f149996256ff6fa5baf, type: 3}
-      Type: 1
+      Type: 0
       Position: {x: -1.5, y: 0.6, z: 3.5}
       Rotation: {x: 0, y: 90, z: 0}
       Scale: {x: 1.5, y: 1.5, z: 1.5}

@@ -16,5 +16,9 @@ MonoBehaviour:
   Patterns:
   - PatternName: Standard 10
     ActiveSlotIndices: 00000000010000000200000003000000040000000500000006000000070000000800000009000000
+  - PatternName: Pyramid 6
+    ActiveSlotIndices: 000000000100000002000000030000000400000005000000
+  - PatternName: Split 4
+    ActiveSlotIndices: 03000000050000000600000009000000
   RandomizePattern: 0
   ActivePatternIndex: 0

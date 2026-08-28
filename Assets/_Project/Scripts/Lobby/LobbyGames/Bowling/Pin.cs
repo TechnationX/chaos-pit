@@ -23,6 +23,32 @@ public class Pin : NetworkBehaviour
     [Tooltip("Degrees off vertical before a pin reported by PinFallTrigger is confirmed fallen, rather than just wobbling near the sensor boundary.")]
     [SerializeField] private float _fallAngleThreshold = 35f;
 
+    // Same pattern as Grabbable's impact SFX (see that class's
+    // OnCollisionEnter) — played locally on whatever peer detects the
+    // collision, no server gate, since physics is simulated independently
+    // on every peer in this project. Not routed through AudioManager's
+    // single shared source's cooldown; each pin tracks its own, so a
+    // chain-reaction strike layers several pins' clatter together instead
+    // of one pin's cooldown silencing its neighbors.
+    //
+    // Two separate clip pools rather than one generic "impact" sound — a
+    // heavy ball strike and a light pin-on-pin knock don't sound the same
+    // in real bowling, and the split lets each be tuned/mixed independently.
+    // Which pool plays is decided by what's on the OTHER side of the
+    // collision (see OnCollisionEnter), resolved via GetComponentInParent
+    // the same way CueTip/PoolPocket identify what they've hit elsewhere in
+    // this project — works whether the collider sits on the same object as
+    // the component or on a child mesh.
+    [Header("Impact SFX")]
+    [Tooltip("Played when the BALL hits this pin.")]
+    [SerializeField] private AudioClip[] _ballImpactClips;
+    [Tooltip("Played when another PIN hits this pin.")]
+    [SerializeField] private AudioClip[] _pinImpactClips;
+    [SerializeField] private float _minImpactVelocity = 1.5f;
+    [SerializeField] private float _impactCooldown = 0.15f;
+
+    private float _lastImpactTime = -999f;
+
     private readonly SyncVar<bool> _isStandingSync = new SyncVar<bool>();
 
     private Rigidbody _rigidbody;
@@ -183,5 +209,44 @@ public class Pin : NetworkBehaviour
             if (rend != null) rend.enabled = standing;
 
         _rigidbody.isKinematic = !standing;
+    }
+
+    // Ball-hits-pin and pin-hits-pin pick different clip pools (see the
+    // field comment above). Anything that's neither — the lane floor, a
+    // gutter/back wall — is deliberately skipped: there's no dedicated
+    // sound for that yet, and playing a pin-hit clip for a pin settling
+    // against the floor would be wrong. Mirrors Grabbable.OnCollisionEnter's
+    // exact pattern otherwise (min velocity + per-object cooldown +
+    // AudioManager.PlaySFXAtPosition), just with its own cooldown clock per
+    // pin instead of one shared across every Grabbable.
+    //
+    // Root cause of this sound being silent for a while wasn't in this
+    // method at all — LobbySpawner's Lane R Pin Prefab field had drifted to
+    // a different, older prefab asset than this script/BowlingPin.prefab.
+    // Confirmed fixed once that field was reassigned in the Inspector.
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (Time.time - _lastImpactTime < _impactCooldown) return;
+
+        float impactSpeed = collision.relativeVelocity.magnitude;
+        if (impactSpeed < _minImpactVelocity) return;
+
+        AudioClip[] clips;
+        if (collision.collider.GetComponentInParent<BowlingBall>() != null)
+            clips = _ballImpactClips;
+        else if (collision.collider.GetComponentInParent<Pin>() != null)
+            clips = _pinImpactClips;
+        else
+            return; // floor, walls, etc. — no dedicated sound for this yet
+
+        if (clips == null || clips.Length == 0) return;
+
+        _lastImpactTime = Time.time;
+
+        AudioClip clip = clips[Random.Range(0, clips.Length)];
+        // Was PlaySFXVaried (non-positional, same volume for every player
+        // regardless of distance/room) — PlaySFXAtPosition gives this real
+        // 3D falloff instead, same reasoning as Grabbable.OnCollisionEnter.
+        AudioManager.Instance?.PlaySFXAtPosition(clip, transform.position, 0.08f);
     }
 }
