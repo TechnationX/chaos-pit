@@ -99,8 +99,14 @@ public class BowlingGameController : NetworkBehaviour
     //
     // Format: "STATE|current|playersBlock"
     //   STATE: WAITING | PLAYING | FINISHED
-    //   current: "CurrentName:FrameNum" during PLAYING, empty otherwise —
-    //     which row/frame BowlingScoreboardText should highlight.
+    //   current: "PlayerIndex:CurrentName:FrameNum" during PLAYING, empty
+    //     otherwise — which row/frame BowlingScoreboardText should
+    //     highlight. Matched by PlayerIndex (position in playersBlock, not
+    //     CurrentName) — display names aren't guaranteed unique (two guests
+    //     with no custom name both sanitize to "?"), so matching by name
+    //     could highlight every row that happens to share a name instead of
+    //     just the active player. CurrentName is kept only for the status
+    //     line's "<Name>'s turn" text.
     //   playersBlock: "~"-separated player blocks, each
     //     "Name:frameToken,frameToken,..." — one token per frame the
     //     player has actually started (not yet-reached frames are simply
@@ -587,7 +593,7 @@ public class BowlingGameController : NetworkBehaviour
             state = "PLAYING";
             BowlingPlayerEntry current = _players[_currentPlayerIndex];
             int frameNumber = GetDisplayFrameNumber(current.Scorer);
-            currentBlock = $"{SanitizeForSnapshot(GetDisplayName(current.Player))}:{frameNumber}";
+            currentBlock = $"{_currentPlayerIndex}:{SanitizeForSnapshot(GetDisplayName(current.Player))}:{frameNumber}";
         }
 
         string snapshot = $"{state}|{currentBlock}|{BuildPlayersBlock()}";

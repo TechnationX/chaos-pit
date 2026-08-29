@@ -292,13 +292,20 @@ public class BowlingScoreboardText : MonoBehaviour
         string currentPart = top[1];
         string playersPart = top[2];
 
+        // Matched by index (position in playersBlock), not name — display
+        // names aren't guaranteed unique (two guests with no custom name
+        // both sanitize to "?"), so matching by name alone could highlight
+        // every row sharing that name instead of just the active player.
+        // See the format comment on BowlingGameController._scoreboardSnapshot.
+        int currentIndex = -1;
         string currentName = null;
         int currentFrame = -1;
         if (!string.IsNullOrEmpty(currentPart))
         {
             string[] cp = currentPart.Split(':');
-            currentName = cp[0];
-            if (cp.Length > 1) int.TryParse(cp[1], out currentFrame);
+            int.TryParse(cp[0], out currentIndex);
+            if (cp.Length > 1) currentName = cp[1];
+            if (cp.Length > 2) int.TryParse(cp[2], out currentFrame);
         }
 
         List<PlayerRow> rows = ParsePlayers(playersPart);
@@ -347,7 +354,7 @@ public class BowlingScoreboardText : MonoBehaviour
 
         for (int i = 0; i < rows.Count; i++)
         {
-            CreatePlayerRow(rows[i], i, frameCount, nameWidth, frameColWidth, totalWidth, y, rowHeight, currentName, currentFrame);
+            CreatePlayerRow(rows[i], i, frameCount, nameWidth, frameColWidth, totalWidth, y, rowHeight, currentIndex, currentFrame);
             y += rowHeight;
         }
     }
@@ -370,9 +377,10 @@ public class BowlingScoreboardText : MonoBehaviour
         CreateLabel(totalFill, "Label", "TOTAL", fontSize, _headerTextColor, TextAlignmentOptions.Center, bold: true);
     }
 
-    private void CreatePlayerRow(PlayerRow row, int rowIndex, int frameCount, float nameWidth, float frameColWidth, float totalWidth, float y, float rowHeight, string currentName, int currentFrame)
+    private void CreatePlayerRow(PlayerRow row, int rowIndex, int frameCount, float nameWidth, float frameColWidth, float totalWidth, float y, float rowHeight, int currentIndex, int currentFrame)
     {
-        bool isCurrentRow = row.Name == currentName;
+        // Row position, not name — see the currentIndex comment in Rebuild().
+        bool isCurrentRow = rowIndex == currentIndex;
         float nameFontSize = rowHeight * _nameFontScale;
         float rollFontSize = rowHeight * _rollFontScale;
         float frameTotalFontSize = rowHeight * _frameTotalFontScale;

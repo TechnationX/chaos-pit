@@ -189,6 +189,30 @@ public class Pin : NetworkBehaviour
         _rigidbody.angularVelocity = Vector3.zero;
         _isStandingSync.Value = true;
         _isDown = false;
+
+        // The transform set above only ever runs on whichever machine is
+        // executing this [Server] method — on host that's the same instance
+        // players actually see, but a real remote client never gets it.
+        // Pin has no NetworkTransform (unlike CueBall/PoolBall), and
+        // _isStandingSync only drives ApplyStandingVisualState (colliders/
+        // renderers/kinematic — see Update()), never the transform itself.
+        // Without this broadcast a client's pin just gets re-enabled exactly
+        // where it was last lying, which reads as "never reset." Same
+        // [Server] + [ObserversRpc] pattern CueBall.ServerResetTo /
+        // ObserversResetTo already use for this identical problem.
+        ObserversSetStandingTransform(_slotPosition, _slotRotation);
+    }
+
+    [ObserversRpc]
+    private void ObserversSetStandingTransform(Vector3 position, Quaternion rotation)
+    {
+        // Same kinematic guard as the [Server] block above — this RPC and
+        // the _isStandingSync SyncVar change can arrive in either order, so
+        // don't assume Update()'s poll already cleared isKinematic first.
+        _rigidbody.isKinematic = false;
+        transform.SetPositionAndRotation(position, rotation);
+        _rigidbody.linearVelocity = Vector3.zero;
+        _rigidbody.angularVelocity = Vector3.zero;
     }
 
     /// Removes this pin from play without moving it — used when the active

@@ -60,14 +60,7 @@ public class LobbySpawner : MonoBehaviour
         }
         if (InstanceFinder.ServerManager.Started)
         {
-            RegisterSpawnPoints();
-            SpawnFurniture();
-            SpawnProps();
-            SpawnPropSetups();
-            SpawnPoolSetups();
-            SpawnBowlingSetups();
-            RegisterSpawnListener();
-            InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
+            RunServerSpawnSequence();
         }
         else
         {
@@ -81,19 +74,25 @@ public class LobbySpawner : MonoBehaviour
         // ServerManager exists now — run normal Start logic
         if (InstanceFinder.ServerManager.Started)
         {
-            RegisterSpawnPoints();
-            SpawnFurniture();
-            SpawnProps();
-            SpawnPropSetups();
-            SpawnPoolSetups();
-            SpawnBowlingSetups();
-            RegisterSpawnListener();
-            InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
+            RunServerSpawnSequence();
         }
         else
         {
             InstanceFinder.ServerManager.OnServerConnectionState += OnServerStarted;
         }
+    }
+    // Shared by all three entry points (Start, WaitForServerManager, OnServerStarted) so the
+    // spawn sequencing only has to live in one place.
+    private void RunServerSpawnSequence()
+    {
+        RegisterSpawnPoints();
+        SpawnFurniture();
+        SpawnProps();
+        SpawnPropSetups();
+        SpawnPoolSetups();
+        SpawnBowlingSetups();
+        RegisterSpawnListener();
+        InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
     }
     private void Awake()
     {
@@ -120,14 +119,7 @@ public class LobbySpawner : MonoBehaviour
     {
         if (args.ConnectionState != LocalConnectionState.Started) return;
         InstanceFinder.ServerManager.OnServerConnectionState -= OnServerStarted;
-        RegisterSpawnPoints();
-        SpawnFurniture();
-        SpawnProps();
-        SpawnPropSetups();
-        SpawnPoolSetups();
-        SpawnBowlingSetups();
-        RegisterSpawnListener();
-        InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
+        RunServerSpawnSequence();
     }
     private void OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
     {
