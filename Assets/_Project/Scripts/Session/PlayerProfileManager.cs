@@ -101,6 +101,23 @@ public class PlayerProfileManager : MonoBehaviour
         profile.DisplayName = newName;
         Debug.Log($"[PlayerProfileManager] ClientId {conn.ClientId} renamed to: {newName}");
 
+        // Keep PlayerObject.PlayerName in sync — it's a separate SyncVar
+        // (used as a fallback name source by some minigames, e.g. Jinxed)
+        // that LobbySpawner only ever sets ONCE, at spawn, using whatever
+        // this profile's DisplayName happened to be at that exact instant.
+        // RegisterPlayer() (called immediately before that spawn-time read,
+        // in the same method) always creates a brand-new profile whose
+        // DisplayName is still the "Player_<id>" placeholder — the real
+        // name can't possibly have arrived yet, since it requires the
+        // player's NetworkObject to finish spawning AND a round-trip
+        // ServerRpc from their client. So without this, PlayerObject.PlayerName
+        // stays wrong for the rest of the session even after the real name
+        // syncs in everywhere else. This call is the only place DisplayName
+        // ever actually changes post-registration, so it's the right choke
+        // point to also correct it.
+        var playerObj = conn.FirstObject?.GetComponent<PlayerObject>();
+        playerObj?.SetPlayerName(newName);
+
         // TODO: BACKEND — persist display name once Steam/account integration exists
     }
 

@@ -17,6 +17,7 @@ MonoBehaviour:
   SceneName: JinxedScene
   MinPlayers: 1
   MaxPlayers: 6
-  Description: Jinxed
+  Description: 'Use LMB to tag other players to spread the jinx before the arena
+    tiles fall away. Last one standing wins the round. '
   Thumbnail: {fileID: 0}
   IsActive: 1

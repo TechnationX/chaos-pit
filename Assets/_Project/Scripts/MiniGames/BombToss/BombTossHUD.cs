@@ -61,6 +61,26 @@ namespace ChaosPit.Minigames.BombToss
             }
         }
 
+        // Updates only the name lookup used by SetHolder/ApplyElimination —
+        // unlike Init(), does NOT touch _scoreRows, so an already-eliminated
+        // row's visual state survives a mid-game refresh. See
+        // BombTossController.StartRound() for why this exists: it's re-sent
+        // every round so a name that was still the "Player_<id>" placeholder
+        // at game start (because it hadn't finished syncing in from
+        // PlayerProfileManager yet) can self-correct on a later round
+        // instead of staying wrong for the rest of the game.
+        private void RefreshNames(string payload)
+        {
+            if (string.IsNullOrEmpty(payload)) return;
+            foreach (string entry in payload.Split('|'))
+            {
+                string[] p = entry.Split(',');
+                if (p.Length < 2) continue;
+                if (!int.TryParse(p[0], out int id)) continue;
+                _nameMap[id] = p[1];
+            }
+        }
+
         // ── Message Routing ───────────────────────────────────────
 
         public void OnNetworkMessage(string messageType, string payload)
@@ -76,6 +96,9 @@ namespace ChaosPit.Minigames.BombToss
                 case "bt_holder_changed":
                     if (int.TryParse(payload, out int newHolder))
                         SetHolder(newHolder);
+                    break;
+                case "bt_refresh_names":
+                    RefreshNames(payload);
                     break;
                 case "bt_pass_failed":
                     

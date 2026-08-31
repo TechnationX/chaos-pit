@@ -477,19 +477,19 @@ public class LobbySpawner : MonoBehaviour
     // Used by PoolPocket to find the spawned holding rack without needing a
     // direct Inspector reference (which can't exist at design time for a
     // runtime-spawned object — see the comment above where it's spawned).
-    // Returns the first pool setup's holding rack, which is fine as long as
-    // there's a single pool table; if a second pool setup is ever added,
-    // this would need a way to say which table a given pocket belongs to
-    // (e.g. matching by PoolSetupConfig reference instead of just "the first one").
-    public Transform GetHoldingRack()
+    // Index-based since a pocket needs to resolve its OWN table's holding
+    // rack, not just "the first one" — same reasoning as GetBowlingLane()
+    // below. Each PoolPocket instance is told which pool setup it belongs
+    // to via its own _poolSetupIndex field (same pattern PoolResetButton
+    // already uses).
+    public Transform GetHoldingRack(int setupIndex)
     {
-        if (_poolSetups == null) return null;
-        foreach (var setup in _poolSetups)
+        if (_poolSetups == null || setupIndex < 0 || setupIndex >= _poolSetups.Count)
         {
-            if (setup.SpawnedHoldingRack != null)
-                return setup.SpawnedHoldingRack;
+            Debug.LogWarning($"[LobbySpawner] GetHoldingRack — invalid setup index {setupIndex}.");
+            return null;
         }
-        return null;
+        return _poolSetups[setupIndex].SpawnedHoldingRack;
     }
 
     // --- Pool Reset (called by PoolResetButton) ---
@@ -923,9 +923,7 @@ public class LobbySpawner : MonoBehaviour
     }
 
     // Used by BowlingGameController to find its lane's spawned pins/balls —
-    // same purpose and pattern as GetHoldingRack() above, just index-based
-    // since bowling lanes aren't 1:1 with a single scene setup the way the
-    // pool table is.
+    // same index-based lookup pattern as GetHoldingRack(int) above.
     public BowlingLaneInstance GetBowlingLane(int laneIndex)
     {
         if (_bowlingLanes == null || laneIndex < 0 || laneIndex >= _bowlingLanes.Count) return null;
@@ -975,7 +973,7 @@ public class PoolSetupInstance
 
     // Set by SpawnPoolSetups() once the holding rack is actually spawned —
     // not an Inspector field, this only exists at runtime. PoolPocket reads
-    // it via LobbySpawner.Instance.GetHoldingRack().
+    // it via LobbySpawner.Instance.GetHoldingRack(_poolSetupIndex).
     [System.NonSerialized] public Transform SpawnedHoldingRack;
 
     // Runtime-only, populated by SpawnPoolSetups() — used by

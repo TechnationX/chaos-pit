@@ -43,10 +43,6 @@ namespace ChaosPit.Minigames.LastOneStanding
     public class LastOneStandingController : MiniGameController
     {
         // ── Inspector ─────────────────────────────────────────────
-        [Header("Results UI")]
-        [SerializeField] private TMPro.TextMeshProUGUI _resultsText;
-        [SerializeField] private TMPro.TextMeshProUGUI _countdownText;
-
         [Header("Game Config")]
         [SerializeField] private int _totalRounds = 3;
         [SerializeField] private float _roundDuration = 120f;
@@ -134,6 +130,20 @@ namespace ChaosPit.Minigames.LastOneStanding
             _eliminatedThisRound.Clear();
             _shoveTimestamps.Clear();
 
+            // Re-resolve every player's current display name before this
+            // round's elimination banners can fire. _nameMap was previously
+            // only ever populated once, from StartGame()'s "los_players"
+            // message — if a just-joined player's real name hadn't finished
+            // syncing in from PlayerProfileManager yet at that moment, the
+            // elimination banner kept showing "Player_<id>" for the rest of
+            // the game (same root cause fixed in BombTossController; see its
+            // StartRound() comment). Uses a dedicated "los_refresh_names"
+            // message rather than re-sending "los_players" so the client
+            // doesn't also re-run InitScoreRows(), which would destroy and
+            // recreate every score row and wipe out anyone's already-applied
+            // eliminated/rank marker.
+            GameRoomManager.Instance.RpcMinigameMessage("los_refresh_names", BuildPlayersPayload());
+
             _arenaGrid.ResetAllTiles();
 
             // Tell clients to reset their grid
@@ -178,6 +188,9 @@ namespace ChaosPit.Minigames.LastOneStanding
             if (_waveCoroutine != null) StopCoroutine(_waveCoroutine);
             StopAllCoroutines();
 
+            foreach (PlayerObject p in _players)
+                p.SetShadowCasting(true);
+
             _players.Clear();
             _nameMap.Clear();
             _totalScores.Clear();
@@ -199,6 +212,7 @@ namespace ChaosPit.Minigames.LastOneStanding
             _players.Remove(player);
             _nameMap.Remove(player.PlayerId);
             _shoveTimestamps.Remove(player.PlayerId);
+            player.SetShadowCasting(true);
             Debug.Log($"[LOS] Player removed: {player.PlayerId}");
         }
 
@@ -229,6 +243,10 @@ namespace ChaosPit.Minigames.LastOneStanding
             {
                 case "los_players":
                     ApplyPlayersPayload(payload);
+                    break;
+
+                case "los_refresh_names":
+                    ApplyNameRefresh(payload);
                     break;
 
                 case "los_grid_init":
@@ -415,6 +433,7 @@ namespace ChaosPit.Minigames.LastOneStanding
                 player.transform.rotation = rot;
 
                 GameRoomManager.Instance.TeleportPlayer(player.Owner, pos, rot);
+                player.SetShadowCasting(true);
             }
         }
 
@@ -458,6 +477,7 @@ namespace ChaosPit.Minigames.LastOneStanding
                     player.Owner,
                     _eliminatedWaitPoint.position,
                     _eliminatedWaitPoint.rotation);
+                player.SetShadowCasting(false);
             }
 
             //Debug.Log($"[LOS] Player {playerId} eliminated. Order: {order}, Survival: {survivalTime:F1}s");
@@ -564,47 +584,6 @@ namespace ChaosPit.Minigames.LastOneStanding
             return _placementPoints[index];
         }
 
-        // ── Results Screen ────────────────────────────────────────
-
-        protected override void OnShowResults(ResultsData data)
-        {
-            if (_resultsScreenPanel != null)
-                _resultsScreenPanel.SetActive(true);
-
-            if (_resultsText != null)
-            {
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine("RESULTS");
-
-                foreach (PlayerResultEntry entry in data.Entries)
-                    sb.AppendLine($"{entry.ResultLabel}: {entry.DisplayName}\n  +{entry.PointsEarned}pts | Level {entry.CareerLevel}");
-
-                _resultsText.text = sb.ToString();
-            }
-
-            StartCoroutine(ResultsTimerCoroutine());
-        }
-
-        private IEnumerator ResultsTimerCoroutine()
-        {
-            float remaining = _resultsDuration;
-            while (remaining > 0f)
-            {
-                if (_countdownText != null)
-                    _countdownText.text = $"Returning in {Mathf.CeilToInt(remaining)}...";
-                yield return new WaitForSeconds(1f);
-                remaining -= 1f;
-            }
-
-            if (_countdownText != null)
-                _countdownText.text = string.Empty;
-
-            if (_resultsScreenPanel != null)
-                _resultsScreenPanel.SetActive(false);
-
-            GameRoomManager.Instance.OnResultsDismissed(this);
-        }
-
         // ── Shove ─────────────────────────────────────────────────
 
         private void ProcessShoveRequest(int shoverPlayerId)
@@ -704,6 +683,22 @@ namespace ChaosPit.Minigames.LastOneStanding
             _hud?.InitScoreRows(_nameMap);
         }
 
+        // Same "id,name|id,name|..." format as ApplyPlayersPayload, but
+        // updates only _nameMap — doesn't touch the HUD's score rows, unlike
+        // ApplyPlayersPayload (which calls InitScoreRows and would destroy/
+        // recreate them). See StartRound() for why this exists.
+        private void ApplyNameRefresh(string payload)
+        {
+            if (string.IsNullOrEmpty(payload)) return;
+            foreach (string entry in payload.Split('|'))
+            {
+                string[] p = entry.Split(',');
+                if (p.Length < 2) continue;
+                if (!int.TryParse(p[0], out int id)) continue;
+                _nameMap[id] = p[1];
+            }
+        }
+
         private void ApplyGridInit(string payload)
         {
             if (FishNet.InstanceFinder.IsServerStarted) return;
@@ -766,48 +761,30 @@ namespace ChaosPit.Minigames.LastOneStanding
 
         private void ApplyResultsPayload(string payload)
         {
-            Debug.Log($"[LOS] ApplyResultsPayload called, IsServer: {FishNet.InstanceFinder.IsServerStarted}");
             if (string.IsNullOrEmpty(payload)) return;
 
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine("RESULTS");
-
+            var entries = new List<PlayerResultEntry>();
             foreach (string entry in payload.Split('|'))
             {
+                // id,standing,points,label,level
                 string[] p = entry.Split(',');
                 if (p.Length < 5) continue;
                 if (!int.TryParse(p[0], out int id)) continue;
-
-                string name = _nameMap.TryGetValue(id, out string n) ? n : $"Player_{id}";
-                string label = p[3];
+                if (!int.TryParse(p[1], out int standing)) continue;
                 int points = int.TryParse(p[2], out int pts) ? pts : 0;
                 int level = int.TryParse(p[4], out int lvl) ? lvl : 1;
 
-                sb.AppendLine($"{label}: {name}\n  +{points}pts | Level {level}");
+                entries.Add(new PlayerResultEntry
+                {
+                    DisplayName = _nameMap.TryGetValue(id, out string n) ? n : $"Player_{id}",
+                    Standing = standing,
+                    ResultLabel = p[3],
+                    PointsEarned = points,
+                    CareerLevel = level
+                });
             }
 
-            if (_resultsScreenPanel != null)
-                _resultsScreenPanel.SetActive(true);
-
-            if (_resultsText != null)
-                _resultsText.text = sb.ToString();
-
-            StartCoroutine(ClientResultsCountdownCoroutine());
-        }
-
-        private IEnumerator ClientResultsCountdownCoroutine()
-        {
-            float remaining = _resultsDuration;
-            while (remaining > 0f)
-            {
-                if (_countdownText != null)
-                    _countdownText.text = $"Returning in {Mathf.CeilToInt(remaining)}...";
-                yield return new WaitForSeconds(1f);
-                remaining -= 1f;
-            }
-
-            if (_countdownText != null)
-                _countdownText.text = string.Empty;
+            ShowResultsClientOnly(new ResultsData { Entries = entries });
         }
 
         // ── Helpers ───────────────────────────────────────────────

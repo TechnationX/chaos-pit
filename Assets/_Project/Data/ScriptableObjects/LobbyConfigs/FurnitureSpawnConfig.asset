@@ -42,7 +42,7 @@ MonoBehaviour:
     Prefab: {fileID: 6165582997407286407, guid: 4da9f6017c5c2954282fe23c8f297ec2, type: 3}
     Position: {x: 9, y: 0, z: -7}
     Rotation: {x: 0, y: 0, z: 0}
-    Scale: {x: 0.75, y: 0.75, z: 0.75}
+    Scale: {x: 1.25, y: 1.25, z: 1.25}
   - Label: Chair Basic
     Prefab: {fileID: 1806843409170209191, guid: 0a94bd08074ccfd4e938cda201930e63, type: 3}
     Position: {x: 5, y: 0, z: -10}
@@ -52,11 +52,6 @@ MonoBehaviour:
     Prefab: {fileID: 1970964019002176582, guid: 204da6aadc13e164eac745605815a273, type: 3}
     Position: {x: -8, y: 0, z: -10}
     Rotation: {x: 0, y: 0, z: 0}
-    Scale: {x: 1, y: 1, z: 1}
-  - Label: Table Metal 2
-    Prefab: {fileID: 1970964019002176582, guid: 204da6aadc13e164eac745605815a273, type: 3}
-    Position: {x: 10, y: 0, z: 0}
-    Rotation: {x: 0, y: 90, z: 0}
     Scale: {x: 1, y: 1, z: 1}
   - Label: Table Round
     Prefab: {fileID: 7690519952026649423, guid: 6f43b2566a8dcad4aa8e75125eeda38e, type: 3}

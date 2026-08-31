@@ -13,6 +13,12 @@ public class PlayerMovement : NetworkBehaviour
     [SerializeField] private float _jumpHeight = 1.5f;
     [SerializeField] private float _gravity = -19.62f;
 
+    // How fast the body rotates to face its movement direction while in
+    // PlayerCamera.CameraMode.ThirdPerson (minigames) — see HandleMovement.
+    // 720 = a full turn in half a second; tune in Inspector once this is
+    // actually visible in Editor.
+    [SerializeField] private float _autoTurnSpeed = 720f;
+
     [Header("Ground Check")]
     [SerializeField] private LayerMask _groundLayer;
     [SerializeField] private float _groundCheckDistance = 0.1f;
@@ -246,7 +252,21 @@ public class PlayerMovement : NetworkBehaviour
         if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed) v += 1f;
         if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) v -= 1f;
 
-        bool wantsSprint = keyboard.leftShiftKey.isPressed && v > 0 && h == 0 && !_isCrouching;
+        bool hasInput = h != 0f || v != 0f;
+
+        // Minigames use a fixed, scene-placed top-down camera — no
+        // player-controlled look at all (see PlayerCamera.MiniGame /
+        // GameRoomManager.FindActiveMinigameCamera). Directional input just
+        // moves relative to that camera's fixed facing, and the body
+        // auto-turns to face wherever it's currently moving. There's no
+        // "strafing" once the body always faces where it's going, so —
+        // unlike first-person — sprint and speed here don't gate on h == 0.
+        bool isMinigameCam = _player.Camera != null &&
+            _player.Camera.CurrentMode == PlayerCamera.CameraMode.MiniGame;
+
+        bool wantsSprint = isMinigameCam
+            ? keyboard.leftShiftKey.isPressed && hasInput && !_isCrouching
+            : keyboard.leftShiftKey.isPressed && v > 0 && h == 0 && !_isCrouching;
         _isSprinting = wantsSprint && (!_staminaLimited || _currentStamina > 0f);
 
         if (_staminaLimited)
@@ -266,19 +286,54 @@ public class PlayerMovement : NetworkBehaviour
             }
         }
 
-
-        // Set blend values
-        _moveX = h;
-        _moveY = _isSprinting ? v : v * 0.5f; ;
-
-        // Cap speed when strafing while sprinting
+        // Cap speed when strafing while sprinting (first-person only — see
+        // isMinigameCam comment above for why minigames skip the cap)
         float speed = _isCrouching ? _crouchSpeed :
-                      _isSprinting && h == 0 ? _sprintSpeed : _walkSpeed;
+                      isMinigameCam
+                          ? (_isSprinting ? _sprintSpeed : _walkSpeed)
+                          : (_isSprinting && h == 0 ? _sprintSpeed : _walkSpeed);
 
-        Vector3 move = transform.right * h + transform.forward * v;
+        Vector3 move;
+        if (isMinigameCam)
+        {
+            // The scene camera looks steeply down, so its own "forward" is
+            // mostly vertical and useless as a ground direction — its "up"
+            // and "right" stay horizontal instead (no roll on these fixed
+            // cameras), so those are what give us a ground-plane basis.
+            Transform camT = _player.Camera.ActiveMiniGameCameraTransform;
+            Vector3 camForward = camT != null
+                ? Vector3.ProjectOnPlane(camT.up, Vector3.up).normalized
+                : Vector3.forward;
+            Vector3 camRight = camT != null
+                ? Vector3.ProjectOnPlane(camT.right, Vector3.up).normalized
+                : Vector3.right;
+
+            move = camRight * h + camForward * v;
+            if (move.sqrMagnitude > 1f) move.Normalize();
+
+            if (hasInput)
+            {
+                Quaternion targetRot = Quaternion.LookRotation(move, Vector3.up);
+                transform.rotation = Quaternion.RotateTowards(
+                    transform.rotation, targetRot, _autoTurnSpeed * Time.deltaTime);
+            }
+
+            // Blend values: the body always faces its travel direction here,
+            // so there's no strafe axis to feed — just an idle/walk/sprint
+            // magnitude. (Best-guess mapping — I can't see the Animator
+            // Controller's blend tree from here; adjust if it looks off.)
+            _moveX = 0f;
+            _moveY = !hasInput ? 0f : (_isSprinting ? 1f : 0.5f);
+        }
+        else
+        {
+            move = transform.right * h + transform.forward * v;
+            _moveX = h;
+            _moveY = _isSprinting ? v : v * 0.5f;
+        }
+
         _controller.Move(move * speed * Time.deltaTime);
-
-        _isMoving = (h != 0f || v != 0f);
+        _isMoving = hasInput;
     }
 
     public void SetStaminaLimited(bool limited)

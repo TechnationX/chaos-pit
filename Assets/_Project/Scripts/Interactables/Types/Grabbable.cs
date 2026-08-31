@@ -78,7 +78,6 @@ public class Grabbable : NetworkBehaviour, IInteractable
             if (player.IsHoldingObject && player.HeldObject == this)
             {
                 ServerDropRpc(player);
-                Debug.Log($"[Grabbable] OnInteract DropRpc");
             }
             return;
         }
@@ -150,7 +149,6 @@ public class Grabbable : NetworkBehaviour, IInteractable
 
     protected virtual void OnObserversGrab(NetworkObject playerNetObj)
     {
-        //Debug.Log($"[Grabbable] ObserversGrab fired on client");
         PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
         if (player == null) return;
 
@@ -169,7 +167,6 @@ public class Grabbable : NetworkBehaviour, IInteractable
         }
 
         player.SetHeldObject(this);
-        //Debug.Log($"ObserversGrab called, SetHeldObject on {player.name}");
     }
 
     protected virtual void OnObserversDrop(NetworkObject playerNetObj)
@@ -189,7 +186,6 @@ public class Grabbable : NetworkBehaviour, IInteractable
         transform.SetParent(null);
         player.SetHeldObject(null);
         _holdingPlayer = null;
-        //Debug.Log($"ObserversDrop called, cleared held object");
     }
 
     // Called by lobby bounds system if object leaves play area, and by the

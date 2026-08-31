@@ -9,6 +9,7 @@ using FishNet.Object;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Cinemachine;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -18,6 +19,7 @@ public class GameRoomManager : NetworkBehaviour
 
     [Header("Settings")]
     [SerializeField] private float _countdownDuration = 10f;
+    [SerializeField] private float _introDuration = 6f;
 
     private Dictionary<int, MinigameStation> _stations = new Dictionary<int, MinigameStation>();
     private Dictionary<int, GameRoomSession> _sessions = new Dictionary<int, GameRoomSession>();
@@ -36,6 +38,7 @@ public class GameRoomManager : NetworkBehaviour
     private Dictionary<int, int> _unloadedClientCounts = new Dictionary<int, int>();
     private Dictionary<int, System.Action<ClientPresenceChangeEventArgs>> _unloadListeners
         = new Dictionary<int, System.Action<ClientPresenceChangeEventArgs>>();
+    private Dictionary<int, bool> _introSkipRequested = new Dictionary<int, bool>();
 
     private void Awake()
     {
@@ -181,6 +184,12 @@ public class GameRoomManager : NetworkBehaviour
             yield break;
         }
 
+        // Show the intro/rules screen and wait it out (or let a player skip
+        // it) BEFORE calling StartGame — round timers/coroutines only begin
+        // once this returns, so no round time is ever burned while players
+        // are reading it.
+        yield return StartCoroutine(ShowIntroAndWait(stationIndex, session.SelectedGame));
+
         session.ActiveController = controller;
         controller.StartGame(session.Players);
 
@@ -210,6 +219,71 @@ public class GameRoomManager : NetworkBehaviour
         }
 
         _stations[stationIndex].OnSessionUpdated(session);
+    }
+
+    // ─── Intro / Rules Screen ─────────────────────────────────────────────────
+    // Shown right after the scene finishes loading and before StartGame() is
+    // called, so round timers never burn while players are reading it. Ends
+    // early if any player in the session requests a skip.
+
+    private IEnumerator ShowIntroAndWait(int stationIndex, MiniGameRegistryEntry entry)
+    {
+        _introSkipRequested[stationIndex] = false;
+        RpcShowIntroScreen(entry.MiniGameName, entry.Description, _introDuration);
+
+        float remaining = _introDuration;
+        while (remaining > 0f)
+        {
+            if (_introSkipRequested.TryGetValue(stationIndex, out bool skip) && skip) break;
+            remaining -= Time.deltaTime;
+            yield return null;
+        }
+
+        _introSkipRequested.Remove(stationIndex);
+        RpcHideIntroScreen();
+    }
+
+    [ObserversRpc]
+    private void RpcShowIntroScreen(string title, string rulesText, float duration)
+    {
+        IntroScreenUI intro = FindActiveIntroScreen();
+        intro?.Show(title, rulesText, duration);
+    }
+
+    [ObserversRpc]
+    private void RpcHideIntroScreen()
+    {
+        IntroScreenUI intro = FindActiveIntroScreen();
+        intro?.Hide();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestSkipIntro(PlayerObject requestingPlayer)
+    {
+        if (requestingPlayer == null) return;
+
+        foreach (var kvp in _sessions)
+        {
+            if (kvp.Value.Players.Contains(requestingPlayer))
+            {
+                _introSkipRequested[kvp.Key] = true;
+                return;
+            }
+        }
+    }
+
+    private IntroScreenUI FindActiveIntroScreen()
+    {
+        for (int i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+        {
+            var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
+            foreach (GameObject obj in scene.GetRootGameObjects())
+            {
+                IntroScreenUI ui = obj.GetComponentInChildren<IntroScreenUI>(true);
+                if (ui != null) return ui;
+            }
+        }
+        return null;
     }
 
     // ─── Host Controls ────────────────────────────────────────────────────────
@@ -619,6 +693,66 @@ public class GameRoomManager : NetworkBehaviour
         }
     }
 
+    // ─── Voluntary Leave (pause menu "Quit to Lobby") ────────────────────────
+    // Mirrors the InProgress/Results branch of HandlePlayerDisconnected above,
+    // but the player stays connected — so unlike a disconnect, we also have to
+    // unload the minigame scene for just this one connection (FishNet supports
+    // unloading a scene per-connection; everyone else keeps their scene loaded
+    // and keeps playing) and then run them through the normal lobby-return path.
+
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestLeaveMinigame(PlayerObject requestingPlayer)
+    {
+        if (requestingPlayer == null) return;
+
+        foreach (var kvp in _sessions)
+        {
+            GameRoomSession session = kvp.Value;
+            if (!session.Players.Contains(requestingPlayer)) continue;
+
+            if (session.State != GameRoomState.InProgress && session.State != GameRoomState.Results)
+                return; // not in a state where leaving early makes sense (e.g. still Loading)
+
+            LeaveMinigameSession(session, requestingPlayer, kvp.Key);
+            return;
+        }
+
+        Debug.LogWarning("[GameRoomManager] RequestLeaveMinigame — requesting player not found in any session.");
+    }
+
+    [Server]
+    private void LeaveMinigameSession(GameRoomSession session, PlayerObject player, int stationIndex)
+    {
+        string sceneName = session.SelectedGame.SceneName;
+        NetworkConnection conn = player.Owner;
+
+        Debug.Log($"[GameRoomManager] LEAVE MINIGAME — station {stationIndex}, player: {player.name}, scene: {sceneName}");
+
+        session.ActiveController?.RemovePlayer(player);
+        RemovePlayerFromSession(session, player, stationIndex); // also migrates host if needed
+
+        void listener(ClientPresenceChangeEventArgs args)
+        {
+            if (args.Scene.name != sceneName || args.Added || args.Connection != conn) return;
+            InstanceFinder.NetworkManager.SceneManager.OnClientPresenceChangeEnd -= listener;
+            ReturnPlayerToLobby(player);
+        }
+        InstanceFinder.NetworkManager.SceneManager.OnClientPresenceChangeEnd += listener;
+
+        SceneUnloadData sud = new SceneUnloadData(sceneName);
+        InstanceFinder.NetworkManager.SceneManager.UnloadConnectionScenes(new NetworkConnection[] { conn }, sud);
+
+        if (session.Players.Count == 0)
+        {
+            session.ActiveController?.CleanUp();
+            ScoreManager.Instance.UnregisterSession(GetSessionId(stationIndex));
+            ResetSession(stationIndex);
+        }
+
+        if (_stations.TryGetValue(stationIndex, out MinigameStation station))
+            SyncSessionToClients(stationIndex, _sessions[stationIndex]);
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private void ResetSession(int stationIndex)
@@ -713,6 +847,49 @@ public class GameRoomManager : NetworkBehaviour
         PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
         if (player == null) return;
         player.ReinitializeCamera();
+
+        // This RPC only ever fires from the per-player loop in
+        // StartGameAfterLoad (minigame entry) — the lobby-return path
+        // (RpcTeleportAndUnlockPlayer) calls player.ReinitializeCamera()
+        // directly without this extra step, so it naturally stays on
+        // PlayerCamera's default starting mode (FirstPerson).
+        //
+        // Minigames use a fixed, scene-placed top-down camera rather than
+        // any player-controlled one — every client independently finds
+        // their own loaded copy of that scene object (same pattern as
+        // FindActiveMinigameController/FindActiveIntroScreen) rather than
+        // the server trying to network a reference to it.
+        CinemachineCamera minigameCam = FindActiveMinigameCamera();
+        if (minigameCam != null)
+        {
+            player.Camera.SetMiniGameCamera(minigameCam);
+            player.Camera.SwitchTo(PlayerCamera.CameraMode.MiniGame);
+        }
+        else
+        {
+            Debug.LogWarning("[GameRoomManager] RpcReinitializeCamera — no minigame camera found in loaded scenes.");
+        }
+    }
+
+    // Finds the current minigame scene's fixed top-down CinemachineCamera.
+    // Skips any root object that's a player rig, since PlayerObjectBoZo/
+    // PlayerObjectMixamo each carry their own first/third-person
+    // CinemachineCameras — a plain type search would risk matching one of
+    // those instead of the scene's dedicated camera.
+    private CinemachineCamera FindActiveMinigameCamera()
+    {
+        for (int i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+        {
+            var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
+            foreach (GameObject obj in scene.GetRootGameObjects())
+            {
+                if (obj.GetComponentInChildren<PlayerObject>() != null) continue;
+
+                CinemachineCamera cam = obj.GetComponentInChildren<CinemachineCamera>();
+                if (cam != null) return cam;
+            }
+        }
+        return null;
     }
 
     [TargetRpc]

@@ -17,6 +17,6 @@ MonoBehaviour:
   SceneName: PaintTheTownScene
   MinPlayers: 1
   MaxPlayers: 6
-  Description: Claim more tiles than anyone else before time runs out
+  Description: Walk over tiles to claim them in your color. Most territory when the timer runs out wins.
   Thumbnail: {fileID: 0}
   IsActive: 1

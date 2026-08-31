@@ -19,12 +19,16 @@ using UnityEngine;
 /// Detects which kind of ball fell in and resets it after a short delay:
 ///  - CueBall  -> _cueBallResetAnchor (the table's original cue ball spawn point).
 ///  - PoolBall -> its named slot on the holding rack (see PoolBall.HoldingSlotName).
-///    The holding rack is resolved via LobbySpawner.Instance.GetHoldingRack()
+///    The holding rack is resolved via LobbySpawner.Instance.GetHoldingRack(_poolSetupIndex)
 ///    rather than an Inspector field, because it's spawned at runtime by
 ///    LobbySpawner (see PoolSetupInstance.HoldingRackPrefab) — nothing exists
-///    to drag into an Inspector slot at design time. _holdingRackOverride
-///    below is an optional manual fallback if you ever want to point a
-///    pocket at a different holding rack than LobbySpawner's.
+///    to drag into an Inspector slot at design time. _poolSetupIndex tells
+///    LobbySpawner which table's holding rack this pocket belongs to (same
+///    pattern PoolResetButton._poolSetupIndex already uses) — required once
+///    there's more than one pool table, since otherwise every pocket would
+///    resolve to whichever table's holding rack happened to spawn first.
+///    _holdingRackOverride below is an optional manual fallback if you ever
+///    want to point a pocket at a different holding rack than LobbySpawner's.
 ///
 /// OnTriggerEnter fires on every peer (physics runs locally everywhere in
 /// this pool system, same as the cue-ball hit detection), but only the
@@ -47,7 +51,9 @@ public class PoolPocket : NetworkBehaviour
     [Header("Reset Targets")]
     [Tooltip("Where the cue ball goes when it falls in ANY pocket — drag in the pool table's original cue ball spawn anchor (the same Transform used to place it at setup time).")]
     [SerializeField] private Transform _cueBallResetAnchor;
-    [Tooltip("Optional manual override — leave empty to use LobbySpawner's spawned holding rack automatically. Only set this if you need a specific pocket to target a different holding rack.")]
+    [Tooltip("Index into LobbySpawner's Pool Setups list — must match the pool table this pocket belongs to (same convention as PoolResetButton._poolSetupIndex). Used to find THIS table's holding rack, not just whichever one spawned first.")]
+    [SerializeField] private int _poolSetupIndex = 0;
+    [Tooltip("Optional manual override — leave empty to use LobbySpawner's spawned holding rack (resolved via _poolSetupIndex above) automatically. Only set this if you need a specific pocket to target a different holding rack.")]
     [SerializeField] private Transform _holdingRackOverride;
 
     [Header("Timing")]
@@ -122,7 +128,7 @@ public class PoolPocket : NetworkBehaviour
         yield return new WaitForSeconds(_resetDelay);
         _pendingReset.Remove(poolBall);
 
-        Transform holdingRack = _holdingRackOverride != null ? _holdingRackOverride : LobbySpawner.Instance?.GetHoldingRack();
+        Transform holdingRack = _holdingRackOverride != null ? _holdingRackOverride : LobbySpawner.Instance?.GetHoldingRack(_poolSetupIndex);
         if (holdingRack == null)
         {
             Debug.LogWarning("[PoolPocket] No holding rack assigned or spawned yet.");

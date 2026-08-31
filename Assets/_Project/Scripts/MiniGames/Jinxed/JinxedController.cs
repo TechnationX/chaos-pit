@@ -29,6 +29,7 @@ namespace ChaosPit.Minigames.Jinxed
         public float TotalSurvival = 0f;
         public float EliminatedAt = -1f;
         public bool TagOnCooldown = false;
+        public int TagsThisRound = 0;
     }
 
     // ── Controller ────────────────────────────────────────────────
@@ -43,13 +44,14 @@ namespace ChaosPit.Minigames.Jinxed
         [SerializeField] private int _totalRounds = 3;
         [SerializeField] private float _roundDuration = 60f;
 
-        [Header("Scoring")]
-        [SerializeField] private int[] _placementPoints = { 10, 8, 6, 3, 2, 1 };
-
         [Header("Tile Fall Settings")]
         [SerializeField] private float _tileFallInterval = 1.5f;
         [SerializeField] private float _tileWarnDuration = 0.8f;
         [SerializeField] private float _tileDangerDuration = 0.4f;
+
+        [Header("Scoring")]
+        [SerializeField] private int[] _placementPoints = { 10, 7, 5, 3, 1, 0 };
+        [SerializeField] private int _pointsPerTag = 2;
 
         [Header("Elimination")]
         [SerializeField] private Transform _eliminationSpawnPoint;
@@ -67,11 +69,6 @@ namespace ChaosPit.Minigames.Jinxed
         private Coroutine _clientFallCoroutine;
 
         // ── MiniGameController Overrides ──────────────────────────
-        public override void ClientInit()
-        {
-            // HUD is found once on client init and cached
-            // Message routing to HUD happens in OnNetworkMessage
-        }
 
         public override void StartGame(List<PlayerObject> players)
         {
@@ -93,11 +90,7 @@ namespace ChaosPit.Minigames.Jinxed
             _roundCoroutine = StartCoroutine(RunGameCoroutine());
         }
 
-        public override void StartRound()
-        {
-            // Round flow is driven internally by RunGameCoroutine.
-            // GameRoomManager calls this — safe to leave as no-op.
-        }
+        public override void StartRound() { }
 
         public override void EndRound()
         {
@@ -133,7 +126,6 @@ namespace ChaosPit.Minigames.Jinxed
 
             foreach (var p in _players)
             {
-                p.Movement.ClearAllMovementLocks();
                 p.GetComponent<JinxedPlayerEffect>()?.RemoveJinxEffect();
             }
 
@@ -142,8 +134,6 @@ namespace ChaosPit.Minigames.Jinxed
 
         public override void OnNetworkMessage(string messageType, string payload)
         {
-            //if (messageType != "jinxed_timer") Debug.Log($"[Jinxed] OnNetworkMessage — type: {messageType}");
-
             switch (messageType)
             {
                 case "jinxed_tag_attempt":
@@ -154,9 +144,6 @@ namespace ChaosPit.Minigames.Jinxed
                     break;
                 case "jinxed_state_change":
                     HandleStateChangeClient(payload);
-                    break;
-                case "jinxed_tag_cooldown":
-                    HandleCooldownClient(payload);
                     break;
                 case "jinxed_timer":
                     HandleTimerClient(payload);
@@ -171,180 +158,6 @@ namespace ChaosPit.Minigames.Jinxed
             }
         }
 
-        private void HandleStateChangeClient(string payload)
-        {
-
-            if (!TryParseTwo(payload, out int playerId, out int stateInt)) return;
-            //Debug.Log($"[Jinxed] Looking for playerId: {playerId}");
-            JinxedPlayerState state = (JinxedPlayerState)stateInt;
-
-            //Debug.Log($"[Jinxed] StateChange — playerId: {playerId}, state: {state}, " +
-            //    $"players in list: {_players.Count}, " +
-            //    $"target found: {FindPlayerById(playerId) != null}");
-
-            // Update HUD for local player only
-            PlayerObject local = _players.FirstOrDefault(p => p.IsOwner);
-            if (local != null && local.Owner?.ClientId == playerId)
-            {
-                JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
-                hud?.SetPlayerStatus(playerId, state);
-            }
-
-            // Apply visual effect on the affected player — visible to all clients
-            PlayerObject target = FindPlayerById(playerId);
-            if (target == null) return;
-
-            JinxedPlayerEffect effect = target.GetComponent<JinxedPlayerEffect>();
-            if (effect == null) return;
-
-            JinxedHUD allHud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
-            allHud?.SetPlayerStatus(playerId, state);
-
-            switch (state)
-            {
-                case JinxedPlayerState.Jinxed:
-                    effect.ApplyJinxEffect();
-                    break;
-                case JinxedPlayerState.Eliminated:
-                    effect.ApplyEliminatedEffect();
-                    break;
-                case JinxedPlayerState.Survivor:
-                    effect.RemoveJinxEffect();
-                    break;
-            }
-        }
-
-        private void HandleCooldownClient(string payload)
-        {
-            if (!TryParseTwo(payload, out int playerId, out int _)) return;
-
-            PlayerObject local = _players.FirstOrDefault(p => p.IsOwner);
-            if (local == null || local.Owner?.ClientId != playerId) return;
-
-            var parts = payload.Split('|');
-            if (parts.Length < 2) return;
-            float duration = float.Parse(parts[1]);
-
-            JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
-            if (duration > 0f) hud?.StartCooldown(duration);
-            else hud?.ClearCooldown();
-        }
-
-        private void HandleTimerClient(string payload)
-        {
-            if (!int.TryParse(payload, out int seconds)) return;
-            JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
-            hud?.SetTimer(seconds);
-        }
-
-        private void HandleRoundStartClient(string payload)
-        {
-            // Populate _players on client if not already done
-            if (_players.Count == 0)
-            {
-                var allPlayers = FindObjectsByType<PlayerObject>(
-                    FindObjectsInactive.Include, FindObjectsSortMode.None);
-                _players.AddRange(allPlayers);
-                //Debug.Log($"[Jinxed] Client populated _players: {_players.Count}");
-            }
-
-            var parts = payload.Split('|');
-            if (parts.Length < 7) return;
-            if (!int.TryParse(parts[0], out int jinxedId)) return;
-            if (!int.TryParse(parts[1], out int roundNum)) return;
-            if (!int.TryParse(parts[2], out int totalRounds)) return;
-            if (!float.TryParse(parts[3], out float fallInterval)) return;
-            if (!float.TryParse(parts[4], out float warnDur)) return;
-            if (!float.TryParse(parts[5], out float dangerDur)) return;
-
-            // Parse scores: "playerId:score,playerId:score,..."
-            var scoreMap = new Dictionary<int, int>();
-            var nameMap = new Dictionary<int, string>();
-
-            foreach (var entry in parts[6].Split(','))
-            {
-                var s = entry.Split(':');
-                if (s.Length < 3) continue;
-                if (!int.TryParse(s[0], out int pid)) continue;
-                if (!int.TryParse(s[1], out int sc)) continue;
-                string name = s[2];
-                int key = _players.FirstOrDefault(p => p.PlayerId == pid)?.Owner?.ClientId ?? pid;
-                scoreMap[key] = sc;
-                nameMap[key] = name;
-            }
-
-
-            //foreach (var p in _players)
-            //    Debug.Log($"[Jinxed] NameMap — OwnerId: {p.Owner?.ClientId}, PlayerName: '{p.PlayerName}'");
-
-            //Debug.Log($"[Jinxed] RoundStart payload length: {payload.Length}, parts: {parts.Length}");
-
-            if (!FishNet.InstanceFinder.IsServerStarted)
-            {
-                _arenaGrid.ResetAllTiles();
-                _arenaGrid.BuildGrid();
-            }
-
-            // Recompute fall order locally — deterministic, no need to send over network
-            var fallIndices = _arenaGrid.GetFallOrder();
-
-            if (_clientFallCoroutine != null) StopCoroutine(_clientFallCoroutine);
-            _clientFallCoroutine = StartCoroutine(ClientTileFallCoroutine(fallIndices, fallInterval, warnDur, dangerDur));
-
-            JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
-            if (hud != null)
-            {
-                hud.InitScoreRows(nameMap);
-
-                // Apply accumulated scores after rows are built
-                foreach (var kvp in scoreMap)
-                    hud.UpdatePlayerScore(kvp.Key, kvp.Value);
-
-                hud.OnRoundStart(roundNum, totalRounds, jinxedId);
-            }
-
-            foreach (var p in _players)
-                p.GetComponent<JinxedPlayerEffect>()?.RemoveJinxEffect();
-
-            PlayerObject startingJinxed = FindPlayerById(jinxedId);
-            startingJinxed?.GetComponent<JinxedPlayerEffect>()?.ApplyJinxEffect();
-        }
-
-        private IEnumerator ClientTileFallCoroutine(List<int> fallOrder, float interval, float warnDur, float dangerDur)
-        {
-            foreach (int tileIndex in fallOrder)
-            {
-                yield return new WaitForSeconds(interval);
-                _arenaGrid.BeginTileDrop(tileIndex, warnDur, dangerDur);
-            }
-        }
-
-        private void HandleRoundEndClient(string payload)
-        {
-            if (_clientFallCoroutine != null)
-            {
-                StopCoroutine(_clientFallCoroutine);
-                _clientFallCoroutine = null;
-            }
-
-            // Payload per player: "playerId:totalScore:totalSurvival:state|..."
-            JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
-            if (hud == null) return;
-
-            hud.OnRoundEnd();
-
-            var entries = payload.Split('|');
-            foreach (var entry in entries)
-            {
-                var parts = entry.Split(':');
-                if (parts.Length < 4) continue;
-                if (!int.TryParse(parts[0], out int playerId)) continue;
-                if (!int.TryParse(parts[1], out int score)) continue;
-
-                hud.UpdatePlayerScore(playerId, score);
-            }
-        }
-
         public override void OnClientAction(string messageType, string payload, NetworkConnection sender)
         {
             switch (messageType)
@@ -355,35 +168,6 @@ namespace ChaosPit.Minigames.Jinxed
                 case "jinxed_kill_request":
                     HandleKillRequest(payload);
                     break;
-            }
-        }
-
-        private void HandleKillRequest(string payload)
-        {
-            if (!int.TryParse(payload, out int playerId)) return;
-            if (!_jinxedPlayers.TryGetValue(playerId, out var pd)) return;
-            if (pd.State == JinxedPlayerState.Eliminated) return;
-            Debug.Log($"[Jinxed] HandleKillRequest — playerId: {playerId}, state: {pd?.State}");
-
-            OnPlayerEliminated(playerId);
-
-            // Teleport eliminated player to holding area
-            PlayerObject po = _players.FirstOrDefault(p => p.PlayerId == playerId);
-            if (po == null) return;
-
-            // Lock movement immediately on server
-            po.Movement.SetMovementLocked(true, "jinxed_round");
-
-            if (_eliminationSpawnPoint != null)
-            {
-                NetworkTransform nt = po.GetComponent<NetworkTransform>();
-                if (nt != null) nt.Teleport();
-                po.transform.position = _eliminationSpawnPoint.position;
-                po.transform.rotation = _eliminationSpawnPoint.rotation;
-                GameRoomManager.Instance.TeleportPlayer(
-                    po.Owner,
-                    _eliminationSpawnPoint.position,
-                    _eliminationSpawnPoint.rotation);
             }
         }
 
@@ -409,14 +193,19 @@ namespace ChaosPit.Minigames.Jinxed
                 pd.State = JinxedPlayerState.Survivor;
                 pd.EliminatedAt = -1f;
                 pd.TagOnCooldown = false;
+                pd.TagsThisRound = 0;
             }
 
             // Build grid and compute fall order
             _arenaGrid.BuildGrid();
             _fallOrder = _arenaGrid.GetFallOrder();
             _fallIndex = 0;
-            int startingJinxedId = PickStartingJinxed();
 
+            // Pick starting jinxed
+            int startingJinxedId = PickStartingJinxed();
+            _lastJinxedId = startingJinxedId;
+
+            // Build round start payload with scores and names
             string scoreParts = string.Join(",", _jinxedPlayers.Values.Select(pd =>
             {
                 PlayerObject po = _players.FirstOrDefault(p => p.PlayerId == pd.PlayerId);
@@ -425,20 +214,18 @@ namespace ChaosPit.Minigames.Jinxed
                 return $"{pd.PlayerId}:{pd.TotalScore}:{name}";
             }));
 
+            // Broadcast round start FIRST so clients populate before state changes arrive
             BroadcastMessage("jinxed_round_start",
                 $"{startingJinxedId}|{_currentRound}|{_totalRounds}|{_tileFallInterval}|{_tileWarnDuration}|{_tileDangerDuration}|{scoreParts}");
-                       
+
             // Small yield to let clients process round_start before state change
             yield return null;
 
             // Now set starting jinxed state
-            _lastJinxedId = startingJinxedId;
             SetJinxedPlayerState(startingJinxedId, JinxedPlayerState.Jinxed);
 
             // Teleport players to spawns
             TeleportPlayersToSpawns();
-            foreach (var p in _players)
-                p.Movement.ClearAllMovementLocks();
 
             // Start tile fall
             _fallCoroutine = StartCoroutine(TileFallCoroutine());
@@ -452,7 +239,6 @@ namespace ChaosPit.Minigames.Jinxed
             {
                 _roundTimer -= Time.deltaTime;
 
-                // Only broadcast timer once per second
                 int currentSecond = Mathf.CeilToInt(_roundTimer);
                 int lastSecond = Mathf.CeilToInt(_lastTimerBroadcast);
                 if (currentSecond != lastSecond)
@@ -474,9 +260,9 @@ namespace ChaosPit.Minigames.Jinxed
             if (_fallCoroutine != null) StopCoroutine(_fallCoroutine);
             _roundActive = false;
 
+            // Award round scores
             float survivalTime = _roundDuration - Mathf.Max(0f, _roundTimer);
 
-            // Award round points
             var roundSorted = _jinxedPlayers.Values
                 .OrderByDescending(p => p.State != JinxedPlayerState.Eliminated)
                 .ThenByDescending(p => p.EliminatedAt)
@@ -484,8 +270,9 @@ namespace ChaosPit.Minigames.Jinxed
 
             for (int i = 0; i < roundSorted.Count; i++)
             {
-                int score = CalculatePlacementPoints(i + 1, roundSorted.Count);
-                roundSorted[i].TotalScore += score;
+                int placementScore = CalculatePlacementPoints(i + 1, roundSorted.Count);
+                int tagScore = roundSorted[i].TagsThisRound * _pointsPerTag;
+                roundSorted[i].TotalScore += placementScore + tagScore;
                 roundSorted[i].TotalSurvival += roundSorted[i].EliminatedAt >= 0f
                     ? roundSorted[i].EliminatedAt
                     : survivalTime;
@@ -530,17 +317,48 @@ namespace ChaosPit.Minigames.Jinxed
             if (tagger.TagOnCooldown) return;
 
             SetJinxedPlayerState(targetId, JinxedPlayerState.Jinxed);
+            tagger.TagsThisRound++;
+            StartCoroutine(TagCooldownCoroutine(taggerId));
+        }
+
+        private IEnumerator TagCooldownCoroutine(int taggerId)
+        {
+            if (!_jinxedPlayers.TryGetValue(taggerId, out var pd)) yield break;
+            pd.TagOnCooldown = true;
+            yield return new WaitForSeconds(3f);
+            pd.TagOnCooldown = false;
         }
 
         // ── Elimination ───────────────────────────────────────────
 
-        public void OnPlayerEliminated(int playerId)
+        private void HandleKillRequest(string payload)
         {
-            
-
+            if (!int.TryParse(payload, out int playerId)) return;
             if (!_jinxedPlayers.TryGetValue(playerId, out var pd)) return;
             if (pd.State == JinxedPlayerState.Eliminated) return;
-            Debug.Log($"[Jinxed] OnPlayerEliminated — playerId: {playerId}, eliminatedAt: {pd.EliminatedAt}");
+
+            OnPlayerEliminated(playerId);
+
+            PlayerObject po = _players.FirstOrDefault(p => p.PlayerId == playerId);
+            if (po == null) return;
+
+            if (_eliminationSpawnPoint != null)
+            {
+                NetworkTransform nt = po.GetComponent<NetworkTransform>();
+                if (nt != null) nt.Teleport();
+                po.transform.position = _eliminationSpawnPoint.position;
+                po.transform.rotation = _eliminationSpawnPoint.rotation;
+                GameRoomManager.Instance.TeleportPlayer(
+                    po.Owner,
+                    _eliminationSpawnPoint.position,
+                    _eliminationSpawnPoint.rotation);
+            }
+        }
+
+        public void OnPlayerEliminated(int playerId)
+        {
+            if (!_jinxedPlayers.TryGetValue(playerId, out var pd)) return;
+            if (pd.State == JinxedPlayerState.Eliminated) return;
 
             pd.EliminatedAt = _roundDuration - Mathf.Max(0f, _roundTimer);
             SetJinxedPlayerState(playerId, JinxedPlayerState.Eliminated);
@@ -557,7 +375,6 @@ namespace ChaosPit.Minigames.Jinxed
                 .ThenByDescending(p => p.TotalSurvival)
                 .ToList();
 
-            // Build results payload for clients
             var parts = new List<string>();
             for (int i = 0; i < sorted.Count; i++)
             {
@@ -568,6 +385,7 @@ namespace ChaosPit.Minigames.Jinxed
                 int careerPoints = CalculatePlacementPoints(i + 1, sorted.Count);
                 parts.Add($"{pd.PlayerId}:{careerPoints}:{name}");
             }
+
             BroadcastMessage("jinxed_game_end", string.Join("|", parts));
 
             // Reset all player visuals
@@ -576,6 +394,8 @@ namespace ChaosPit.Minigames.Jinxed
 
             GameRoomManager.Instance.NotifyGameComplete(this, GetResults());
         }
+
+        // ── Results ───────────────────────────────────────────────
 
         protected override void OnShowResults(ResultsData data)
         {
@@ -616,28 +436,175 @@ namespace ChaosPit.Minigames.Jinxed
             NotifyResultsDismissed();
         }
 
+        // ── Client Handlers ───────────────────────────────────────
+
+        private void HandleRoundStartClient(string payload)
+        {
+            // Populate _players first
+            if (_players.Count == 0)
+            {
+                var allPlayers = FindObjectsByType<PlayerObject>(
+                    FindObjectsInactive.Include, FindObjectsSortMode.None);
+                _players.AddRange(allPlayers);
+            }
+
+            var parts = payload.Split('|');
+            if (parts.Length < 7) return;
+            if (!int.TryParse(parts[0], out int jinxedId)) return;
+            if (!int.TryParse(parts[1], out int roundNum)) return;
+            if (!int.TryParse(parts[2], out int totalRounds)) return;
+            if (!float.TryParse(parts[3], out float fallInterval)) return;
+            if (!float.TryParse(parts[4], out float warnDur)) return;
+            if (!float.TryParse(parts[5], out float dangerDur)) return;
+
+            // Parse scores and names
+            var scoreMap = new Dictionary<int, int>();
+            var nameMap = new Dictionary<int, string>();
+
+            foreach (var entry in parts[6].Split(','))
+            {
+                var s = entry.Split(':');
+                if (s.Length < 3) continue;
+                if (!int.TryParse(s[0], out int pid)) continue;
+                if (!int.TryParse(s[1], out int sc)) continue;
+                string name = s[2];
+                int key = _players.FirstOrDefault(p => p.PlayerId == pid)?.Owner?.ClientId ?? pid;
+                scoreMap[key] = sc;
+                nameMap[key] = name;
+            }
+
+            if (!FishNet.InstanceFinder.IsServerStarted)
+            {
+                _arenaGrid.ResetAllTiles();
+                _arenaGrid.BuildGrid();
+            }
+
+            var fallIndices = _arenaGrid.GetFallOrder();
+            if (_clientFallCoroutine != null) StopCoroutine(_clientFallCoroutine);
+            _clientFallCoroutine = StartCoroutine(ClientTileFallCoroutine(
+                fallIndices, fallInterval, warnDur, dangerDur));
+
+            JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
+            if (hud != null)
+            {
+                hud.InitScoreRows(nameMap);
+
+                foreach (var kvp in scoreMap)
+                    hud.UpdatePlayerScore(kvp.Key, kvp.Value);
+
+                hud.OnRoundStart(roundNum, totalRounds, jinxedId);
+            }
+
+            foreach (var p in _players)
+                p.GetComponent<JinxedPlayerEffect>()?.RemoveJinxEffect();
+
+            PlayerObject startingJinxed = FindPlayerById(jinxedId);
+            startingJinxed?.GetComponent<JinxedPlayerEffect>()?.ApplyJinxEffect();
+        }
+
+        private IEnumerator ClientTileFallCoroutine(List<int> fallOrder, float interval,
+            float warnDur, float dangerDur)
+        {
+            foreach (int tileIndex in fallOrder)
+            {
+                yield return new WaitForSeconds(interval);
+                _arenaGrid.BeginTileDrop(tileIndex, warnDur, dangerDur);
+            }
+        }
+
+        private void HandleStateChangeClient(string payload)
+        {
+            if (!TryParseTwo(payload, out int playerId, out int stateInt)) return;
+
+            JinxedPlayerState state = (JinxedPlayerState)stateInt;
+
+            // Update HUD for local player
+            PlayerObject local = _players.FirstOrDefault(p => p.IsOwner);
+            if (local != null && local.Owner?.ClientId == playerId)
+            {
+                JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
+                hud?.SetPlayerStatus(playerId, state);
+            }
+
+            // Update score row status for all players
+            JinxedHUD allHud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
+            allHud?.SetPlayerStatus(playerId, state);
+
+            // Apply visual effect
+            PlayerObject target = FindPlayerById(playerId);
+            if (target == null) return;
+
+            JinxedPlayerEffect effect = target.GetComponent<JinxedPlayerEffect>();
+            if (effect == null) return;
+
+            switch (state)
+            {
+                case JinxedPlayerState.Jinxed:
+                    effect.ApplyJinxEffect();
+                    break;
+                case JinxedPlayerState.Eliminated:
+                    effect.ApplyEliminatedEffect();
+                    break;
+                case JinxedPlayerState.Survivor:
+                    effect.RemoveJinxEffect();
+                    break;
+            }
+        }
+
+        private void HandleTimerClient(string payload)
+        {
+            if (!int.TryParse(payload, out int seconds)) return;
+            JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
+            hud?.SetTimer(seconds);
+        }
+
+        private void HandleRoundEndClient(string payload)
+        {
+            if (_clientFallCoroutine != null)
+            {
+                StopCoroutine(_clientFallCoroutine);
+                _clientFallCoroutine = null;
+            }
+
+            JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
+            if (hud == null) return;
+
+            hud.OnRoundEnd();
+
+            var entries = payload.Split('|');
+            foreach (var entry in entries)
+            {
+                var ps = entry.Split(':');
+                if (ps.Length < 4) continue;
+                if (!int.TryParse(ps[0], out int playerId)) continue;
+                if (!int.TryParse(ps[1], out int score)) continue;
+                hud.UpdatePlayerScore(playerId, score);
+            }
+        }
+
         private void HandleGameEndClient(string payload)
         {
             JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
             hud?.SetScorePanelVisible(false);
 
+            if (_resultsScreenPanel != null)
+                _resultsScreenPanel.SetActive(true);
+
+            if (hud == null) return;
+
             var entries = new List<(string name, int score, string label)>();
             var lines = payload.Split('|');
             for (int i = 0; i < lines.Length; i++)
             {
-                var parts = lines[i].Split(':');
-                if (parts.Length < 3) continue;
-                if (!int.TryParse(parts[1], out int score)) continue;
-                string name = parts[2];
+                var ps = lines[i].Split(':');
+                if (ps.Length < 3) continue;
+                if (!int.TryParse(ps[1], out int score)) continue;
+                string name = ps[2];
                 string label = GetResultLabel(i + 1);
                 entries.Add((name, score, label));
             }
 
             hud.ShowResults(entries);
-
-            if (_resultsScreenPanel != null)
-                _resultsScreenPanel.SetActive(true);
-
             StartCoroutine(ClientResultsTimerCoroutine());
         }
 
@@ -656,68 +623,7 @@ namespace ChaosPit.Minigames.Jinxed
             hudFinal?.SetScorePanelVisible(true);
         }
 
-        private int CalculatePlacementPoints(int standing, int totalPlayers)
-        {
-            int lastIndex = _placementPoints.Length - 1;
-            int index = lastIndex - totalPlayers + standing;
-            index = Mathf.Clamp(index, 0, lastIndex);
-            return _placementPoints[index];
-        }
-
-        // ── Helpers ───────────────────────────────────────────────
-
-        private void SetJinxedPlayerState(int playerId, JinxedPlayerState state)
-        {
-            if (!_jinxedPlayers.TryGetValue(playerId, out var pd)) return;
-            pd.State = state;
-            BroadcastMessage("jinxed_state_change", $"{playerId}|{(int)state}");
-
-            // Enable tag input on the newly jinxed player's client
-            SetClientTagMode(playerId, state == JinxedPlayerState.Jinxed);
-        }
-
-        private void SetClientTagMode(int playerId, bool active)
-        {
-            PlayerObject po = _players.FirstOrDefault(p => p.PlayerId == playerId);
-            if (po == null) return;
-            GameRoomManager.Instance.SetPlayerTagMode(po.Owner, po.NetworkObject, active);
-        }
-
-        private int PickStartingJinxed()
-        {
-            var candidates = _jinxedPlayers.Keys
-                .Where(id => id != _lastJinxedId)
-                .ToList();
-
-            if (candidates.Count == 0)
-                candidates = _jinxedPlayers.Keys.ToList();
-
-            return candidates[Random.Range(0, candidates.Count)];
-        }
-
-        private bool TryParseTwo(string payload, out int a, out int b)
-        {
-            a = b = 0;
-            var parts = payload.Split('|');
-            if (parts.Length < 2) return false;
-            return int.TryParse(parts[0], out a) && int.TryParse(parts[1], out b);
-        }
-
-        private void BroadcastMessage(string messageType, string payload)
-        {
-            GameRoomManager.Instance.RpcMinigameMessage(messageType, payload);
-        }
-        private PlayerObject FindPlayerById(int playerId)
-        {
-            // First try existing _players list match by PlayerId
-            var match = _players.FirstOrDefault(p => p.PlayerId == playerId);
-            if (match != null) return match;
-
-            // Fallback: search all PlayerObjects in scene by OwnerId
-            var all = FindObjectsByType<PlayerObject>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
-            return all.FirstOrDefault(p => p.Owner?.ClientId == playerId);
-        }
+        // ── Teleport ──────────────────────────────────────────────
 
         protected override void TeleportPlayersToSpawns()
         {
@@ -742,5 +648,64 @@ namespace ChaosPit.Minigames.Jinxed
             }
         }
 
+        // ── Helpers ───────────────────────────────────────────────
+
+        private void SetJinxedPlayerState(int playerId, JinxedPlayerState state)
+        {
+            if (!_jinxedPlayers.TryGetValue(playerId, out var pd)) return;
+            pd.State = state;
+            BroadcastMessage("jinxed_state_change", $"{playerId}|{(int)state}");
+            SetClientTagMode(playerId, state == JinxedPlayerState.Jinxed);
+        }
+
+        private void SetClientTagMode(int playerId, bool active)
+        {
+            PlayerObject po = _players.FirstOrDefault(p => p.PlayerId == playerId);
+            if (po == null) return;
+            GameRoomManager.Instance.SetPlayerTagMode(po.Owner, po.NetworkObject, active);
+        }
+
+        private int PickStartingJinxed()
+        {
+            var candidates = _jinxedPlayers.Keys
+                .Where(id => id != _lastJinxedId)
+                .ToList();
+
+            if (candidates.Count == 0)
+                candidates = _jinxedPlayers.Keys.ToList();
+
+            return candidates[Random.Range(0, candidates.Count)];
+        }
+
+        private PlayerObject FindPlayerById(int playerId)
+        {
+            var match = _players.FirstOrDefault(p => p.PlayerId == playerId);
+            if (match != null) return match;
+
+            var all = FindObjectsByType<PlayerObject>(
+                FindObjectsInactive.Include, FindObjectsSortMode.None);
+            return all.FirstOrDefault(p => p.Owner?.ClientId == playerId);
+        }
+
+        private int CalculatePlacementPoints(int standing, int totalPlayers)
+        {
+            int lastIndex = _placementPoints.Length - 1;
+            int index = lastIndex - totalPlayers + standing;
+            index = Mathf.Clamp(index, 0, lastIndex);
+            return _placementPoints[index];
+        }
+
+        private bool TryParseTwo(string payload, out int a, out int b)
+        {
+            a = b = 0;
+            var parts = payload.Split('|');
+            if (parts.Length < 2) return false;
+            return int.TryParse(parts[0], out a) && int.TryParse(parts[1], out b);
+        }
+
+        private void BroadcastMessage(string messageType, string payload)
+        {
+            GameRoomManager.Instance.RpcMinigameMessage(messageType, payload);
+        }
     }
 }

@@ -17,6 +17,7 @@ MonoBehaviour:
   SceneName: BombTossScene
   MinPlayers: 1
   MaxPlayers: 6
-  Description: Bomb Toss
+  Description: "Use LMB to pass the bomb before your fuse runs out \u2014 whoever's
+    holding it when it detonates is eliminated."
   Thumbnail: {fileID: 0}
   IsActive: 1

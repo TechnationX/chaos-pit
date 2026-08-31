@@ -33,6 +33,15 @@ public class PlayerCamera : NetworkBehaviour
     private CameraMode _currentMode;
     private float _verticalRotation;
     private CinemachineCamera _activeMiniGameCam;
+
+    // Minigames use a fixed, scene-placed top-down camera (see
+    // GameRoomManager.FindActiveMinigameCamera) rather than any
+    // player-controlled look — this just exposes its transform so
+    // PlayerMovement can read a ground-plane forward/right basis from it
+    // for camera-relative movement and auto-turn.
+    public Transform ActiveMiniGameCameraTransform =>
+        _activeMiniGameCam != null ? _activeMiniGameCam.transform : null;
+
     private readonly SyncVar<float> _syncedPitch = new SyncVar<float>(
         new SyncTypeSettings(WritePermission.ClientUnsynchronized));
     private float _sensitivityMultiplier = 1f;
@@ -52,12 +61,30 @@ public class PlayerCamera : NetworkBehaviour
 
         if (!IsOwner) return;
 
+        // Defensive reset — Initialize() runs on every minigame-entry and
+        // lobby-return round-trip. If pause state was ever left stuck true
+        // (e.g. a path that requests a scene change without going through
+        // the normal Resume/Unpause flow — see PauseMenuUI.OnQuitToLobby),
+        // this guarantees it can never carry over stale into the next scene.
+        _isPaused = false;
+        PauseMenuUI.Instance?.SetVisible(false);
+
+        // Reset stale look pitch — otherwise whatever angle you were looking at
+        // right before entering a minigame gets silently reapplied by
+        // HandleFirstPersonLook() the next frame after ReinitializeCamera().
+        _verticalRotation = 0f;
+
         SetupFirstPersonCam();
         SetupThirdPersonCam();
         SwitchTo(_startingMode);
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+
+        // Unsubscribe before subscribing — Initialize() runs again every time
+        // ReinitializeCamera() fires (every minigame round-trip), and without
+        // this guard these handlers stack up and fire multiple times per event.
+        _syncedPitch.OnChange -= OnSyncedPitchChanged;
         _syncedPitch.OnChange += OnSyncedPitchChanged;
 
         if (SettingsManager.Instance != null)
@@ -66,6 +93,10 @@ public class PlayerCamera : NetworkBehaviour
             _invertY = SettingsManager.Instance.Current.invertYAxis;
             ApplyFOV(SettingsManager.Instance.Current.fieldOfView);
         }
+
+        SettingsManager.OnSensitivityChanged -= HandleSensitivityChanged;
+        SettingsManager.OnInvertYChanged -= HandleInvertYChanged;
+        SettingsManager.OnFOVChanged -= ApplyFOV;
 
         SettingsManager.OnSensitivityChanged += HandleSensitivityChanged;
         SettingsManager.OnInvertYChanged += HandleInvertYChanged;
@@ -181,6 +212,12 @@ public class PlayerCamera : NetworkBehaviour
             case CameraMode.MiniGame:
                 if (_activeMiniGameCam != null)
                     SetPriority(_activeMiniGameCam, PRIORITY_ACTIVE);
+                // This case didn't set cursor state before (nothing used
+                // MiniGame mode yet) — locking/hiding it here matches the
+                // other two active modes, since there's no cursor-driven
+                // aiming during minigames, just directional movement.
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
                 break;
         }
 

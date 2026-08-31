@@ -116,6 +116,19 @@ namespace ChaosPit.Minigames.PaintTheTown
             }
         }
 
+        /// <summary>
+        /// Updates existing rows' name labels in place — unlike
+        /// InitScoreRows, never instantiates or destroys a row. Used to
+        /// correct a name that was still "Player_&lt;id&gt;" when
+        /// InitScoreRows first ran (see PaintTheTownController.StartRound).
+        /// </summary>
+        public void RefreshNames(Dictionary<int, string> playerNames)
+        {
+            foreach (var kvp in playerNames)
+                if (_scoreRows.TryGetValue(kvp.Key, out PaintScoreRow row))
+                    row.SetName(kvp.Value);
+        }
+
         /// <summary>Called each batch sync to update displayed tile counts.</summary>
         public void UpdateTileCounts(Dictionary<int, int> countMap)
         {

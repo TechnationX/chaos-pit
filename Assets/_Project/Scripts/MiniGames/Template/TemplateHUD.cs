@@ -28,10 +28,9 @@ namespace ChaosPit.Minigames.Template
         [SerializeField] private Transform     _scoreRowParent;
         [SerializeField] private TemplateScoreRow _scoreRowPrefab;
 
-        [Header("Results")]
-        [SerializeField] private GameObject        _resultsPanel;
-        [SerializeField] private TextMeshProUGUI   _resultsText;
-        [SerializeField] private TextMeshProUGUI   _resultsCountdownText;
+        // Results display now lives on the shared ResultsCanvas.prefab /
+        // ResultsScreenUI (see MiniGameController.ShowResults /
+        // ShowResultsClientOnly) — this HUD no longer owns a results panel.
 
         // ── Runtime State ─────────────────────────────────────────
         private float     _timeRemaining;
@@ -46,9 +45,6 @@ namespace ChaosPit.Minigames.Template
         {
             _timeRemaining = duration;
             _timerRunning  = true;
-
-            if (_resultsPanel != null)
-                _resultsPanel.SetActive(false);
 
             if (_timerCoroutine != null) StopCoroutine(_timerCoroutine);
             _timerCoroutine = StartCoroutine(TimerCoroutine());
@@ -133,35 +129,5 @@ namespace ChaosPit.Minigames.Template
             _scoreRows.Clear();
         }
 
-        // ── Results (non-host clients) ────────────────────────────
-
-        public void ShowClientResults(List<(string label, string name, string points, string level)> entries)
-        {
-            if (_resultsPanel != null)
-                _resultsPanel.SetActive(true);
-
-            if (_resultsText == null) return;
-
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine("--- RESULTS ---");
-            foreach (var entry in entries)
-            {
-                sb.AppendLine($"{entry.label}: {entry.name}");
-                sb.AppendLine($"  +{entry.points}pts | Level {entry.level}");
-            }
-            _resultsText.text = sb.ToString();
-        }
-
-        public void SetResultsCountdown(int seconds)
-        {
-            if (_resultsCountdownText != null)
-                _resultsCountdownText.text = $"Returning in {seconds}...";
-        }
-
-        public void ClearResultsCountdown()
-        {
-            if (_resultsCountdownText != null)
-                _resultsCountdownText.text = string.Empty;
-        }
     }
 }

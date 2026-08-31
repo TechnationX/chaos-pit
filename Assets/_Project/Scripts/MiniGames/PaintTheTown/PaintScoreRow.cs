@@ -26,5 +26,14 @@ namespace ChaosPit.Minigames.PaintTheTown
         {
             if (_countText != null) _countText.text = count.ToString();
         }
+
+        // Updates just the name label in place — used by
+        // PaintTheTownHUD.RefreshNames so a name correction mid-game doesn't
+        // require destroying/recreating this row (which Init() + a fresh
+        // Instantiate would).
+        public void SetName(string playerName)
+        {
+            if (_nameText != null) _nameText.text = playerName;
+        }
     }
 }

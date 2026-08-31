@@ -17,6 +17,6 @@ MonoBehaviour:
   SceneName: LastOneStandingScene
   MinPlayers: 1
   MaxPlayers: 6
-  Description: Floor falls in waves, last one alive wins.
+  Description: Dodge falling tiles and shove rivals off the edge. Be the last player standing when the round ends.
   Thumbnail: {fileID: 0}
   IsActive: 1

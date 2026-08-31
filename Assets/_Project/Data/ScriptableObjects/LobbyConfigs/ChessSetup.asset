@@ -163,13 +163,13 @@ MonoBehaviour:
     - Label: Pawn White 7
       Prefab: {fileID: 5546320639773053895, guid: 9f894201dfcf59e40b6a40bba716445a, type: 3}
       Type: 0
-      Position: {x: 0.5, y: 0.6, z: -2.5}
+      Position: {x: -2.5, y: 0.6, z: -2.5}
       Rotation: {x: 0, y: 0, z: 0}
       Scale: {x: 1, y: 1, z: 1}
     - Label: Pawn White 8
       Prefab: {fileID: 5546320639773053895, guid: 9f894201dfcf59e40b6a40bba716445a, type: 3}
       Type: 0
-      Position: {x: 0.5, y: 0.6, z: -2.5}
+      Position: {x: -3.5, y: 0.6, z: -2.5}
       Rotation: {x: 0, y: 0, z: 0}
       Scale: {x: 1, y: 1, z: 1}
     - Label: Queen Black

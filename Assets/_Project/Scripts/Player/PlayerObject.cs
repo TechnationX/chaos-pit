@@ -4,6 +4,7 @@ using FishNet.Example.ColliderRollbacks;
 using FishNet.Object;
 using FishNet.Connection;
 using UnityEngine;
+using UnityEngine.Rendering;
 using FishNet.Object.Synchronizing;
 
 public class PlayerObject : NetworkBehaviour
@@ -15,6 +16,19 @@ public class PlayerObject : NetworkBehaviour
 
     [Header("Model Reference")]
     [SerializeField] private GameObject _characterModel;
+
+    // Character mesh whose shadow-casting gets toggled off while a player
+    // sits on a floating "elimination holder" platform (see SetShadowCasting
+    // below) — those platforms already have their own geometry set to not
+    // cast shadows, but the player standing on one still did.
+    private SkinnedMeshRenderer _characterRenderer;
+
+    // Purely visual, but every client renders its own local copy of every
+    // other player, so this has to be synced rather than set once wherever
+    // the teleport happens — same reasoning JinxedPlayerEffect documents for
+    // the jinx tint, just backed by a SyncVar here instead of an ObserversRpc
+    // so a late-joining/reconnecting client also picks up the correct value.
+    private readonly SyncVar<bool> _castShadows = new SyncVar<bool>(true);
 
     [Header("Player Data")]
     private readonly SyncVar<int> _playerId = new SyncVar<int>();
@@ -71,6 +85,32 @@ public class PlayerObject : NetworkBehaviour
         _playerMovement.enabled = false;
         _playerCamera.enabled = false;
         _interactionManager.enabled = false;
+
+        _characterRenderer = _characterModel != null
+            ? _characterModel.GetComponentInChildren<SkinnedMeshRenderer>()
+            : null;
+
+        _castShadows.OnChange += OnCastShadowsChanged;
+        ApplyShadowCasting(_castShadows.Value);
+    }
+
+    private void OnCastShadowsChanged(bool prev, bool next, bool asServer)
+    {
+        ApplyShadowCasting(next);
+    }
+
+    private void ApplyShadowCasting(bool castShadows)
+    {
+        if (_characterRenderer != null)
+            _characterRenderer.shadowCastingMode = castShadows ? ShadowCastingMode.On : ShadowCastingMode.Off;
+    }
+
+    // Server-only. Call when moving a player onto/off of a floating
+    // elimination-holder platform (BombToss/Jinxed/LastOneStanding) whose
+    // own geometry already has shadow-casting disabled.
+    public void SetShadowCasting(bool enabled)
+    {
+        _castShadows.Value = enabled;
     }
 
     public override void OnOwnershipClient(NetworkConnection prevOwner)
@@ -102,6 +142,17 @@ public class PlayerObject : NetworkBehaviour
     {
         _playerName.Value = playerName;
         _playerId.Value = playerId;
+    }
+
+    // Called by PlayerProfileManager.SetDisplayName whenever the player's
+    // real display name becomes known/changes, so this SyncVar doesn't stay
+    // stuck on the "Player_<id>" placeholder SetPlayerData was called with
+    // at spawn time (see PlayerProfileManager.SetDisplayName for why that
+    // placeholder is unavoidable at spawn). Leaves _playerId untouched,
+    // unlike SetPlayerData.
+    public void SetPlayerName(string playerName)
+    {
+        _playerName.Value = playerName;
     }
 
     public void SetHeldObject(Grabbable obj)

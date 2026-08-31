@@ -707,7 +707,7 @@ MonoBehaviour:
   _maxInteractDistance: 2
   _interactableLayer:
     serializedVersion: 2
-    m_Bits: 128
+    m_Bits: 262272
   _interactionPromptUI: {fileID: 0}
   _promptLabel: {fileID: 0}
   _passCheckDistance: 1.5

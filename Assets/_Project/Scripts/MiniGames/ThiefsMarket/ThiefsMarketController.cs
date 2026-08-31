@@ -68,10 +68,6 @@ namespace ChaosPit.Minigames.ThiefsMarket
         [SerializeField] private float _dropScatterRadius = 1.2f;
         [SerializeField] private float _stunDuration = 1f;
 
-        [Header("Results UI")]
-        [SerializeField] private TMPro.TextMeshProUGUI _resultsText;
-        [SerializeField] private TMPro.TextMeshProUGUI _countdownText;
-
         // ── Runtime State ─────────────────────────────────────────
 
         private enum ItemState { Available, Held, Dropped }
@@ -144,6 +140,19 @@ namespace ChaosPit.Minigames.ThiefsMarket
         {
             _currentRound++;
             _roundActive = true;
+
+            // Re-resolve every player's current display name before this
+            // round's "X punched Y!" feed text can fire. _nameMap was
+            // previously only ever populated once, from StartGame()'s
+            // "tm_players" message — if a just-joined player's real name
+            // hadn't finished syncing in from PlayerProfileManager yet at
+            // that moment, the feed kept showing "Player_<id>" for the rest
+            // of the game (same root cause fixed in BombTossController; see
+            // its StartRound() comment). Uses a dedicated "tm_refresh_names"
+            // message rather than re-sending "tm_players" so the client
+            // doesn't also re-run Init(), which would destroy and recreate
+            // every score row.
+            GameRoomManager.Instance.RpcMinigameMessage("tm_refresh_names", BuildPlayersPayload());
 
             ResetItemsForRound();
             RespawnPlayers();
@@ -498,6 +507,10 @@ namespace ChaosPit.Minigames.ThiefsMarket
                     ApplyPlayersPayload(payload);
                     break;
 
+                case "tm_refresh_names":
+                    ApplyNameRefresh(payload);
+                    break;
+
                 case "tm_seed":
                     int.TryParse(payload, out _gameSeed);
                     break;
@@ -700,52 +713,44 @@ namespace ChaosPit.Minigames.ThiefsMarket
         // [Server]-tagged OnGameComplete executes (the server/host instance).
         protected override void OnShowResults(ResultsData data)
         {
-            if (_resultsScreenPanel != null)
-                _resultsScreenPanel.SetActive(true);
-
-            if (_resultsText != null)
-            {
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine("RESULTS");
-                foreach (PlayerResultEntry entry in data.Entries)
-                    sb.AppendLine($"{entry.ResultLabel}: {entry.DisplayName}  +{entry.PointsEarned}pts");
-                _resultsText.text = sb.ToString();
-            }
-
             _hud?.SetScorePanelVisible(false);
-            StartCoroutine(ResultsCountdownCoroutine(_countdownText, notifyDismissal: true,
-                onComplete: () => _hud?.SetScorePanelVisible(true)));
+        }
+
+        protected override void OnResultsHidden()
+        {
+            _hud?.SetScorePanelVisible(true);
         }
 
         // Pure-client broadcast path — mirrors BombTossController's
-        // ApplyGameOverPayload / ClientResultsCountdownCoroutine. Does NOT
-        // call OnResultsDismissed — only the server-authoritative path above
-        // is allowed to trigger the return-to-lobby flow.
+        // ApplyGameOverPayload. Uses ShowResultsClientOnly, which does NOT
+        // trigger the return-to-lobby flow — only the server-authoritative
+        // path (OnShowResults above, driven through GameRoomManager) does.
         private void ApplyGameOverPayload(string payload)
         {
             if (string.IsNullOrEmpty(payload)) return;
 
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine("RESULTS");
-
+            var entries = new List<PlayerResultEntry>();
             foreach (string entry in payload.Split('|'))
             {
-                // standing,id,points,roundWins,totalItems,steals,stuns
+                // standing,id,points,roundWins,totalItems,steals,stuns,level
                 string[] p = entry.Split(',');
-                if (p.Length < 7) continue;
+                if (p.Length < 8) continue;
                 if (!int.TryParse(p[0], out int standing)) continue;
                 if (!int.TryParse(p[1], out int id)) continue;
                 if (!int.TryParse(p[2], out int points)) continue;
+                int level = int.TryParse(p[7], out int lvl) ? lvl : 1;
 
-                string name = _nameMap.TryGetValue(id, out string n) ? n : $"Player_{id}";
-                sb.AppendLine($"{GetResultLabel(standing)}: {name}  +{points}pts");
+                entries.Add(new PlayerResultEntry
+                {
+                    DisplayName = _nameMap.TryGetValue(id, out string n) ? n : $"Player_{id}",
+                    Standing = standing,
+                    ResultLabel = GetResultLabel(standing),
+                    PointsEarned = points,
+                    CareerLevel = level
+                });
             }
 
-            if (_resultsScreenPanel != null) _resultsScreenPanel.SetActive(true);
-            if (_resultsText != null) _resultsText.text = sb.ToString();
-            _hud?.SetScorePanelVisible(false);
-            StartCoroutine(ResultsCountdownCoroutine(_countdownText, notifyDismissal: false,
-                onComplete: () => _hud?.SetScorePanelVisible(true)));
+            ShowResultsClientOnly(new ResultsData { Entries = entries });
         }
 
         // ── Payload Builders ───────────────────────────────────────
@@ -828,12 +833,34 @@ namespace ChaosPit.Minigames.ThiefsMarket
             foreach (RoundResult r in _finalResults)
             {
                 int id = r.Player.PlayerId;
-                parts.Add($"{r.Standing},{id},{r.ScoreAwarded},{_roundWins[id]},{_totalItemsAcrossRounds[id]},{_totalSteals[id]},{_totalStuns[id]}");
+                PlayerProfile profile = PlayerProfileManager.Instance.GetProfile(r.Player.Owner);
+                int level = profile != null ? PlayerResultEntry.CalculateLevel(profile.CareerScore) : 1;
+                parts.Add($"{r.Standing},{id},{r.ScoreAwarded},{_roundWins[id]},{_totalItemsAcrossRounds[id]},{_totalSteals[id]},{_totalStuns[id]},{level}");
             }
             return string.Join("|", parts);
         }
 
         // ── Payload Parsers ────────────────────────────────────────
+
+        // Same "id,name|id,name|..." format as ApplyPlayersPayload, but only
+        // updates _nameMap's existing entries in place — never calls
+        // _hud?.Init(), which would destroy and recreate every score row.
+        // No separate push to the HUD is needed: ThiefsMarketHUD.Init()
+        // (called once below, via ApplyPlayersPayload/ClientInit) points the
+        // HUD's own _nameMap field at this SAME Dictionary instance, so
+        // updating entries here is already visible on the HUD's side. See
+        // StartRound() for why this exists.
+        private void ApplyNameRefresh(string payload)
+        {
+            if (string.IsNullOrEmpty(payload)) return;
+            foreach (string entry in payload.Split('|'))
+            {
+                string[] p = entry.Split(',');
+                if (p.Length < 2) continue;
+                if (!int.TryParse(p[0], out int id)) continue;
+                _nameMap[id] = p[1];
+            }
+        }
 
         private void ApplyPlayersPayload(string payload)
         {

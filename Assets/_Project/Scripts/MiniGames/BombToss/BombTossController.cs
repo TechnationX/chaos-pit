@@ -32,10 +32,6 @@ namespace ChaosPit.Minigames.BombToss
         [Header("Elimination Spawns")]
         [SerializeField] private Transform _eliminationSpawn;
 
-        [Header("Results UI")]
-        [SerializeField] private TMPro.TextMeshProUGUI _resultsText;
-        [SerializeField] private TMPro.TextMeshProUGUI _countdownText;
-
         // ── Runtime State ─────────────────────────────────────────
 
         private List<int> _activePlayers = new List<int>();
@@ -82,6 +78,24 @@ namespace ChaosPit.Minigames.BombToss
             _roundActive = true;
             _eliminationOrder = 0;
 
+            // Re-resolve every active player's current display name and push
+            // it to clients before this round's holder text goes out. Fixes
+            // names showing "Player_<id>" in the live "X has the bomb" /
+            // "X was eliminated" text: _nameMap was previously only ever
+            // populated ONCE, from StartGame()'s "bt_players" message, which
+            // can fire before a just-joined player's real name has finished
+            // syncing in from PlayerProfileManager (see SetDisplayName) — and
+            // nothing ever refreshed it afterward, so a name that was still
+            // the placeholder at that single snapshot stayed wrong for the
+            // rest of the game. Re-sending it at the top of every round
+            // means round 2+ self-heals even if round 1 briefly lost the
+            // race. Uses "bt_refresh_names" rather than re-sending
+            // "bt_players" so the client only updates its name lookup
+            // (BombTossHUD.RefreshNames) instead of re-running Init(), which
+            // would also destroy/recreate the score rows and wipe any
+            // eliminated-row marker already applied this game.
+            GameRoomManager.Instance.RpcMinigameMessage("bt_refresh_names", BuildPlayersPayload());
+
             RespawnActivePlayers();
 
             _currentHolderId = _activePlayers[Random.Range(0, _activePlayers.Count)];
@@ -106,6 +120,10 @@ namespace ChaosPit.Minigames.BombToss
         public override void CleanUp()
         {
             StopAllCoroutines();
+
+            foreach (PlayerObject p in _players)
+                p.SetShadowCasting(true);
+
             _activePlayers.Clear();
             _eliminatedPlayers.Clear();
             _cumulativeScores.Clear();
@@ -114,6 +132,19 @@ namespace ChaosPit.Minigames.BombToss
             _roundActive = false;
             _gameActive = false;
             Debug.Log("[BombToss] CleanUp complete.");
+        }
+
+        // Base RemovePlayer only removes from _players — this adds the one
+        // thing BombToss needs on top: a mid-round "Quit to Lobby" while
+        // sitting in the elimination holder must not leave shadow-casting
+        // stuck off (same carry-over concern CleanUp above handles for the
+        // normal end-of-game path). Note _activePlayers/_cumulativeScores
+        // bookkeeping is untouched here — that gap predates this fix and is
+        // out of scope for it.
+        public override void RemovePlayer(PlayerObject player)
+        {
+            base.RemovePlayer(player);
+            player.SetShadowCasting(true);
         }
 
         public override void ClientInit()
@@ -169,6 +200,7 @@ namespace ChaosPit.Minigames.BombToss
                 elimPlayer.transform.position = spawn.position;
                 elimPlayer.transform.rotation = spawn.rotation;
                 GameRoomManager.Instance.TeleportPlayer(elimPlayer.Owner, spawn.position, spawn.rotation);
+                elimPlayer.SetShadowCasting(false);
             }
 
             string scoresPayload = BuildScoresPayload();
@@ -199,21 +231,10 @@ namespace ChaosPit.Minigames.BombToss
         {
             yield return new WaitForSeconds(delay);
 
-            string finalPayload = BuildScoresPayload();
-            GameRoomManager.Instance.RpcMinigameMessage("bt_game_over", finalPayload);
-
             _finalResults = BuildFinalResults();
+
+            GameRoomManager.Instance.RpcMinigameMessage("bt_game_over", BuildFinalResultsPayload());
             GameRoomManager.Instance.NotifyGameComplete(this, _finalResults);
-
-            var entries = _finalResults.Select(r => new PlayerResultEntry
-            {
-                DisplayName = _nameMap.TryGetValue(r.Player.Owner.ClientId, out string n) ? n : $"Player_{r.Player.PlayerId}",
-                PointsEarned = r.ScoreAwarded,
-                ResultLabel = r.ResultLabel,
-                Standing = r.Standing
-            }).ToList();
-
-            OnShowResults(new ResultsData { Entries = entries });
         }
 
         private int CalculatePlacementPoints(int standing, int totalPlayers)
@@ -260,6 +281,14 @@ namespace ChaosPit.Minigames.BombToss
             {
                 case "bt_players":
                     ApplyPlayersPayload(payload);
+                    break;
+
+                case "bt_refresh_names":
+                    // Same "id,name|id,name|..." format as "bt_players", but
+                    // routed straight to the HUD's lighter-touch RefreshNames
+                    // instead of ApplyPlayersPayload/Init — see StartRound()
+                    // for why this can't just reuse "bt_players".
+                    _hud?.OnNetworkMessage(messageType, payload);
                     break;
 
                 case "bt_round_start":
@@ -319,20 +348,6 @@ namespace ChaosPit.Minigames.BombToss
         protected override void OnShowResults(ResultsData data)
         {
             _hud?.HideHUD();
-
-            if (_resultsScreenPanel != null)
-                _resultsScreenPanel.SetActive(true);
-
-            if (_resultsText != null)
-            {
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine("RESULTS");
-                foreach (PlayerResultEntry entry in data.Entries)
-                    sb.AppendLine($"{entry.ResultLabel}: {entry.DisplayName}  +{entry.PointsEarned}pts");
-                _resultsText.text = sb.ToString();
-            }
-
-            StartCoroutine(ResultsCountdownCoroutine(_countdownText, notifyDismissal: true));
         }
 
         // ── Payload Builders ───────────────────────────────────────
@@ -368,6 +383,22 @@ namespace ChaosPit.Minigames.BombToss
             return results;
         }
 
+        // Final results payload (unlike BuildScoresPayload, which only carries
+        // cumulative points and is reused for the mid-game "bt_player_eliminated"
+        // sync) — format: id,standing,points,label,level. "id" is ClientId,
+        // matching _nameMap and every other lookup in this controller.
+        private string BuildFinalResultsPayload()
+        {
+            var parts = new List<string>();
+            foreach (RoundResult r in _finalResults)
+            {
+                PlayerProfile profile = PlayerProfileManager.Instance.GetProfile(r.Player.Owner);
+                int level = profile != null ? PlayerResultEntry.CalculateLevel(profile.CareerScore) : 1;
+                parts.Add($"{r.Player.Owner.ClientId},{r.Standing},{r.ScoreAwarded},{r.ResultLabel},{level}");
+            }
+            return string.Join("|", parts);
+        }
+
         // ── Payload Parsers ────────────────────────────────────────
 
         private void ApplyPlayersPayload(string payload)
@@ -388,29 +419,28 @@ namespace ChaosPit.Minigames.BombToss
         {
             if (string.IsNullOrEmpty(payload)) return;
 
-            var entries = new List<(int id, int score)>();
+            var entries = new List<PlayerResultEntry>();
             foreach (string entry in payload.Split('|'))
             {
+                // id,standing,points,label,level — id is ClientId (see BuildFinalResultsPayload)
                 string[] p = entry.Split(',');
-                if (p.Length < 2) continue;
+                if (p.Length < 5) continue;
                 if (!int.TryParse(p[0], out int id)) continue;
-                if (!int.TryParse(p[1], out int score)) continue;
-                entries.Add((id, score));
-            }
-            entries.Sort((a, b) => b.score.CompareTo(a.score));
+                if (!int.TryParse(p[1], out int standing)) continue;
+                if (!int.TryParse(p[2], out int points)) continue;
+                int level = int.TryParse(p[4], out int lvl) ? lvl : 1;
 
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine("RESULTS");
-            for (int i = 0; i < entries.Count; i++)
-            {
-                string name = _nameMap.TryGetValue(entries[i].id, out string n) ? n : $"Player_{entries[i].id}";
-                string label = GetResultLabel(i + 1);
-                sb.AppendLine($"{label}: {name}  +{entries[i].score}pts");
+                entries.Add(new PlayerResultEntry
+                {
+                    DisplayName = _nameMap.TryGetValue(id, out string n) ? n : $"Player_{id}",
+                    Standing = standing,
+                    ResultLabel = p[3],
+                    PointsEarned = points,
+                    CareerLevel = level
+                });
             }
 
-            if (_resultsScreenPanel != null) _resultsScreenPanel.SetActive(true);
-            if (_resultsText != null) _resultsText.text = sb.ToString();
-            StartCoroutine(ResultsCountdownCoroutine(_countdownText, notifyDismissal: false));
+            ShowResultsClientOnly(new ResultsData { Entries = entries });
         }
 
         // ── Helpers ────────────────────────────────────────────────
@@ -434,6 +464,7 @@ namespace ChaosPit.Minigames.BombToss
                 player.transform.position = spawn.position;
                 player.transform.rotation = spawn.rotation;
                 GameRoomManager.Instance.TeleportPlayer(player.Owner, spawn.position, spawn.rotation);
+                player.SetShadowCasting(true);
             }
         }
 

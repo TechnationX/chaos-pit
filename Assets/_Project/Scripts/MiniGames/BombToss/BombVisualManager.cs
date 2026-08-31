@@ -48,6 +48,20 @@ namespace ChaosPit.Minigames.BombToss
             _bombInstance.transform.SetParent(null);
         }
 
+        // Safety net: AttachToHolder() reparents the bomb onto the holder's
+        // hand socket, which lives on the persistent PlayerObject — not on
+        // anything in this scene. If the scene unloads for a player while
+        // they're still holding it (e.g. they quit to lobby mid-round via
+        // the pause menu instead of finishing the round normally), Hide()
+        // never gets called and the bomb rides along back to the lobby.
+        // BombVisualManager itself always dies with this scene, so cleaning
+        // up here catches every exit path, not just the normal round flow.
+        private void OnDestroy()
+        {
+            if (_bombInstance != null)
+                Destroy(_bombInstance);
+        }
+
         private PlayerObject FindPlayerById(int playerId)
         {
             foreach (var p in FindObjectsByType<PlayerObject>(

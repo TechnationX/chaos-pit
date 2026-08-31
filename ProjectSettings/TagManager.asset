@@ -27,19 +27,19 @@ TagManager:
   - Pins
   - BowlingBall
   - BowlingSensors
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
+  - ChessPiece
+  -
+  -
+  -
+  -
+  -
+  -
+  -
+  -
+  -
+  -
+  -
+  -
   - 
   m_SortingLayers:
   - name: Default

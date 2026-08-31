@@ -192,26 +192,6 @@ namespace ChaosPit.Minigames.Template
             GameRoomManager.Instance.NotifyGameComplete(this, _roundResults);
         }
 
-        // ── Results (host) ────────────────────────────────────────
-
-        protected override void OnShowResults(ResultsData data)
-        {
-            if (_resultsScreenPanel != null)
-                _resultsScreenPanel.SetActive(true);
-
-            StartCoroutine(ResultsTimerCoroutine());
-        }
-
-        private IEnumerator ResultsTimerCoroutine()
-        {
-            yield return new WaitForSeconds(_resultsDuration);
-
-            if (_resultsScreenPanel != null)
-                _resultsScreenPanel.SetActive(false);
-
-            GameRoomManager.Instance.OnResultsDismissed(this);
-        }
-
         // ── Scoring ───────────────────────────────────────────────
 
         private List<RoundResult> BuildResults()
@@ -294,36 +274,28 @@ namespace ChaosPit.Minigames.Template
         {
             if (string.IsNullOrEmpty(payload)) return;
 
-            var entries = new List<(string label, string name, string points, string level)>();
-
+            var entries = new List<PlayerResultEntry>();
             foreach (string entry in payload.Split('|'))
             {
+                // id,standing,points,label,level
                 string[] p = entry.Split(',');
                 if (p.Length < 5) continue;
                 if (!int.TryParse(p[0], out int id)) continue;
+                if (!int.TryParse(p[1], out int standing)) continue;
+                int points = int.TryParse(p[2], out int pts) ? pts : 0;
+                int level = int.TryParse(p[4], out int lvl) ? lvl : 1;
 
-                string name   = _nameMap.TryGetValue(id, out string n) ? n : $"Player_{id}";
-                string label  = p[3];
-                string points = p[2];
-                string level  = p[4];
-
-                entries.Add((label, name, points, level));
+                entries.Add(new PlayerResultEntry
+                {
+                    DisplayName = _nameMap.TryGetValue(id, out string n) ? n : $"Player_{id}",
+                    Standing = standing,
+                    ResultLabel = p[3],
+                    PointsEarned = points,
+                    CareerLevel = level
+                });
             }
 
-            _hud?.ShowClientResults(entries);
-            StartCoroutine(ClientResultsCountdownCoroutine());
-        }
-
-        private IEnumerator ClientResultsCountdownCoroutine()
-        {
-            float remaining = _resultsDuration;
-            while (remaining > 0f)
-            {
-                _hud?.SetResultsCountdown(Mathf.CeilToInt(remaining));
-                yield return new WaitForSeconds(1f);
-                remaining -= 1f;
-            }
-            _hud?.ClearResultsCountdown();
+            ShowResultsClientOnly(new ResultsData { Entries = entries });
         }
 
         // ── Helpers ───────────────────────────────────────────────

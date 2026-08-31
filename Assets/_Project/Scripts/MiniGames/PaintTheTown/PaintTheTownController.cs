@@ -22,10 +22,6 @@ namespace ChaosPit.Minigames.PaintTheTown
     public class PaintTheTownController : MiniGameController
     {
         // ── Inspector ─────────────────────────────────────────────
-        [Header("Results UI")]
-        [SerializeField] private TMPro.TextMeshProUGUI _resultsText;
-        [SerializeField] private TMPro.TextMeshProUGUI _countdownText;
-
         [Header("Game Config")]
         [SerializeField] private float _roundDuration = 75f;
         [SerializeField] private float _syncInterval = 0.2f;
@@ -81,6 +77,21 @@ namespace ChaosPit.Minigames.PaintTheTown
 
         public override void StartRound()
         {
+            // Re-resolve every player's current display name before this
+            // round's score rows/results can be read. _nameMap was
+            // previously only ever populated once, from StartGame()'s
+            // "colors" message — if a just-joined player's real name hadn't
+            // finished syncing in from PlayerProfileManager yet at that
+            // moment, their score row (and the end-of-round results screen,
+            // which also reads _nameMap) kept showing "Player_<id>" for the
+            // rest of the game (same root cause fixed in
+            // BombTossController; see its StartRound() comment). Uses a
+            // dedicated "refresh_names" message rather than re-sending
+            // "colors" so the client doesn't also re-run InitScoreRows,
+            // which would instantiate a second, duplicate set of rows
+            // (InitScoreRows never clears existing ones first).
+            GameRoomManager.Instance.RpcMinigameMessage("refresh_names", BuildNamesPayload());
+
             _tileGrid.ResetAllTiles();
             _tileGrid.FlushDirtyTiles();
             InitTileCounts();
@@ -183,6 +194,7 @@ namespace ChaosPit.Minigames.PaintTheTown
                     FindLocalPlayer()?.Movement.SetStaminaLimited(false);
                     break;
                 case "counts": ApplyCountsPayload(payload); break;
+                case "refresh_names": ApplyNameRefresh(payload); break;
                 case "results":
                     if (!FishNet.InstanceFinder.IsServerStarted)
                         ApplyResultsPayload(payload);
@@ -250,49 +262,50 @@ namespace ChaosPit.Minigames.PaintTheTown
             GameRoomManager.Instance.RpcMinigameMessage("counts", BuildCountsPayload());
         }
 
+        // Updates _nameMap's existing entries in place (never reassigns the
+        // dictionary, and never touches _colorMap) and pushes the corrected
+        // names to the HUD's rows without recreating them. See StartRound().
+        private void ApplyNameRefresh(string payload)
+        {
+            if (string.IsNullOrEmpty(payload)) return;
+            var updated = new Dictionary<int, string>();
+            foreach (string entry in payload.Split('|'))
+            {
+                string[] p = entry.Split(',');
+                if (p.Length < 2) continue;
+                if (!int.TryParse(p[0], out int id)) continue;
+                _nameMap[id] = p[1];
+                updated[id] = p[1];
+            }
+            _hud?.RefreshNames(updated);
+        }
+
         private void ApplyResultsPayload(string payload)
         {
             if (string.IsNullOrEmpty(payload)) return;
 
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine(ResultsFormatter.Header);
-
+            var entries = new List<PlayerResultEntry>();
             foreach (string entry in payload.Split('|'))
             {
+                // id,standing,points,label,level
                 string[] p = entry.Split(',');
                 if (p.Length < 5) continue;
                 if (!int.TryParse(p[0], out int id)) continue;
+                if (!int.TryParse(p[1], out int standing)) continue;
+                int points = int.TryParse(p[2], out int pts) ? pts : 0;
+                int level = int.TryParse(p[4], out int lvl) ? lvl : 1;
 
-                string name = _nameMap.TryGetValue(id, out string n) ? n : $"Player_{id}";
-                string label = p[3];
-                string points = p[2];
-                string level = p[4];
-
-                sb.AppendLine(ResultsFormatter.FormatEntry(label, name, int.Parse(points), int.Parse(level)));
+                entries.Add(new PlayerResultEntry
+                {
+                    DisplayName = _nameMap.TryGetValue(id, out string n) ? n : $"Player_{id}",
+                    Standing = standing,
+                    ResultLabel = p[3],
+                    PointsEarned = points,
+                    CareerLevel = level
+                });
             }
 
-            if (_resultsScreenPanel != null)
-                _resultsScreenPanel.SetActive(true);
-
-            if (_resultsText != null)
-                _resultsText.text = sb.ToString();
-
-            StartCoroutine(ClientResultsCountdownCoroutine());
-        }
-
-        private IEnumerator ClientResultsCountdownCoroutine()
-        {
-            float remaining = _resultsDuration;
-            while (remaining > 0f)
-            {
-                if (_countdownText != null)
-                    _countdownText.text = $"Returning in {Mathf.CeilToInt(remaining)}...";
-                yield return new WaitForSeconds(1f);
-                remaining -= 1f;
-            }
-
-            if (_countdownText != null)
-                _countdownText.text = string.Empty;
+            ShowResultsClientOnly(new ResultsData { Entries = entries });
         }
 
         // ── Payload Builders (server) ─────────────────────────────
@@ -316,6 +329,20 @@ namespace ChaosPit.Minigames.PaintTheTown
                           $",{c.b.ToString(System.Globalization.CultureInfo.InvariantCulture)}" +
                           $",{name}");
                 Debug.Log($"[PaintTheTown] BUILD — playerId: {player.PlayerId}, name: {name}, color: {c}");
+            }
+            return string.Join("|", parts);
+        }
+
+        // "id,name|id,name|..." — deliberately lighter than BuildColorsPayload
+        // (no color fields) since a refresh only ever needs to correct names.
+        private string BuildNamesPayload()
+        {
+            var parts = new List<string>();
+            foreach (PlayerObject player in _players)
+            {
+                PlayerProfile profile = PlayerProfileManager.Instance.GetProfile(player.Owner);
+                string name = profile?.DisplayName ?? $"Player_{player.PlayerId}";
+                parts.Add($"{player.PlayerId},{name}");
             }
             return string.Join("|", parts);
         }
@@ -463,54 +490,5 @@ namespace ChaosPit.Minigames.PaintTheTown
             GameRoomManager.Instance.RpcMinigameMessage(messageType, payload);
         }
 
-        protected override void OnShowResults(ResultsData data)
-        {
-            if (_resultsScreenPanel != null)
-                _resultsScreenPanel.SetActive(true);
-
-            if (_resultsText != null)
-            {
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine(ResultsFormatter.Header);
-
-                foreach (PlayerResultEntry entry in data.Entries)
-                {
-                    sb.AppendLine(ResultsFormatter.FormatEntry(entry.ResultLabel, entry.DisplayName, entry.PointsEarned, entry.CareerLevel));
-                }
-
-                _resultsText.text = sb.ToString();
-            }
-
-            StartCoroutine(ResultsTimerCoroutine());
-        }
-
-        private IEnumerator ResultsTimerCoroutine()
-        {
-            float remaining = _resultsDuration;
-            while (remaining > 0f)
-            {
-                if (_countdownText != null)
-                    _countdownText.text = $"Returning in {Mathf.CeilToInt(remaining)}...";
-                yield return new WaitForSeconds(1f);
-                remaining -= 1f;
-            }
-
-            if (_countdownText != null)
-                _countdownText.text = string.Empty;
-
-            if (_resultsScreenPanel != null)
-                _resultsScreenPanel.SetActive(false);
-
-            GameRoomManager.Instance.OnResultsDismissed(this);
-        }
-
-    }
-
-    internal static class ResultsFormatter
-    {
-        public const string Header = "RESULTS";
-
-        public static string FormatEntry(string label, string name, int points, int level)
-            => $"{label}: {name}\n  +{points}pts | Level {level}";
     }
 }

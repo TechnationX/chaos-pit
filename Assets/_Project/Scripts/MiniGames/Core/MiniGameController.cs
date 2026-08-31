@@ -22,6 +22,21 @@ public abstract class MiniGameController : MonoBehaviour
     [SerializeField] protected GameObject _resultsScreenPanel;
     [SerializeField] protected float _resultsDuration = 10f;
 
+    private ResultsScreenUI _resultsUI;
+
+    // Cached lookup of the ResultsScreenUI living on _resultsScreenPanel (see
+    // ResultsCanvas.prefab). Every minigame shares the same prefab instance,
+    // so no per-controller Inspector wiring is needed.
+    protected ResultsScreenUI ResultsUI
+    {
+        get
+        {
+            if (_resultsUI == null && _resultsScreenPanel != null)
+                _resultsUI = _resultsScreenPanel.GetComponent<ResultsScreenUI>();
+            return _resultsUI;
+        }
+    }
+
     // --- Required overrides ---
 
     /// Called by GameRoomManager when all players are loaded into the scene.
@@ -91,19 +106,46 @@ public abstract class MiniGameController : MonoBehaviour
         }
     }
 
-    // Called by GameRoomManager after scores are processed
+    // Called by GameRoomManager after scores are processed. This only ever
+    // runs on the server's own controller instance (GameRoomManager.OnGameComplete
+    // calls it as a direct method call inside a [Server]-tagged method, not
+    // an RPC) — it's the path responsible for telling GameRoomManager to
+    // return players to the lobby once the results screen finishes.
     public void ShowResults(ResultsData data)
     {
         OnShowResults(data);
+
+        if (_resultsScreenPanel != null) _resultsScreenPanel.SetActive(true);
+        if (ResultsUI != null) ResultsUI.Populate(data, _resultsDuration, HandleResultsHidden);
     }
 
-    // Override in subclass to populate UI and start dismiss timer
-    protected virtual void OnShowResults(ResultsData data)
+    // Client-only display path: pure clients learn the game ended through a
+    // results broadcast (e.g. "bt_game_over" / "tm_game_over") rather than
+    // through ShowResults, so they show the same row layout and countdown
+    // locally without re-triggering the return-to-lobby flow. On a host
+    // (server+client in the same process) this simply re-populates the same
+    // panel the server path already showed, which is harmless.
+    protected void ShowResultsClientOnly(ResultsData data)
     {
-        // Default — subclass should override this entirely
-        Debug.LogWarning("[MiniGameController] OnShowResults not implemented in subclass.");
+        OnShowResults(data);
+
+        if (_resultsScreenPanel != null) _resultsScreenPanel.SetActive(true);
+        if (ResultsUI != null) ResultsUI.Populate(data, _resultsDuration, OnResultsHidden);
+    }
+
+    private void HandleResultsHidden()
+    {
+        OnResultsHidden();
         GameRoomManager.Instance.OnResultsDismissed(this);
     }
+
+    // Override in subclass for any game-specific UI change made the moment
+    // results are shown (e.g. hiding the in-round HUD/score panel).
+    protected virtual void OnShowResults(ResultsData data) { }
+
+    // Override in subclass for any game-specific UI change made once the
+    // results screen finishes and hides itself (e.g. restoring the HUD).
+    protected virtual void OnResultsHidden() { }
 
     // Call this from subclass when results timer expires
     protected void NotifyResultsDismissed()
@@ -111,19 +153,9 @@ public abstract class MiniGameController : MonoBehaviour
         GameRoomManager.Instance.OnResultsDismissed(this);
     }
 
-    // Override to update countdown display each tick
-    protected virtual void OnResultsTimerTick(float secondsRemaining) { }
-
-    // Called when timer expires — notifies GameRoomManager to return players
-    protected virtual void OnResultsDismissed()
-    {
-        if (_resultsScreenPanel != null)
-            _resultsScreenPanel.SetActive(false);
-
-        GameRoomManager.Instance.OnResultsDismissed(this);
-    }
-
-    /// Shared results-countdown timer used by minigame results screens.
+    /// Shared results-countdown timer used by minigame results screens that
+    /// have not yet been migrated onto ResultsScreenUI (currently only
+    /// StubMiniGame — out of scope for the ResultsCanvas consolidation).
     /// Counts down _resultsDuration on the given text field.
     ///
     /// Pass notifyDismissal: true ONLY for the instance responsible for
