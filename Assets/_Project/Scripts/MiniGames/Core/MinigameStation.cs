@@ -24,6 +24,16 @@ public class MinigameStation : MonoBehaviour, IInteractable
     [SerializeField] private Transform _playerListContainer;
     [SerializeField] private TextMeshProUGUI _playerListEntryPrefab;
 
+    [Header("UI — Exterior Display")]
+    [SerializeField] private TextMeshProUGUI _exteriorHeaderText;   // "DisplayText" object — static "Game Room N"
+    [SerializeField] private TextMeshProUGUI _exteriorPlayingText;  // "GameText" object — "Playing: X"
+    [SerializeField] private Transform _exteriorEntryContainer;     // "EntryContainer"
+    [SerializeField] private TextMeshProUGUI _exteriorEntryPrefab;  // per-player name slot prefab
+    [SerializeField] private Image _exteriorGameImage;              // "GameImage"
+
+    [Header("UI — Room Console")]
+    [SerializeField] private GameRoomConsole _console; // physical console in the waiting room, fed the same synced data as the exterior display
+
     [Header("UI — Status")]
     [SerializeField] private TextMeshProUGUI _statusLabel;
     [SerializeField] private TextMeshProUGUI _countdownLabel;
@@ -46,6 +56,8 @@ public class MinigameStation : MonoBehaviour, IInteractable
     private int _syncedMinPlayers = 0;
     private List<int> _syncedClientIds = new List<int>();
     private string _syncedSelectedGameId = string.Empty;
+
+    private const int MaxExteriorEntries = 6;
 
     public int StationIndex => _stationIndex;
     public Transform[] WaitingAreaPoints => _waitingAreaPoints;
@@ -70,6 +82,8 @@ public class MinigameStation : MonoBehaviour, IInteractable
         _startButton.onClick.AddListener(OnStartPressed);
         _closeButton.onClick.AddListener(OnClosePressed);
 
+        _exteriorHeaderText.text = $"Game Room {_stationIndex}";
+        RefreshExteriorDisplay();
     }
 
     private void OnDestroy()
@@ -84,6 +98,12 @@ public class MinigameStation : MonoBehaviour, IInteractable
 
     public void OnInteract(PlayerObject player)
     {
+        // Once a player is part of this station's session they're in the
+        // waiting room using the GameRoomConsole — the kiosk panel is only
+        // for the initial Join step, so don't let it reopen mid-session
+        // (e.g. if the room layout allows walking back within raycast range).
+        if (_syncedClientIds.Contains(player.OwnerId)) return;
+
         _localPlayer = player;
         OpenPanel();
     }
@@ -176,7 +196,7 @@ public class MinigameStation : MonoBehaviour, IInteractable
 
     private void OnGameSelected(string miniGameId)
     {
-        GameRoomManager.Instance.SelectGame(_stationIndex, miniGameId);
+        GameRoomManager.Instance.SelectGame(_stationIndex, miniGameId, _localPlayer);
     }
 
     // ─── UI Refresh ───────────────────────────────────────────────────────────
@@ -305,6 +325,41 @@ public class MinigameStation : MonoBehaviour, IInteractable
         }
     }
 
+    // ─── Exterior Display (kiosk screen — visible to everyone, not just the local player's panel) ─
+
+    private void RefreshExteriorDisplay()
+    {
+        MiniGameRegistryEntry entry = !string.IsNullOrEmpty(_syncedSelectedGameId) && _registry != null
+            ? _registry.GetById(_syncedSelectedGameId)
+            : null;
+
+        _exteriorPlayingText.text = entry != null
+            ? $"Playing: {entry.MiniGameName}"
+            : "Playing: Selecting Game...";
+
+        if (_exteriorGameImage != null)
+        {
+            _exteriorGameImage.sprite = entry?.Thumbnail;
+            _exteriorGameImage.enabled = entry != null && entry.Thumbnail != null;
+        }
+
+        BuildExteriorEntries();
+    }
+
+    private void BuildExteriorEntries()
+    {
+        foreach (Transform child in _exteriorEntryContainer)
+            Destroy(child.gameObject);
+
+        int count = Mathf.Min(_syncedPlayerNames.Count, MaxExteriorEntries);
+        for (int i = 0; i < count; i++)
+        {
+            TextMeshProUGUI entry = Instantiate(_exteriorEntryPrefab, _exteriorEntryContainer);
+            bool isHost = i == 0; // host is always first in list — same convention as BuildPlayerList()
+            entry.text = isHost ? $"{_syncedPlayerNames[i]} (Host)" : _syncedPlayerNames[i];
+        }
+    }
+
     // ─── Countdown Display ────────────────────────────────────────────────────
 
     /// Called by GameRoomManager each countdown tick via RPC.
@@ -312,6 +367,7 @@ public class MinigameStation : MonoBehaviour, IInteractable
     {
         _countdownLabel.gameObject.SetActive(true);
         _countdownLabel.text = $"Starting in {secondsRemaining}...";
+        _console?.UpdateCountdown(secondsRemaining);
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -344,6 +400,9 @@ public class MinigameStation : MonoBehaviour, IInteractable
         _syncedGameSelected = gameSelected;
         _syncedMinPlayers = minPlayers;
         _syncedSelectedGameId = selectedGameId;
+
+        RefreshExteriorDisplay();
+        _console?.Refresh(state, playerNames, selectedGameId, _registry);
 
         if (state == GameRoomState.Loading ||
             state == GameRoomState.InProgress ||

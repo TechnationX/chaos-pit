@@ -10,6 +10,8 @@ public class LobbySpawner : MonoBehaviour
 {
     [Header("Configs")]
     [SerializeField] private PlayerSpawnConfig _playerSpawnConfig;
+    [Tooltip("Scene anchor Transforms marking where players spawn in. Any count works — drag in as many empty GameObjects as you want spawn locations. Order doesn't matter; spawn selection is randomized (see RegisterSpawnPoints/TryGetSpawnPoint).")]
+    [SerializeField] private List<Transform> _playerSpawnPoints;
     [SerializeField] private FurnitureSpawnConfig _furnitureSpawnConfig;
     [SerializeField] private PropSpawnConfig _propSpawnConfig;
     [Tooltip("Each entry pairs a Prop Setup Config (piece list/patterns) with the scene Transform that anchors it — e.g. an empty GameObject placed where the chess table sits.")]
@@ -177,29 +179,39 @@ public class LobbySpawner : MonoBehaviour
         _spawnedConnections.Clear();
     }
     // --- Player Spawn Points ---
+    // Anchors now live as real Transforms in the scene (_playerSpawnPoints) instead of raw
+    // Position/Rotation data on PlayerSpawnConfig. _availableSpawnPoints/_availableSpawnRotations
+    // hold a shuffled copy of the anchors; TryGetSpawnPoint() actually consumes that shuffled
+    // order now (previously it cycled the unshuffled source list directly, so the shuffle below
+    // was computed but never used).
     private void RegisterSpawnPoints()
     {
         _availableSpawnPoints.Clear();
         _availableSpawnRotations.Clear();
-        foreach (var point in _playerSpawnConfig.SpawnPoints)
+        foreach (var anchor in _playerSpawnPoints)
         {
-            _availableSpawnPoints.Add(point.Position);
-            _availableSpawnRotations.Add(Quaternion.Euler(point.Rotation));
+            if (anchor == null) continue;
+            _availableSpawnPoints.Add(anchor.position);
+            _availableSpawnRotations.Add(anchor.rotation);
         }
+        _spawnPointIndex = 0;
         ShuffleSpawnPoints();
     }
     public bool TryGetSpawnPoint(out Vector3 position, out Quaternion rotation)
     {
         //Debug.Log($"[LobbySpawner] TryGetSpawnPoint — index: {_spawnPointIndex}, caller: {new System.Diagnostics.StackTrace().ToString().Split('\n')[1].Trim()}");
-        if (_playerSpawnConfig == null || _playerSpawnConfig.SpawnPoints.Length == 0)
+        if (_availableSpawnPoints == null || _availableSpawnPoints.Count == 0)
         {
             position = Vector3.zero;
             rotation = Quaternion.identity;
             return false;
         }
-        position = _playerSpawnConfig.SpawnPoints[_spawnPointIndex].Position;
-        rotation = Quaternion.Euler(_playerSpawnConfig.SpawnPoints[_spawnPointIndex].Rotation);
-        _spawnPointIndex = (_spawnPointIndex + 1) % _playerSpawnConfig.SpawnPoints.Length;
+        position = _availableSpawnPoints[_spawnPointIndex];
+        rotation = _availableSpawnRotations[_spawnPointIndex];
+        _spawnPointIndex = (_spawnPointIndex + 1) % _availableSpawnPoints.Count;
+        // Every point has been handed out once — reshuffle so the next lap isn't the same order.
+        if (_spawnPointIndex == 0)
+            ShuffleSpawnPoints();
         return true;
     }
     private void ShuffleSpawnPoints()
@@ -217,17 +229,18 @@ public class LobbySpawner : MonoBehaviour
     }
     public bool TryGetReturnSpawnPoint(out Vector3 position, out Quaternion rotation)
     {
-        // Re-read all spawn points from config each time — doesn't consume the list
-        if (_playerSpawnConfig == null || _playerSpawnConfig.SpawnPoints.Length == 0)
+        // Picks a fresh random anchor each call — doesn't consume/advance _spawnPointIndex,
+        // so it can't collide with the new-join cycling above.
+        if (_playerSpawnPoints == null || _playerSpawnPoints.Count == 0)
         {
             position = Vector3.zero;
             rotation = Quaternion.identity;
             return false;
         }
-        // Pick a random spawn point from the full config list
-        int index = Random.Range(0, _playerSpawnConfig.SpawnPoints.Length);
-        position = _playerSpawnConfig.SpawnPoints[index].Position;
-        rotation = Quaternion.Euler(_playerSpawnConfig.SpawnPoints[index].Rotation);
+        int index = Random.Range(0, _playerSpawnPoints.Count);
+        Transform anchor = _playerSpawnPoints[index];
+        position = anchor.position;
+        rotation = anchor.rotation;
         return true;
     }
     // --- Furniture ---
@@ -839,8 +852,50 @@ public class LobbySpawner : MonoBehaviour
         {
             foreach (Pin pin in lane.SpawnedPins)
                 if (pin != null && pin.IsAwaitingHide) pin.ServerHideNow();
+
+            // Same moment every server-confirmed-fallen pin in the lane
+            // clears — also resync every pin the server still considers
+            // standing. See ReaffirmStandingPins()/Pin.ServerReaffirmStanding()
+            // for why this is needed.
+            ReaffirmStandingPins(lane);
+
             lane.LastAwaitingHideCount = 0;
         }
+    }
+
+    // Re-broadcasts every still-standing pin's transform in this lane —
+    // see Pin.ServerReaffirmStanding() for the full reasoning: physics is
+    // simulated independently per client, so a pin can topple over on one
+    // client's own local physics without the server's copy falling the
+    // same way. That pin's SyncVar never changes as a result (the server
+    // still thinks it's standing), so nothing else would ever put it back
+    // up for that one client.
+    //
+    // Called from two places, covering both ways a roll can go:
+    //  - UpdateBowlingPinGroupHide() above, alongside the normal
+    //    fallen-pin hide pass — covers the common case, at the same
+    //    moment pins are already being resynced.
+    //  - BowlingGameController.ServerResolveRoll(), unconditionally, once
+    //    per roll — covers the edge case UpdateBowlingPinGroupHide() can't:
+    //    a roll where the SERVER itself sees zero pins fall (e.g. a
+    //    gutter ball) short-circuits before ever reaching the hide pass
+    //    above, but a pin could still have phantom-fallen on a client's
+    //    own physics that same roll. ServerResolveRoll() runs every roll
+    //    regardless of outcome, so this is the backstop that always fires.
+    private void ReaffirmStandingPins(BowlingLaneInstance lane)
+    {
+        if (lane?.SpawnedPins == null) return;
+        foreach (Pin pin in lane.SpawnedPins)
+            if (pin != null && pin.IsStanding) pin.ServerReaffirmStanding();
+    }
+
+    /// Public, index-based wrapper for external callers (e.g.
+    /// BowlingGameController) — same lookup convention as
+    /// ResetBowlingLane(int)/SwitchBowlingPattern(int, int) above.
+    public void ReaffirmStandingPins(int laneIndex)
+    {
+        if (_bowlingLanes == null || laneIndex < 0 || laneIndex >= _bowlingLanes.Count) return;
+        ReaffirmStandingPins(_bowlingLanes[laneIndex]);
     }
 
     private int GetActiveBowlingPatternIndex(BowlingPinConfig config)

@@ -59,6 +59,7 @@ public class PlayerObject : NetworkBehaviour
     public Animator CharacterAnimator => _animator;
 
     private bool _initialized = false;
+    private bool _hasStartedClient = false;
 
     private Grabbable _heldObject;
     private Grabbable _serverHeldObject;
@@ -82,9 +83,25 @@ public class PlayerObject : NetworkBehaviour
         base.OnStartClient();
         //Debug.Log($"OnStartClient fired. IsOwner: {IsOwner}");
 
-        _playerMovement.enabled = false;
-        _playerCamera.enabled = false;
-        _interactionManager.enabled = false;
+        _hasStartedClient = true;
+
+        // Only default these to disabled if we haven't already initialized
+        // as the local owner — see TryInitializeAsLocalOwner() below for
+        // why. FishNet doesn't guarantee OnOwnershipClient fires AFTER
+        // OnStartClient for an object spawned already-owned by this
+        // connection (exactly how the player prefab spawns) — when
+        // ownership happens to be assigned first, OnOwnershipClient
+        // already enabled and initialized everything, and this
+        // unconditional disable used to stomp that with nothing left to
+        // ever turn it back on. That was intermittent (a network-timing
+        // race, not a fixed order) and looked like "player joined but
+        // their own camera/movement never came on."
+        if (!_initialized)
+        {
+            _playerMovement.enabled = false;
+            _playerCamera.enabled = false;
+            _interactionManager.enabled = false;
+        }
 
         _characterRenderer = _characterModel != null
             ? _characterModel.GetComponentInChildren<SkinnedMeshRenderer>()
@@ -92,6 +109,8 @@ public class PlayerObject : NetworkBehaviour
 
         _castShadows.OnChange += OnCastShadowsChanged;
         ApplyShadowCasting(_castShadows.Value);
+
+        TryInitializeAsLocalOwner();
     }
 
     private void OnCastShadowsChanged(bool prev, bool next, bool asServer)
@@ -118,7 +137,17 @@ public class PlayerObject : NetworkBehaviour
         base.OnOwnershipClient(prevOwner);
         //Debug.Log($"OnOwnershipClient fired. IsOwner: {IsOwner}");
 
-        if (!IsOwner || _initialized) return;
+        TryInitializeAsLocalOwner();
+    }
+
+    // Runs the local-owner init exactly once, the first time BOTH
+    // OnStartClient has fired AND ownership is confirmed ours — regardless
+    // of which of the two callbacks happens to fire first. See the comment
+    // on OnStartClient for why relying on a fixed order between them was
+    // the actual bug.
+    private void TryInitializeAsLocalOwner()
+    {
+        if (_initialized || !_hasStartedClient || !IsOwner) return;
 
         _initialized = true;
         _playerMovement.enabled = true;

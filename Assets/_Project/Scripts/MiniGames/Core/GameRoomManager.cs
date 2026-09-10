@@ -91,10 +91,13 @@ public class GameRoomManager : NetworkBehaviour
         session.State = GameRoomState.Waiting;
 
         TeleportToWaitingArea(stationIndex, player);
-        player.Movement.SetMovementLocked(true, "lobby_session");
-        SetPlayerMovementLocked(player.Owner, player.NetworkObject, true, "lobby_session");
-        player.Interaction.SetInteractionEnabled(false);
-        RpcDisableInteraction(player.Owner, player.NetworkObject);
+
+        // Player is now physically in the waiting room and free to move —
+        // no movement lock, no interaction disable. The room's
+        // GameRoomConsole (fed by SyncSessionToClients below, same as the
+        // exterior GameStation display) takes over from here; the frozen
+        // kiosk panel is only ever used for the pre-join Join button.
+        RpcForceCloseStationPanel(player.Owner, stationIndex);
 
         _stations[stationIndex].OnSessionUpdated(session);
         SyncSessionToClients(stationIndex, session);
@@ -289,10 +292,16 @@ public class GameRoomManager : NetworkBehaviour
     // ─── Host Controls ────────────────────────────────────────────────────────
 
     [ServerRpc(RequireOwnership = false)]
-    public void SelectGame(int stationIndex, string miniGameId)
+    public void SelectGame(int stationIndex, string miniGameId, PlayerObject requestingPlayer)
     {
         if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) return;
         if (session.State != GameRoomState.Waiting) return;
+
+        // Previously unchecked — harmless while the only caller was a UI
+        // button the panel hid from non-hosts, but the room's SelectGame
+        // console button is a physical, walk-up-and-click interactable
+        // anyone can reach, so this needs real server-side enforcement now.
+        if (session.HostPlayer?.Owner?.ClientId != requestingPlayer?.Owner?.ClientId) return;
 
         MiniGameRegistryEntry entry = session.Registry?.GetById(miniGameId);
         if (entry == null)

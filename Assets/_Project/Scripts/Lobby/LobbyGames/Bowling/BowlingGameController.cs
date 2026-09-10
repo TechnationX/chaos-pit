@@ -386,6 +386,18 @@ public class BowlingGameController : NetworkBehaviour
         int pinsDown = Mathf.Max(0, _standingPinsBeforeRoll - standingNow);
         current.Scorer.AddRoll(pinsDown);
 
+        // Runs every roll, unconditionally — the backstop half of the
+        // client-only-phantom-fallen-pin fix (see
+        // LobbySpawner.ReaffirmStandingPins()/Pin.ServerReaffirmStanding()).
+        // LobbySpawner.UpdateBowlingPinGroupHide() only resyncs standing
+        // pins when the SERVER itself registers at least one pin falling
+        // that roll; a roll the server sees as a total gutter ball (zero
+        // pins down server-side) never reaches that pass at all, even if a
+        // pin visibly toppled on one client's own local physics that same
+        // roll. This call happens for every roll regardless of outcome, so
+        // that gap can't persist past the roll it happened on.
+        LobbySpawner.Instance.ReaffirmStandingPins(_laneIndex);
+
         LogScoreboard(current, pinsDown);
         RebuildScoreboardSnapshot();
 

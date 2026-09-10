@@ -203,6 +203,30 @@ public class Pin : NetworkBehaviour
         ObserversSetStandingTransform(_slotPosition, _slotRotation);
     }
 
+    /// Re-broadcasts this pin's slot transform to every client WITHOUT
+    /// touching _isStandingSync/_isDown — for a pin the SERVER still
+    /// considers standing, but whose transform may have drifted on a
+    /// client. Physics is simulated independently on every peer (this
+    /// pin has no NetworkTransform — see the class comment), so a
+    /// collision can occasionally topple a pin on one client's own local
+    /// physics without the server's own copy falling the same way. Since
+    /// fall detection is entirely server-authoritative (ReportPossibleFall
+    /// / the Update() safety net, both gated IsServerInitialized — correct,
+    /// scoring needs one agreed-on answer), that pin's SyncVar never
+    /// changes, so nothing was ever telling the affected client to put it
+    /// back up — it just sits fallen there indefinitely, even while every
+    /// server-confirmed pin resets normally. Called from
+    /// LobbySpawner.UpdateBowlingPinGroupHide() alongside the normal
+    /// fallen-pin hide pass, so every still-standing pin's transform gets
+    /// reasserted at the same cadence fallen ones get cleared, instead of
+    /// only at the next full re-rack.
+    [Server]
+    public void ServerReaffirmStanding()
+    {
+        if (!_isStandingSync.Value || _isDown) return; // not an active standing pin — nothing to reaffirm
+        ObserversSetStandingTransform(_slotPosition, _slotRotation);
+    }
+
     [ObserversRpc]
     private void ObserversSetStandingTransform(Vector3 position, Quaternion rotation)
     {

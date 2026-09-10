@@ -25,11 +25,28 @@ using UnityEngine.InputSystem;
 /// Networking mirrors Throwable's pattern: the owner requests a shoot via
 /// ServerRpc, the server validates and broadcasts via ObserversRpc, and
 /// every observing client (including the shooter) runs the same thrust
-/// coroutine and independently detects/applies the hit on its own local
-/// physics. This is "good enough" for a casual party game, same as
-/// Throwable's AddForce-on-every-client approach — it isn't frame-perfect
-/// deterministic, but the cue ball's NetworkTransform (kept permanently
-/// enabled, never toggled) periodically corrects any drift from the server.
+/// coroutine and detects the tip/ball overlap on its own local physics —
+/// but only for LOCAL COSMETIC PREDICTION now (see OnTipTriggerEnter).
+/// The ACTUAL force application is authoritative, reported by the
+/// shooter alone via ServerReportHit and applied once, server-side.
+///
+/// This used to be fully decentralized ("every peer applies the hit to
+/// its own local Rigidbody, good enough since physics converges"), but
+/// that broke down specifically for this one-shot trigger overlap: the
+/// cue is parented to the shooting player's HandSocket, whose transform
+/// is itself replicated with normal network latency/interpolation to
+/// every OTHER peer. The shooter's own client has zero-latency knowledge
+/// of their own hand position, so their local overlap check is reliable
+/// — but a remote observer's (including host's, when a client is
+/// shooting) copy of that same swing is checking overlap against a
+/// slightly-lagging position. Over the ~0.08–0.18s thrust
+/// (_thrustDuration/_returnDuration) that's often enough for the tip to
+/// cleanly miss the ball on the laggy peer's simulation even though it
+/// clearly hit on the shooter's — reported as "client hits the ball, but
+/// it never moves on the host." Ball-vs-ball collisions during normal
+/// rolling don't have this failure mode (continuous multi-step contact,
+/// not a single fast trigger check), so this fix is scoped to the strike
+/// moment only.
 /// </summary>
 public class Cue : Grabbable
 {
@@ -57,6 +74,12 @@ public class Cue : Grabbable
     private bool _isShooting;
     private bool _hasHitThisShot;
     private float _cooldownUntil;
+
+    // Server-side guard so ServerReportHit can only ever apply force once
+    // per shot, even if the ServerRpc somehow arrived twice (retry, or a
+    // malicious/buggy client). Reset at the top of ShootRoutine() — which
+    // the server runs its own copy of, same as every other observer.
+    private bool _serverStruckThisShot;
 
     // World-space direction the tip is actually travelling during the current
     // shot. Captured once at the start of ShootRoutine() from the same local
@@ -129,6 +152,7 @@ public class Cue : Grabbable
     {
         _isShooting = true;
         _hasHitThisShot = false;
+        _serverStruckThisShot = false;
 
         // _thrustDirection is authored relative to the cue's own forward, but
         // transform.localPosition is relative to the hand socket's axes — rotate
@@ -182,8 +206,43 @@ public class Cue : Grabbable
         if (cueBall == null) return; // not the cue ball — the cue can only ever affect the cue ball, everything else is silently ignored
 
         _hasHitThisShot = true;
-        // Use the direction the tip is actually travelling this shot, not
-        // transform.forward — see _shotWorldDirection's declaration for why.
+
+        // Local cosmetic prediction only — every peer (including the host's
+        // own client-side view of itself) still plays the strike sound and,
+        // if it's NOT the server, still applies a local Strike() so there's
+        // zero visible delay for whoever's watching. The host IS the server,
+        // so it skips this and waits for the authoritative path below to
+        // avoid applying the impulse twice.
+        if (!IsServerInitialized)
+        {
+            cueBall.Strike(_shotWorldDirection, _hitForce);
+        }
+        cueBall.PlayCueStrikeSound();
+
+        // Only the player actually holding the cue gets to report a hit —
+        // this runs on every observer's machine, so without this check a
+        // bystander client could also fire the RPC. ServerReportHit
+        // double-checks the same thing server-side (never trust the client
+        // alone), this just avoids a wasted RPC from everyone else.
+        if (_holdingPlayer != null && _holdingPlayer.IsOwner)
+        {
+            ServerReportHit(_holdingPlayer, cueBall);
+        }
+    }
+
+    // Authoritative strike. Only the connection that owns _holdingPlayer can
+    // report a hit for this shot, and it's applied at most once — the
+    // server's own ShootRoutine() (it runs one too, like every observer)
+    // already computed _shotWorldDirection from the SAME thrust the shooter
+    // saw, so this doesn't trust any client-supplied physics values, only
+    // "did the legitimate shooter's tip touch the ball."
+    [ServerRpc(RequireOwnership = false)]
+    private void ServerReportHit(PlayerObject player, CueBall cueBall)
+    {
+        if (!_isHeld || _holdingPlayer != player) return; // not the current legitimate shooter
+        if (cueBall == null || _serverStruckThisShot) return; // no ball reference, or already applied this shot
+        _serverStruckThisShot = true;
+
         cueBall.Strike(_shotWorldDirection, _hitForce);
         cueBall.PlayCueStrikeSound();
     }
