@@ -17,6 +17,7 @@ MonoBehaviour:
   SceneName: ThiefsMarketScene
   MinPlayers: 1
   MaxPlayers: 6
-  Description: Grab items and punch rivals to steal theirs. Highest value held when the round ends wins.
-  Thumbnail: {fileID: 0}
+  Description: Grab items and punch rivals to steal theirs. Highest value held when
+    the round ends wins.
+  Thumbnail: {fileID: 21300000, guid: 64630eb8d8976fd4c8227453cb7a0be8, type: 3}
   IsActive: 1

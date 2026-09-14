@@ -13,6 +13,7 @@ public class PlayerObject : NetworkBehaviour
     [SerializeField] private PlayerMovement _playerMovement;
     [SerializeField] private PlayerCamera _playerCamera;
     [SerializeField] private InteractionManager _interactionManager;
+    [SerializeField] private PlayerAppearance _playerAppearance;
 
     [Header("Model Reference")]
     [SerializeField] private GameObject _characterModel;
@@ -52,6 +53,7 @@ public class PlayerObject : NetworkBehaviour
     public PlayerMovement Movement => _playerMovement;
     public PlayerCamera Camera => _playerCamera;
     public InteractionManager Interaction => _interactionManager;
+    public PlayerAppearance Appearance => _playerAppearance;
     public GameObject CharacterModel => _characterModel;
 
     [Header("Animation")]
@@ -81,7 +83,7 @@ public class PlayerObject : NetworkBehaviour
     public override void OnStartClient()
     {
         base.OnStartClient();
-        //Debug.Log($"OnStartClient fired. IsOwner: {IsOwner}");
+        Debug.Log($"[DIAGNOSTIC] OnStartClient — obj: {gameObject.name}, IsOwner: {IsOwner}, Owner.ClientId: {(Owner != null ? Owner.ClientId : -1)}, _initialized(before): {_initialized}");
 
         _hasStartedClient = true;
 
@@ -135,7 +137,7 @@ public class PlayerObject : NetworkBehaviour
     public override void OnOwnershipClient(NetworkConnection prevOwner)
     {
         base.OnOwnershipClient(prevOwner);
-        //Debug.Log($"OnOwnershipClient fired. IsOwner: {IsOwner}");
+        Debug.Log($"[DIAGNOSTIC] OnOwnershipClient — obj: {gameObject.name}, IsOwner: {IsOwner}, Owner.ClientId: {(Owner != null ? Owner.ClientId : -1)}, prevOwner.ClientId: {(prevOwner != null ? prevOwner.ClientId : -1)}, _hasStartedClient: {_hasStartedClient}, _initialized(before): {_initialized}");
 
         TryInitializeAsLocalOwner();
     }
@@ -147,14 +149,24 @@ public class PlayerObject : NetworkBehaviour
     // the actual bug.
     private void TryInitializeAsLocalOwner()
     {
-        if (_initialized || !_hasStartedClient || !IsOwner) return;
+        Debug.Log($"[DIAGNOSTIC] TryInitializeAsLocalOwner called — obj: {gameObject.name}, _initialized: {_initialized}, _hasStartedClient: {_hasStartedClient}, IsOwner: {IsOwner}");
+
+        if (_initialized || !_hasStartedClient || !IsOwner)
+        {
+            Debug.Log($"[DIAGNOSTIC] TryInitializeAsLocalOwner — early-return (guard failed) on obj: {gameObject.name}");
+            return;
+        }
 
         _initialized = true;
         _playerMovement.enabled = true;
         _playerCamera.enabled = true;
         _interactionManager.enabled = true;
 
+        Debug.Log($"[DIAGNOSTIC] TryInitializeAsLocalOwner — guard passed, enabling subsystems and calling Initialize() on obj: {gameObject.name}. _playerMovement null? {_playerMovement == null}, _playerCamera null? {_playerCamera == null}, _interactionManager null? {_interactionManager == null}");
+
         Initialize();
+
+        Debug.Log($"[DIAGNOSTIC] TryInitializeAsLocalOwner — Initialize() returned on obj: {gameObject.name}");
     }
 
     private void Initialize()

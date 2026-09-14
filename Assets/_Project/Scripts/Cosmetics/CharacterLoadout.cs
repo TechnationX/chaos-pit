@@ -1,6 +1,7 @@
 // CharacterLoadout.cs
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using UnityEngine;
 using Bozo.ModularCharacters;
 
@@ -95,8 +96,27 @@ public static class CharacterLoadout
         return result;
     }
 
-    // Applies a loadout to a target OutfitSystem (used on every client for every player)
-    public static async void Apply(OutfitSystem system, List<SlotLoadout> slots, OutfitRegistry registry)
+    // Outfit slot type names that get kept as their own unmerged, always-active
+    // GameObjects for the local owner (see Apply's keepHeadPiecesSeparate below) —
+    // anything worn on/around the head or face that would otherwise clip into the
+    // first-person camera. PlayerAppearance.SetOwnHeadPiecesVisible reads this same
+    // list to toggle each piece's layer in sync with camera mode, so a mirror (or
+    // third-person/minigame view) still renders it while the owner's own first-person
+    // camera excludes it. Add a slot type name here — and only here — to give another
+    // piece (e.g. "Hat", "HeadAcc") this same treatment.
+    public static readonly string[] KeepSeparateWhenOwned =
+    {
+        "Head", "HairFront", "HairBack", "UpperFace", "LowerFace"
+    };
+
+    // Applies a loadout to a target OutfitSystem (used on every client for every player).
+    // keepHeadPiecesSeparate: true excludes each slot in KeepSeparateWhenOwned from BSMC's
+    // mesh-combine step (sets Outfit.mergeMesh = false) so it stays its own always-skinned
+    // SkinnedMeshRenderer instead of being permanently baked into the single merged body
+    // mesh. That's what lets PlayerAppearance.SetOwnHeadPiecesVisible toggle each one
+    // afterwards without a re-merge. Only ever pass true for the local owner's own build —
+    // every other client still merges normally, so nobody else's view of this player changes.
+    public static async Task Apply(OutfitSystem system, List<SlotLoadout> slots, OutfitRegistry registry, bool keepHeadPiecesSeparate = false)
     {
         foreach (var s in slots)
         {
@@ -109,6 +129,9 @@ public static class CharacterLoadout
 
             var inst = Object.Instantiate(prefab, system.transform);
             inst.Attach(system);
+
+            if (keepHeadPiecesSeparate && inst.Type != null && System.Array.IndexOf(KeepSeparateWhenOwned, inst.Type.name) >= 0)
+                inst.mergeMesh = false;
 
             for (int c = 0; c < s.colors.Length; c++)
             {

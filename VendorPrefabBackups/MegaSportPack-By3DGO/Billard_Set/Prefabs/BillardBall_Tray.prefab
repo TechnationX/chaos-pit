@@ -65,6 +65,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: fb078fa80816cbe4aae3ef14e8e72fea, type: 3}
       insertIndex: -1
       addedObject: {fileID: -3109862887608086858}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: fb078fa80816cbe4aae3ef14e8e72fea, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 9123456789012340002}
   m_SourcePrefab: {fileID: 100100000, guid: fb078fa80816cbe4aae3ef14e8e72fea, type: 3}
 --- !u!1 &7621988576257840310 stripped
 GameObject:
@@ -105,9 +108,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 70462f2405252a74d81149662cd610db, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PoolRackGrabbable
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: -3109862887608086858}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: -3109862887608086858}
   _promptLabel: Grab
   _dropPromptLabel: 
   _impactClips: []
@@ -137,7 +140,8 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
+  NetworkBehaviours:
+  - {fileID: 618135721359759766}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -152,7 +156,7 @@ MonoBehaviour:
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
-  NetworkObserver: {fileID: 0}
+  NetworkObserver: {fileID: 9123456789012340002}
   _enablePrediction: 0
   _predictionType: 0
   _localReconcileCorrectionType: 2
@@ -176,3 +180,19 @@ MonoBehaviour:
     Rotation: {x: 0, y: 0, z: 0, w: 0}
     Scale: {x: 0, y: 0, z: 0}
     IsValid: 0
+--- !u!114 &9123456789012340002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7621988576257840310}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 3
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}

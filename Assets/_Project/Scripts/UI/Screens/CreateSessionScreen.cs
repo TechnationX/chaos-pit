@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using TMPro;
+using FishNet;
 
 public class CreateSessionScreen : UIScreenBase
 {
@@ -144,6 +145,25 @@ public class CreateSessionScreen : UIScreenBase
     private void LoadLobby()
     {
         //Debug.Log("[CreateSessionScreen] Session active. Loading Lobby.");
-        SceneManager.LoadScene(lobbySceneName);
+
+        // Same loading screen JoinSessionScreen uses — host's own catch-up
+        // cost is normally negligible (props trickle in via the server's
+        // own spawn coroutines), but this keeps behavior consistent and
+        // covers the host if that ever changes.
+        if (LobbyLoadingScreen.HasInstance)
+            LobbyLoadingScreen.Instance.ShowAndWaitForSettled();
+
+        // Async, not the plain synchronous LoadScene — see JoinSessionScreen's
+        // LoadLobby() for why the synchronous version freezes everything,
+        // including this very loading screen, for the duration of the load.
+        AsyncOperation op = SceneManager.LoadSceneAsync(lobbySceneName);
+        if (op != null)
+        {
+            // Host is its own local client too, and LobbySpawner now gates
+            // every spawn (including the host's own player) on this signal
+            // instead of FishNet's OnClientLoadedStartScenes — see
+            // LobbyReadyBroadcast.cs and JoinSessionScreen.LoadLobby for why.
+            op.completed += _ => InstanceFinder.ClientManager.Broadcast(new LobbyReadyBroadcast());
+        }
     }
 }

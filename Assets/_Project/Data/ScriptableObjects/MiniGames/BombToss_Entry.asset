@@ -19,5 +19,5 @@ MonoBehaviour:
   MaxPlayers: 6
   Description: "Use LMB to pass the bomb before your fuse runs out \u2014 whoever's
     holding it when it detonates is eliminated."
-  Thumbnail: {fileID: 0}
+  Thumbnail: {fileID: 21300000, guid: 59fcff7bb453e9c469be97b4ef65dd46, type: 3}
   IsActive: 1

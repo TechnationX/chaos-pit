@@ -13,7 +13,8 @@ GameObject:
   - component: {fileID: 217767033373434239}
   - component: {fileID: 1227087230682091301}
   - component: {fileID: 1253914843298134986}
-  m_Layer: 7
+  - component: {fileID: 9123456789012340001}
+  m_Layer: 18
   m_Name: rookHighPoly
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -44,9 +45,9 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2480671543117846818}
   serializedVersion: 5
-  m_Mass: 1
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
+  m_Mass: 2
+  m_LinearDamping: 1
+  m_AngularDamping: 3
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -98,7 +99,7 @@ MonoBehaviour:
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
-  NetworkObserver: {fileID: 0}
+  NetworkObserver: {fileID: 9123456789012340001}
   _enablePrediction: 0
   _predictionType: 0
   _localReconcileCorrectionType: 2
@@ -156,7 +157,7 @@ GameObject:
   - component: {fileID: 3563655110723386767}
   - component: {fileID: 2945980711255118119}
   - component: {fileID: 7476479772007994974}
-  m_Layer: 7
+  m_Layer: 18
   m_Name: rookHighPoly.01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -301,3 +302,19 @@ MonoBehaviour:
     X: 0
     Y: 0
     Z: 0
+--- !u!114 &9123456789012340001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2480671543117846818}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 3
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}

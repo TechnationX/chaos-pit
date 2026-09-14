@@ -88,6 +88,15 @@ public class PlayerMovement : NetworkBehaviour
         _player = player;
         _controller = player.GetComponent<CharacterController>();
         _targetHeight = _standHeight;
+        _controller.height = _targetHeight;
+
+        // Force center.y to height/2 at spawn instead of trusting whatever raw value
+        // is authored on the CharacterController in the Inspector — HandleCrouch only
+        // keeps center.y in sync with height while the two differ, so if a future
+        // edit sets Height and Center.y to values that don't already agree, the
+        // capsule would otherwise float or sink relative to the root with no
+        // transition ever running to correct it, breaking ground detection.
+        _controller.center = new Vector3(_controller.center.x, _targetHeight / 2f, _controller.center.z);
         _isGrounded = true;
         _animator?.SetBool("IsGrounded", true);
         _animator?.SetBool("IsJumping", false);
@@ -159,7 +168,6 @@ public class PlayerMovement : NetworkBehaviour
     {
         bool wasGrounded = _isGrounded;
 
-        //Debug.Log($"IsGrounded: {_isGrounded}");
         if (_jumpCooldown > 0f)
         {
             _isGrounded = false;
@@ -207,8 +215,11 @@ public class PlayerMovement : NetworkBehaviour
                 Time.deltaTime * _crouchTransitionSpeed
             );
 
-            // Keep controller grounded by adjusting center
-            _controller.center = new Vector3(0, _controller.height / 2f, 0);
+            // Keep controller grounded by adjusting center's Y only — X/Z are left
+            // whatever they're set to on the CharacterController (e.g. a forward
+            // offset), since this used to hardcode them to 0 and silently wipe out
+            // any manual horizontal center offset the moment the player crouched.
+            _controller.center = new Vector3(_controller.center.x, _controller.height / 2f, _controller.center.z);
 
             // Move camera root to match new height
             if (_player.CameraRoot != null)

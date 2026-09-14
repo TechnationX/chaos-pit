@@ -346,9 +346,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3b0829b1748a39a46b4fc5cde7159494, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BowlingGameController
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: 1394994484171101665}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 1394994484171101665}
   _laneIndex: 0
   _initialFrameCount: 10
   _maxPlayers: 4
@@ -374,7 +374,8 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
+  NetworkBehaviours:
+  - {fileID: 445275413362853031}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}

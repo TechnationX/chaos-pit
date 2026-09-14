@@ -6,23 +6,12 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class MinigameStation : MonoBehaviour, IInteractable
+public class MinigameStation : MonoBehaviour
 {
     [Header("Station Settings")]
     [SerializeField] private int _stationIndex;
     [SerializeField] private Transform[] _waitingAreaPoints;
     [SerializeField] private MiniGameRegistry _registry;
-
-    [Header("UI — Panel")]
-    [SerializeField] private GameObject _panel;
-
-    [Header("UI — Game Selection")]
-    [SerializeField] private Transform _gameButtonContainer;
-    [SerializeField] private Button _gameButtonPrefab;
-
-    [Header("UI — Player List")]
-    [SerializeField] private Transform _playerListContainer;
-    [SerializeField] private TextMeshProUGUI _playerListEntryPrefab;
 
     [Header("UI — Exterior Display")]
     [SerializeField] private TextMeshProUGUI _exteriorHeaderText;   // "DisplayText" object — static "Game Room N"
@@ -30,40 +19,34 @@ public class MinigameStation : MonoBehaviour, IInteractable
     [SerializeField] private Transform _exteriorEntryContainer;     // "EntryContainer"
     [SerializeField] private TextMeshProUGUI _exteriorEntryPrefab;  // per-player name slot prefab
     [SerializeField] private Image _exteriorGameImage;              // "GameImage"
+    [SerializeField] private Sprite _privateModeSprite;             // shown instead of a minigame thumbnail while in Private mode
+    [SerializeField] private KioskJoinButton _kioskJoinButton;      // the station display's own Join button — greys out via CanJoin below
+    [SerializeField] private TextMeshProUGUI _countdownLabel;       // "Starting in N..." — kept visible to everyone, not gated on any menu
 
     [Header("UI — Room Console")]
     [SerializeField] private GameRoomConsole _console; // physical console in the waiting room, fed the same synced data as the exterior display
 
-    [Header("UI — Status")]
-    [SerializeField] private TextMeshProUGUI _statusLabel;
-    [SerializeField] private TextMeshProUGUI _countdownLabel;
-
-    [Header("UI — Buttons")]
-    [SerializeField] private Button _joinButton;
-    [SerializeField] private Button _leaveButton;
-    [SerializeField] private Button _startButton;
-    [SerializeField] private Button _closeButton;
-
     // State
-    private GameRoomSession _currentSession;
-    private PlayerObject _localPlayer;
-    private bool _isPanelOpen = false;
-    private int _hostClientId = -1;
     private List<string> _syncedPlayerNames = new List<string>();
     private GameRoomState _syncedState = GameRoomState.Idle;
-    private int _syncedPlayerCount = 0;
-    private bool _syncedGameSelected = false;
-    private int _syncedMinPlayers = 0;
     private List<int> _syncedClientIds = new List<int>();
     private string _syncedSelectedGameId = string.Empty;
+    private bool _syncedIsPrivateMode = true; // matches GameRoomSession's default so a fresh room's kiosk shows "Private" before any sync arrives
+    private bool _syncedIsLocked = false;
 
     private const int MaxExteriorEntries = 6;
 
     public int StationIndex => _stationIndex;
+
+    public int _stationVal = 0;
     public Transform[] WaitingAreaPoints => _waitingAreaPoints;
 
-    // IInteractable
-    public string PromptLabel => GetPromptLabel();
+    // Whether the kiosk's Join button should currently be interactable —
+    // same rule the old panel's Join button used
+    // (isIdle || isWaiting) && !locked — just no longer buried inside a
+    // panel-only refresh. KioskJoinButton reads this to grey itself out.
+    public bool CanJoin =>
+        (_syncedState == GameRoomState.Idle || _syncedState == GameRoomState.Waiting) && !_syncedIsLocked;
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -75,272 +58,61 @@ public class MinigameStation : MonoBehaviour, IInteractable
 
     private void Awake()
     {
-        _panel.SetActive(false);
+        _stationVal = _stationIndex + 1;
 
-        _joinButton.onClick.AddListener(OnJoinPressed);
-        _leaveButton.onClick.AddListener(OnLeavePressed);
-        _startButton.onClick.AddListener(OnStartPressed);
-        _closeButton.onClick.AddListener(OnClosePressed);
-
-        _exteriorHeaderText.text = $"Game Room {_stationIndex}";
+        _exteriorHeaderText.text = $"Game Room {_stationVal}";
         RefreshExteriorDisplay();
+        _kioskJoinButton?.Refresh();
     }
 
-    private void OnDestroy()
+    // ─── Join ─────────────────────────────────────────────────────────────────
+
+    // Called directly by KioskJoinButton.OnInteract — the station no longer
+    // opens any panel/menu, so there is nothing else for interacting with
+    // this station to do.
+    public void RequestJoin(PlayerObject player)
     {
-        _joinButton.onClick.RemoveAllListeners();
-        _leaveButton.onClick.RemoveAllListeners();
-        _startButton.onClick.RemoveAllListeners();
-        _closeButton.onClick.RemoveAllListeners();
+        if (_syncedClientIds.Contains(player.OwnerId)) return; // already in this room
+        GameRoomManager.Instance.RequestJoin(_stationIndex, player);
     }
 
-    // ─── IInteractable ────────────────────────────────────────────────────────
+    // Previously force-closed the join panel from the server right after a
+    // successful join (see GameRoomManager's RpcForceCloseStationPanel).
+    // There's no panel left to close, but the method is kept — with this
+    // empty body — so that existing call site keeps compiling without
+    // touching GameRoomManager.cs.
+    public void ForceClosePanel() { }
 
-    public void OnInteract(PlayerObject player)
-    {
-        // Once a player is part of this station's session they're in the
-        // waiting room using the GameRoomConsole — the kiosk panel is only
-        // for the initial Join step, so don't let it reopen mid-session
-        // (e.g. if the room layout allows walking back within raycast range).
-        if (_syncedClientIds.Contains(player.OwnerId)) return;
+    // ─── Session Sync ─────────────────────────────────────────────────────────
 
-        _localPlayer = player;
-        OpenPanel();
-    }
-
-    // ─── Panel ────────────────────────────────────────────────────────────────
-
-    private void OpenPanel()
-    {
-        _isPanelOpen = true;
-        _panel.SetActive(true);
-        RefreshUI();
-
-        // Lock player movement while panel is open
-        _localPlayer?.Movement.SetMovementLocked(true, "station_menu");
-        _localPlayer?.Camera.ReleaseCursor();
-    }
-
-    private void OnClosePressed()
-    {
-        if (_localPlayer == null) return;
-
-        bool localIsHost = _localPlayer.OwnerId == _hostClientId;
-        bool isCountdown = _syncedState == GameRoomState.Countdown;
-        bool localInSession = IsLocalPlayerInSession();
-
-        if (localInSession)
-        {
-            // Always just leave — host migration handled server side
-            GameRoomManager.Instance.RequestLeave(_stationIndex, _localPlayer);
-        }
-
-        ClosePanel();
-    }
-
-    private void ClosePanel()
-    {
-        _isPanelOpen = false;
-        _panel.SetActive(false);
-
-        // Restore movement if player is not in session
-        _localPlayer?.Movement.SetMovementLocked(false, "station_menu");
-
-        if (!IsLocalPlayerInSession())
-            _localPlayer?.Camera.LockCursor();
-
-        // Clear status label
-        if (_statusLabel != null)
-            _statusLabel.text = string.Empty;
-
-        // Reset synced state so panel shows correctly next open
-        _hostClientId = -1;
-        _syncedPlayerNames.Clear();
-        _syncedClientIds.Clear();
-        _syncedState = GameRoomState.Idle;
-        _syncedPlayerCount = 0;
-        _syncedGameSelected = false;
-        _syncedMinPlayers = 0;
-
-        _localPlayer = null;
-    }
-
-    public void ForceClosePanel()
-    {
-        if (!_isPanelOpen) return;
-        ClosePanel();
-        _localPlayer?.Camera.LockCursor();
-    }
-
-    // ─── Button Handlers ──────────────────────────────────────────────────────
-
-    private void OnJoinPressed()
-    {
-        if (_localPlayer == null) return;
-        GameRoomManager.Instance.RequestJoin(_stationIndex, _localPlayer);
-        RefreshUI();
-    }
-
-    private void OnLeavePressed()
-    {
-        if (_localPlayer == null) return;
-        GameRoomManager.Instance.RequestLeave(_stationIndex, _localPlayer);
-        ClosePanel();
-    }
-
-    private void OnStartPressed()
-    {
-        if (_localPlayer == null) return;
-        GameRoomManager.Instance.RequestStartCountdown(_stationIndex, _localPlayer);
-    }
-
-    private void OnGameSelected(string miniGameId)
-    {
-        GameRoomManager.Instance.SelectGame(_stationIndex, miniGameId, _localPlayer);
-    }
-
-    // ─── UI Refresh ───────────────────────────────────────────────────────────
-
-    /// Called by GameRoomManager whenever session state changes.
-    public void OnSessionUpdated(GameRoomSession session)
-    {
-        _currentSession = session;
-
-        if (session.State == GameRoomState.Loading ||
-            session.State == GameRoomState.InProgress ||
-            session.State == GameRoomState.Returning ||
-            session.State == GameRoomState.Results)
-        {
-            if (_isPanelOpen)
-                ClosePanel();
-            return;
-        }
-
-        if (_isPanelOpen)
-            RefreshUI();
-    }
-
-    private void RefreshUI()
-    {
-        _joinButton.gameObject.SetActive(false);
-        _leaveButton.gameObject.SetActive(false);
-        _startButton.gameObject.SetActive(false);
-        _closeButton.gameObject.SetActive(false);
-
-        int localClientId = _localPlayer != null ? _localPlayer.OwnerId : -1;
-        bool localIsHost = localClientId != -1 && localClientId == _hostClientId;
-        bool localInSession = _syncedPlayerNames.Count > 0 &&
-                              IsLocalPlayerInSession();
-        bool isCountdown = _syncedState == GameRoomState.Countdown;
-        bool isWaiting = _syncedState == GameRoomState.Waiting;
-        bool isIdle = _syncedState == GameRoomState.Idle;
-        bool isInProgress = _syncedState == GameRoomState.InProgress;
-        bool enoughPlayers = _syncedPlayerCount >= _syncedMinPlayers && _syncedMinPlayers > 0;
-
-        //Debug.Log($"[MinigameStation] RefreshUI — localClientId: {localClientId}, " +
-        //          $"hostClientId: {_hostClientId}, isHost: {localIsHost}, state: {_syncedState}");
-
-        // Status label
-        _statusLabel.text = _syncedState switch
-        {
-            GameRoomState.Idle => "Open — waiting for players",
-            GameRoomState.Waiting => $"{_syncedPlayerCount} player(s) in queue",
-            GameRoomState.Countdown => "Starting...",
-            GameRoomState.InProgress => "Game in progress",
-            _ => ""
-        };
-
-        // Countdown label
-        _countdownLabel.gameObject.SetActive(isCountdown);
-
-        // Join
-        _joinButton.gameObject.SetActive(!localInSession && !isInProgress);
-        _joinButton.interactable = isIdle || isWaiting;
-
-        // Leave — non-host only
-        _leaveButton.gameObject.SetActive(localInSession && !localIsHost && !isInProgress);
-
-        // Close
-        _closeButton.gameObject.SetActive(!isInProgress);
-        _closeButton.interactable = !isInProgress;
-
-        // Start — host only
-        _startButton.gameObject.SetActive(localIsHost && isWaiting && _syncedGameSelected && enoughPlayers);
-
-        // Game buttons — host only
-        _gameButtonContainer.gameObject.SetActive(localIsHost && isWaiting);
-        if (localIsHost && isWaiting)
-            BuildGameButtons();
-
-        // Close label
-        TextMeshProUGUI closeLabel = _closeButton.GetComponentInChildren<TextMeshProUGUI>();
-        if (closeLabel != null)
-            closeLabel.text = localIsHost && (isCountdown || localInSession) ? "Cancel" : "Close";
-
-        // Player list
-        BuildPlayerList();
-    }
-
-    private void BuildGameButtons()
-    {
-        //Debug.Log("[MinigameStation] BuildGameButtons — start");
-
-        foreach (Transform child in _gameButtonContainer)
-            Destroy(child.gameObject);
-
-        if (_registry == null) return;
-
-        //Debug.Log($"[MinigameStation] BuildGameButtons — entries: {_registry.GetActiveEntries().Count}");
-
-        foreach (MiniGameRegistryEntry entry in _registry.GetActiveEntries())
-        {
-            //Debug.Log($"[MinigameStation] BuildGameButtons — creating button for: {entry?.MiniGameName}");
-
-            Button btn = Instantiate(_gameButtonPrefab, _gameButtonContainer);
-            //Debug.Log("[MinigameStation] BuildGameButtons — button instantiated");
-
-            TextMeshProUGUI label = btn.GetComponentInChildren<TextMeshProUGUI>();
-            if (label != null) label.text = entry.MiniGameName;
-
-            bool isSelected = entry.MiniGameId == _syncedSelectedGameId;
-            btn.interactable = !isSelected;
-
-            string id = entry.MiniGameId;
-            btn.onClick.AddListener(() => OnGameSelected(id));
-        }
-
-        //Debug.Log("[MinigameStation] BuildGameButtons — complete");
-    }
-
-    private void BuildPlayerList()
-    {
-        foreach (Transform child in _playerListContainer)
-            Destroy(child.gameObject);
-
-        for (int i = 0; i < _syncedPlayerNames.Count; i++)
-        {
-            TextMeshProUGUI entry = Instantiate(_playerListEntryPrefab, _playerListContainer);
-            bool isHost = i == 0; // host is always first in list
-            entry.text = isHost ? $"{_syncedPlayerNames[i]} (Host)" : _syncedPlayerNames[i];
-        }
-    }
-
-    // ─── Exterior Display (kiosk screen — visible to everyone, not just the local player's panel) ─
+    // Called directly (not via RPC) by GameRoomManager on the server's own
+    // station instance whenever session state changes. Previously used to
+    // give the host's own panel a zero-latency refresh ahead of the RPC
+    // broadcast; now that there's no panel, UpdateSessionState — driven by
+    // the authoritative SyncSessionToClients RPC that reaches every client,
+    // including the host — is the only path that needs to touch the kiosk's
+    // visuals. Kept as a no-op stub so GameRoomManager's many existing calls
+    // into every station still compile.
+    public void OnSessionUpdated(GameRoomSession session) { }
 
     private void RefreshExteriorDisplay()
     {
-        MiniGameRegistryEntry entry = !string.IsNullOrEmpty(_syncedSelectedGameId) && _registry != null
+        MiniGameRegistryEntry entry = !_syncedIsPrivateMode && !string.IsNullOrEmpty(_syncedSelectedGameId) && _registry != null
             ? _registry.GetById(_syncedSelectedGameId)
             : null;
 
-        _exteriorPlayingText.text = entry != null
-            ? $"Playing: {entry.MiniGameName}"
-            : "Playing: Selecting Game...";
+        if (_syncedIsPrivateMode)
+            _exteriorPlayingText.text = _syncedIsLocked ? "Playing: Private (Locked)" : "Playing: Private";
+        else
+            _exteriorPlayingText.text = entry != null
+                ? $"Playing: {entry.MiniGameName}"
+                : "Playing: Selecting Game...";
 
         if (_exteriorGameImage != null)
         {
-            _exteriorGameImage.sprite = entry?.Thumbnail;
-            _exteriorGameImage.enabled = entry != null && entry.Thumbnail != null;
+            Sprite sprite = _syncedIsPrivateMode ? _privateModeSprite : entry?.Thumbnail;
+            _exteriorGameImage.sprite = sprite;
+            _exteriorGameImage.enabled = sprite != null;
         }
 
         BuildExteriorEntries();
@@ -370,51 +142,21 @@ public class MinigameStation : MonoBehaviour, IInteractable
         _console?.UpdateCountdown(secondsRemaining);
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
-
-    private bool IsLocalPlayerInSession()
-    {
-        if (_localPlayer == null) return false;
-        return _syncedClientIds.Contains(_localPlayer.OwnerId);
-    }
-
-    private string GetPromptLabel()
-    {
-        return _syncedState switch
-        {
-            GameRoomState.InProgress => "In Progress",
-            GameRoomState.Loading => "Loading...",
-            GameRoomState.Returning => "Returning...",
-            _ => "View Game Room"
-        };
-    }
+    // ─── Sync Entry Point ─────────────────────────────────────────────────────
 
     public void UpdateSessionState(int hostClientId, List<string> playerNames,
-    List<int> clientIds, GameRoomState state, bool gameSelected, int minPlayers, string selectedGameId)
+    List<int> clientIds, GameRoomState state, bool gameSelected, int minPlayers, string selectedGameId,
+    bool isPrivateMode, bool isLocked)
     {
-        _hostClientId = hostClientId;
         _syncedPlayerNames = playerNames;
         _syncedClientIds = clientIds;
         _syncedState = state;
-        _syncedPlayerCount = playerNames.Count;
-        _syncedGameSelected = gameSelected;
-        _syncedMinPlayers = minPlayers;
         _syncedSelectedGameId = selectedGameId;
+        _syncedIsPrivateMode = isPrivateMode;
+        _syncedIsLocked = isLocked;
 
         RefreshExteriorDisplay();
-        _console?.Refresh(state, playerNames, selectedGameId, _registry);
-
-        if (state == GameRoomState.Loading ||
-            state == GameRoomState.InProgress ||
-            state == GameRoomState.Returning ||
-            state == GameRoomState.Results)
-        {
-            if (_isPanelOpen)
-                ClosePanel();
-            return;
-        }
-
-        if (_isPanelOpen)
-            RefreshUI();
+        _console?.Refresh(state, playerNames, clientIds, selectedGameId, _registry, isPrivateMode, isLocked);
+        _kioskJoinButton?.Refresh();
     }
 }

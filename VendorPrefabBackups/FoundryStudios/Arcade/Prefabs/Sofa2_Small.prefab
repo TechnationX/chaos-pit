@@ -25,7 +25,7 @@ Transform:
   m_GameObject: {fileID: 7259855251634083180}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.345, z: 0.119}
+  m_LocalPosition: {x: 0, y: 0.416, z: 0.323}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -180,9 +180,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5e9fd80d909b1d044b80c78905ced8e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Sittable
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: -3291881760600136318}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: -3291881760600136318}
   _sitPoints:
   - {fileID: 8322084768908000149}
   _promptLabel: Sit
@@ -204,7 +204,8 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
+  NetworkBehaviours:
+  - {fileID: -8186594030440218804}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}

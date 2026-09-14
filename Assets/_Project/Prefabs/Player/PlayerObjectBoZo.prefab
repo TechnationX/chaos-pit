@@ -28,13 +28,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 620739584008641160}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.38920143, y: 0.490134, z: -0.25934517, w: 0.7355481}
-  m_LocalPosition: {x: -3.0296435, y: 4.309724, z: -1.0279009}
+  m_LocalRotation: {x: 0.11894367, y: -0.5625415, z: 0.082197, w: 0.814029}
+  m_LocalPosition: {x: 0.9307447, y: 0.51468277, z: -0.20382044}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1696979339290945896}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 55, y: 67.355, z: 0}
 --- !u!114 &2416079227321590371
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -59,9 +59,9 @@ MonoBehaviour:
     LookAtTarget: {fileID: 0}
     CustomLookAtTarget: 0
   Lens:
-    FieldOfView: 60.000004
+    FieldOfView: 40
     OrthographicSize: 5
-    NearClipPlane: 0.3
+    NearClipPlane: 0.1
     FarClipPlane: 1000
     Dutch: 0
     ModeOverride: 0
@@ -97,14 +97,14 @@ MonoBehaviour:
     AngularDampingMode: 0
     RotationDamping: {x: 0, y: 0, z: 0}
     QuaternionDamping: 1
-  OrbitStyle: 1
+  OrbitStyle: 0
   Radius: 1
   Orbits:
     Top:
       Radius: 2
-      Height: 5
+      Height: 3
     Center:
-      Radius: 4
+      Radius: 2
       Height: 2.25
     Bottom:
       Radius: 2.5
@@ -112,7 +112,7 @@ MonoBehaviour:
     SplineCurvature: 0.5
   RecenteringTarget: 2
   HorizontalAxis:
-    Value: 67.35517
+    Value: -69.293465
     Center: 0
     Range: {x: -180, y: 180}
     Wrap: 1
@@ -122,9 +122,9 @@ MonoBehaviour:
       Time: 2
     Restrictions: 0
   VerticalAxis:
-    Value: 30.769423
+    Value: 5.7209086
     Center: 17.5
-    Range: {x: -10, y: 45}
+    Range: {x: 0, y: 45}
     Wrap: 0
     Recentering:
       Enabled: 0
@@ -156,7 +156,7 @@ MonoBehaviour:
   ReferenceFrame: 0
   RecenterTarget: 0
   PanAxis:
-    Value: 67.35517
+    Value: -69.293465
     Center: 0
     Range: {x: -180, y: 180}
     Wrap: 1
@@ -166,7 +166,7 @@ MonoBehaviour:
       Time: 2
     Restrictions: 0
   TiltAxis:
-    Value: 55.76943
+    Value: 16.626144
     Center: 0
     Range: {x: 0, y: 70}
     Wrap: 0
@@ -274,7 +274,7 @@ Transform:
   m_GameObject: {fileID: 1099591980734124255}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: -0.079, z: 0.236}
+  m_LocalPosition: {x: 0, y: -0.085, z: 0.148}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -445,13 +445,13 @@ CharacterController:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Height: 2
+  m_Height: 1.5
   m_Radius: 0.3
   m_SlopeLimit: 45
   m_StepOffset: 0.3
   m_SkinWidth: 0.08
   m_MinMoveDistance: 0.001
-  m_Center: {x: 0, y: 1, z: 0}
+  m_Center: {x: 0, y: 0.75, z: 0.2}
 --- !u!54 &2126655610883340682
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -504,6 +504,8 @@ MonoBehaviour:
   - {fileID: 4406292158570597787}
   - {fileID: 1576687685634962087}
   - {fileID: 4571975280494835051}
+  - {fileID: 7850362941537905089}
+  - {fileID: 5771011698147605862}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -514,7 +516,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584178647839378432
+  _initializedTimestamp: -8584124067694795012
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
@@ -533,7 +535,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 16
+  <PrefabId>k__BackingField: 17
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 4577531805922500227
   SceneId: 0
@@ -628,6 +630,7 @@ MonoBehaviour:
   _playerMovement: {fileID: 4406292158570597787}
   _playerCamera: {fileID: 1576687685634962087}
   _interactionManager: {fileID: 4571975280494835051}
+  _playerAppearance: {fileID: 7850362941537905089}
   _characterModel: {fileID: 675420075707996841}
   _handSocket: {fileID: 2841485608747275214}
   _handSocketStatic: {fileID: 4492696681795499465}
@@ -651,13 +654,14 @@ MonoBehaviour:
   _sprintSpeed: 8
   _jumpHeight: 1.5
   _gravity: -19.62
+  _autoTurnSpeed: 720
   _groundLayer:
     serializedVersion: 2
-    m_Bits: 320
+    m_Bits: 524736
   _groundCheckDistance: 0.3
   _crouchSpeed: 2
   _crouchHeight: 0.9
-  _standHeight: 1.8
+  _standHeight: 1.5
   _crouchTransitionSpeed: 10
   _crouchKey: 55
   _shoveKey: 20
@@ -746,9 +750,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bd863ca578a4d014093cec7e355c33c2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerAppearance
-  _componentIndexCache: 255
+  _componentIndexCache: 6
   _addedNetworkObject: {fileID: 4854047822952305378}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 4854047822952305378}
   registry: {fileID: 11400000, guid: 00fbf948d5804084781bdb4f36ccec69, type: 2}
   outfitSystem: {fileID: 405037180155912657}
 --- !u!114 &5771011698147605862
@@ -763,9 +767,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3c4c2a1bf9070ad4e8e592e5fbb8f64d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerProfileSync
-  _componentIndexCache: 255
+  _componentIndexCache: 7
   _addedNetworkObject: {fileID: 4854047822952305378}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 4854047822952305378}
 --- !u!1 &4462422390393396489
 GameObject:
   m_ObjectHideFlags: 0
@@ -845,7 +849,7 @@ Transform:
   m_GameObject: {fileID: 7705649155312591626}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.198, z: 0.141}
+  m_LocalPosition: {x: 0, y: 1.012, z: 0.154}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -871,7 +875,7 @@ CapsuleCollider:
   m_Enabled: 1
   serializedVersion: 2
   m_Radius: 0.15
-  m_Height: 1.2
+  m_Height: 1.5
   m_Direction: 1
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &8506393290023215574
@@ -900,7 +904,7 @@ Transform:
   m_GameObject: {fileID: 8506393290023215574}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: -0.089, z: 0.109}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -930,9 +934,9 @@ MonoBehaviour:
     LookAtTarget: {fileID: 0}
     CustomLookAtTarget: 0
   Lens:
-    FieldOfView: 60.000004
+    FieldOfView: 50
     OrthographicSize: 5
-    NearClipPlane: 0.3
+    NearClipPlane: 0.1
     FarClipPlane: 1000
     Dutch: 0
     ModeOverride: 0

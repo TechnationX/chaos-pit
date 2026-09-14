@@ -134,9 +134,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5e9fd80d909b1d044b80c78905ced8e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Sittable
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: -2914740644730965701}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: -2914740644730965701}
   _sitPoints:
   - {fileID: 7175063294632294191}
   - {fileID: 7280016821075896890}
@@ -164,7 +164,8 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
+  NetworkBehaviours:
+  - {fileID: -2007737878479265240}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}

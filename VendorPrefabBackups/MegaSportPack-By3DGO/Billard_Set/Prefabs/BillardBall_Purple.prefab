@@ -75,6 +75,9 @@ PrefabInstance:
       addedObject: {fileID: -8662213038105176103}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 049b987981f99ac44960a626826c0e61, type: 3}
       insertIndex: -1
+      addedObject: {fileID: 9123456789012340002}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 049b987981f99ac44960a626826c0e61, type: 3}
+      insertIndex: -1
       addedObject: {fileID: 9050541392002175611}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 049b987981f99ac44960a626826c0e61, type: 3}
       insertIndex: -1
@@ -193,7 +196,7 @@ MonoBehaviour:
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
-  NetworkObserver: {fileID: 0}
+  NetworkObserver: {fileID: 9123456789012340002}
   _enablePrediction: 0
   _predictionType: 0
   _localReconcileCorrectionType: 2
@@ -255,3 +258,19 @@ MonoBehaviour:
   _networkObjectCache: {fileID: -8662213038105176103}
   _holdingSlotName: BallHolder_4
   _disableGravityWhenParked: 1
+--- !u!114 &9123456789012340002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3353899848545635176}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 3
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}

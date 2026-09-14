@@ -7,6 +7,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using TMPro;
+using FishNet;
 
 public class JoinSessionScreen : UIScreenBase
 {
@@ -172,6 +173,37 @@ public class JoinSessionScreen : UIScreenBase
     private void LoadLobby()
     {
         Debug.Log("[JoinSessionScreen] Connected. Loading Lobby.");
-        SceneManager.LoadScene(lobbySceneName);
+
+        // Shown until the client's own catch-up prop spawning actually
+        // settles, not just until the scene finishes loading — see
+        // LobbyLoadingScreen for why those two are very different lengths
+        // of time for a client joining an already-set-up lobby.
+        if (LobbyLoadingScreen.HasInstance)
+            LobbyLoadingScreen.Instance.ShowAndWaitForSettled();
+
+        // Async, not the plain synchronous LoadScene — a synchronous load
+        // blocks the entire game loop (no Update, no coroutines, nothing)
+        // until the whole heavy Lobby scene finishes deserializing and every
+        // object's Awake() has run. That froze the loading screen itself
+        // along with everything else, including its own hard-timeout
+        // failsafe, since a coroutine can only advance between frames and a
+        // synchronous load doesn't yield any. LoadSceneAsync keeps frames
+        // (and this client's own rendering/coroutines) running while Lobby
+        // loads in the background.
+        Debug.Log("[DIAGNOSTIC][JoinSessionScreen] Starting SceneManager.LoadSceneAsync(Lobby).");
+        AsyncOperation op = SceneManager.LoadSceneAsync(lobbySceneName);
+        if (op != null)
+        {
+            op.completed += _ =>
+            {
+                Debug.Log("[DIAGNOSTIC][JoinSessionScreen] Lobby scene LoadSceneAsync completed (Unity scene load finished on this client).");
+
+                // Tell the server this client's own Lobby scene is actually
+                // ready — see LobbyReadyBroadcast.cs for why LobbySpawner
+                // needs this instead of just reacting to the raw connection
+                // becoming ready.
+                InstanceFinder.ClientManager.Broadcast(new LobbyReadyBroadcast());
+            };
+        }
     }
 }

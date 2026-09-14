@@ -1,7 +1,9 @@
 // LobbySpawner
 using FishNet;
+using FishNet.Broadcast;
 using FishNet.Connection;
 using FishNet.Object;
+using FishNet.Observing;
 using FishNet.Transporting;
 using System.Collections;
 using System.Collections.Generic;
@@ -29,6 +31,22 @@ public class LobbySpawner : MonoBehaviour
     public static LobbySpawner Instance { get; private set; }
     private int _spawnPointIndex = 0;
     private HashSet<int> _spawnedConnections = new HashSet<int>();
+    // Two independent "is this connection actually safe to spawn for" signals
+    // — a connection's player only spawns once BOTH are true for it. See
+    // OnClientLoadedStartScenes / OnLobbyReadyBroadcast / TrySpawnIfReady for
+    // why neither one alone is sufficient (each was tried alone first and
+    // each broke a different case).
+    private HashSet<int> _startScenesLoadedConnections = new HashSet<int>();
+    private HashSet<int> _lobbyReadyConnections = new HashSet<int>();
+    // Every currently-spawned NetworkObject that uses ManualRevealCondition
+    // (chess pieces; pool — rack, cue ball, cues, holding rack, numbered
+    // balls; bowling pins and balls; see RegisterManualRevealObject). A new
+    // connection starts with none of these visible and RevealManualObjectsToConnection
+    // gradually reveals them one at a time, instead of letting FishNet's
+    // automatic new-connection catch-up burst (ServerManager.Objects.RebuildObservers)
+    // send all of them at once, which was found to permanently stall that
+    // connection's reliable channel — see the comment on RevealManualObjectsToConnection.
+    private List<NetworkObject> _manualRevealObjects = new List<NetworkObject>();
 #if UNITY_EDITOR
     private bool _editorHostSpawnPending = false;
     public void EditorTriggerHostSpawn(FishNet.Connection.NetworkConnection conn)
@@ -99,6 +117,57 @@ public class LobbySpawner : MonoBehaviour
     private void Awake()
     {
         Instance = this;
+        PrewarmConvexMeshColliders();
+    }
+    // --- Physics Warm-up ---
+    // Pre-bakes convex hull data for every convex MeshCollider referenced by
+    // any Prop Setup pattern (chess pieces are the practical case — their
+    // MeshCollider sits directly on the real high-poly render mesh, see the
+    // collider-placement fix history in the project docs). Physics.BakeMesh
+    // cooks the hull once per unique mesh and caches the result; any later
+    // MeshCollider that references that same mesh (with a matching convex
+    // flag) reuses the cached hull instead of PhysX re-running hull
+    // generation from scratch on every single Instantiate. Without this, a
+    // client who joins after the lobby is already set up has to eat that
+    // cook cost for all 32 chess-piece instances back-to-back — on top of
+    // every other prop it's catching up on — which is what turned into a
+    // many-second stall on join. Runs in Awake() (every peer, not just the
+    // server — see the class-level note on LobbySpawner not being a
+    // NetworkBehaviour) so it happens before any spawn, whether the
+    // server's own initial spawn or a late-joining client's catch-up burst,
+    // can hit the uncached cost.
+    private void PrewarmConvexMeshColliders()
+    {
+        if (_propSetups == null) return;
+
+        var bakedMeshIds = new HashSet<int>();
+
+        foreach (var instance in _propSetups)
+        {
+            PropSetupConfig setup = instance?.Config;
+            if (setup?.Patterns == null) continue;
+
+            foreach (var pattern in setup.Patterns)
+            {
+                if (pattern?.Entries == null) continue;
+
+                foreach (var entry in pattern.Entries)
+                {
+                    if (entry?.Prefab == null) continue;
+
+                    foreach (var col in entry.Prefab.GetComponentsInChildren<MeshCollider>(true))
+                    {
+                        if (!col.convex || col.sharedMesh == null) continue;
+
+                        int meshId = col.sharedMesh.GetInstanceID();
+                        if (bakedMeshIds.Contains(meshId)) continue;
+
+                        Physics.BakeMesh(meshId, true, col.cookingOptions);
+                        bakedMeshIds.Add(meshId);
+                    }
+                }
+            }
+        }
     }
     private void Update()
     {
@@ -130,21 +199,61 @@ public class LobbySpawner : MonoBehaviour
     }
     private void RegisterSpawnListener()
     {
-        //Debug.Log($"[LobbySpawner] RegisterSpawnListener called. AlreadyRegistered: {_spawnListenerRegistered}");
+        Debug.Log($"[LobbySpawner] RegisterSpawnListener called. AlreadyRegistered: {_spawnListenerRegistered}");
         if (_spawnListenerRegistered) return;
         _spawnListenerRegistered = true;
         InstanceFinder.SceneManager.OnClientLoadedStartScenes += OnClientLoadedStartScenes;
+        InstanceFinder.ServerManager.RegisterBroadcast<LobbyReadyBroadcast>(OnLobbyReadyBroadcast);
     }
+    // One of two required signals — see TrySpawnIfReady. FishNet fires this
+    // once IT internally considers a connection to have loaded its start
+    // scenes, which turned out to be a genuine precondition for
+    // ServerManager.Spawn() to be safe (skipping it is what caused the
+    // SyncTypes_Preinitialize NullReferenceException flood the first time
+    // this project hit it) — NOT just an event we could freely replace.
+    // Originally this method did the actual spawning by itself, which broke
+    // for a remote client (see OnLobbyReadyBroadcast's comment). Swapping the
+    // trigger to LobbyReadyBroadcast alone then broke the HOST's own spawn
+    // instead: on the host's loopback connection, LobbyReadyBroadcast can
+    // arrive before FishNet's own internal start-scenes-loaded flag flips
+    // true, so spawning off that alone re-triggered the exact same NRE with
+    // a new cause. Requiring both together is what actually closes both gaps.
     private void OnClientLoadedStartScenes(FishNet.Connection.NetworkConnection conn, bool asServer)
     {
-        //Debug.Log($"[LobbySpawner] OnClientLoadedStartScenes — connId: {conn.ClientId}, asServer: {asServer}, alreadySpawned: {_spawnedConnections.Contains(conn.ClientId)}");
+        Debug.Log($"[LobbySpawner] OnClientLoadedStartScenes — connId: {conn.ClientId}, asServer: {asServer}, alreadySpawned: {_spawnedConnections.Contains(conn.ClientId)}");
         if (!asServer) return;
-        if (_spawnedConnections.Contains(conn.ClientId))
-        {
-            // Refresh leaderboard for both server and client
-            //LeaderboardManager.Instance?.Refresh();
-            return;
-        }
+        _startScenesLoadedConnections.Add(conn.ClientId);
+        TrySpawnIfReady(conn);
+    }
+    // The other required signal — see TrySpawnIfReady. Fires once a
+    // connection's own client confirms that its local Lobby scene has
+    // genuinely finished loading (see JoinSessionScreen.LoadLobby /
+    // CreateSessionScreen.LoadLobby for where this gets sent). Needed
+    // because nothing in this project loads Lobby through FishNet's own
+    // scene system — both screens use plain SceneManager.LoadSceneAsync — so
+    // OnClientLoadedStartScenes above has no relationship to whether the
+    // client's Lobby scene actually exists locally yet. In testing, relying
+    // on OnClientLoadedStartScenes alone let the server spawn/reveal objects
+    // for a remote client about a second before that client's Lobby scene
+    // existed, which is what caused the original "client joins, then
+    // silently receives nothing ever again" symptom.
+    private void OnLobbyReadyBroadcast(NetworkConnection conn, LobbyReadyBroadcast msg, Channel channel)
+    {
+        Debug.Log($"[LobbySpawner] OnLobbyReadyBroadcast — connId: {conn.ClientId}, alreadySpawned: {_spawnedConnections.Contains(conn.ClientId)}");
+        _lobbyReadyConnections.Add(conn.ClientId);
+        TrySpawnIfReady(conn);
+    }
+    // Spawns a connection's player (and starts its manual-reveal coroutine)
+    // the moment BOTH OnClientLoadedStartScenes and OnLobbyReadyBroadcast
+    // have fired for it, regardless of which one happens to arrive second —
+    // see the comments on each for why neither alone is sufficient.
+    private void TrySpawnIfReady(NetworkConnection conn)
+    {
+        if (_spawnedConnections.Contains(conn.ClientId)) return;
+        if (!_startScenesLoadedConnections.Contains(conn.ClientId)) return;
+        if (!_lobbyReadyConnections.Contains(conn.ClientId)) return;
+
+        Debug.Log($"[LobbySpawner] TrySpawnIfReady — both signals received for connId: {conn.ClientId}. Spawning.");
         _spawnedConnections.Add(conn.ClientId);
         if (_playerSpawnConfig.PlayerPrefab == null)
         {
@@ -167,6 +276,12 @@ public class LobbySpawner : MonoBehaviour
         playerObj?.SetPlayerData(displayName, conn.ClientId);
         //Debug.Log($"[LobbySpawner] Calling LeaderboardManager.Refresh — instance: {LeaderboardManager.Instance != null}");
         GameRoomManager.Instance?.SyncLeaderboardToClients();
+
+        // Chess pieces are hidden from this connection by default (see the
+        // Manual Reveal region above) — reveal them gradually now instead of
+        // letting FishNet's own automatic catch-up burst try to send all of
+        // them at once.
+        StartCoroutine(RevealManualObjectsToConnection(conn));
     }
     private void OnDestroy()
     {
@@ -175,8 +290,94 @@ public class LobbySpawner : MonoBehaviour
         if (InstanceFinder.SceneManager != null)
             InstanceFinder.SceneManager.OnClientLoadedStartScenes -= OnClientLoadedStartScenes;
         if (InstanceFinder.ServerManager != null)
+        {
             InstanceFinder.ServerManager.OnRemoteConnectionState -= OnRemoteConnectionState;
+            InstanceFinder.ServerManager.UnregisterBroadcast<LobbyReadyBroadcast>(OnLobbyReadyBroadcast);
+        }
         _spawnedConnections.Clear();
+        _startScenesLoadedConnections.Clear();
+        _lobbyReadyConnections.Clear();
+    }
+    // --- Manual Reveal (chess pieces, pool, bowling pins/balls) ---
+    // Chess pieces, pool objects (rack, cue ball, cues, holding rack, numbered
+    // balls), and bowling pins/balls carry a NetworkObserver +
+    // ManualRevealCondition on their prefab (see ManualRevealCondition.cs)
+    // instead of using FishNet's default always-visible behavior. That
+    // condition starts an object invisible to every connection until
+    // something explicitly reveals it. This exists because of a confirmed
+    // failure mode: FishNet syncs every already-spawned NetworkObject to a
+    // newly-joined connection in one automatic burst
+    // (ServerManager.Objects.RebuildObservers, fired off
+    // SceneManager.OnClientLoadedStartScenes) — with ~32 chess pieces and/or
+    // ~20 pool objects already on the tables, that burst was found to
+    // permanently stall the joining client's reliable channel (it received
+    // literally nothing afterward, not even its own player object).
+    // SwitchPoolPatternRoutine below hit the same class of problem for a live
+    // pattern switch and fixed it by spreading the spawn/despawn calls across
+    // frames — this does the equivalent for the catch-up burst, which isn't
+    // project-authored code and so can't be paced directly: the objects are
+    // held back from a new connection by default, then revealed to it one at
+    // a time in RevealManualObjectsToConnection.
+    //
+    // Bowling pins/balls were added to this list even though 2 lanes' worth
+    // (20 pins + 8 balls) is well under the volume that caused the original
+    // stall on its own — the point is to keep every dynamically-spawned
+    // object off FishNet's automatic catch-up path entirely, so a lane's
+    // objects can never compound with a still-active chess/pool burst on the
+    // same connection. The bowling LANES themselves (BowlingLaneL/R) are
+    // NOT on this list — they're placed directly in the scene, not spawned
+    // via ServerManager.Spawn(), and FishNet syncs scene objects through a
+    // different (lighter-weight) registration path that this mechanism
+    // doesn't apply to. Furniture is also NOT on this list — it hasn't shown
+    // this failure mode, so it doesn't carry the extra prefab complexity
+    // unless that changes.
+    //
+    // Called right after spawning any object that carries a
+    // ManualRevealCondition. Immediately reveals the object to every
+    // currently-connected connection (host included) so nothing changes for
+    // clients that are already here — only a connection that joins AFTER this
+    // object already exists goes through the gradual reveal below.
+    private void RegisterManualRevealObject(NetworkObject netObj)
+    {
+        if (netObj == null) return;
+        ManualRevealCondition condition = GetManualRevealCondition(netObj);
+        if (condition == null)
+        {
+            Debug.LogWarning($"[LobbySpawner] {netObj.name} has no NetworkObserver + ManualRevealCondition — it will be invisible to everyone. Check the prefab.");
+            return;
+        }
+
+        _manualRevealObjects.Add(netObj);
+
+        foreach (NetworkConnection conn in InstanceFinder.ServerManager.Clients.Values)
+            condition.Reveal(conn);
+    }
+    private ManualRevealCondition GetManualRevealCondition(NetworkObject netObj)
+    {
+        NetworkObserver observer = netObj.GetComponent<NetworkObserver>();
+        if (observer == null) return null;
+        return observer.GetObserverCondition<ManualRevealCondition>() as ManualRevealCondition;
+    }
+    // Gradually reveals every currently-tracked manual-reveal object (chess
+    // pieces, pool) to a newly-joined connection, one object per frame — see
+    // the class comment above for why this needs to be gradual at all, and
+    // SwitchPoolPatternRoutine's comment below for the original version of
+    // this same "don't burst reliable messages in one frame" lesson. Started
+    // from OnClientLoadedStartScenes once that connection's own player object
+    // has been spawned.
+    private IEnumerator RevealManualObjectsToConnection(NetworkConnection conn)
+    {
+        // Snapshot to an array — SwitchPoolPattern (or a future equivalent
+        // for chess) could add/remove entries in _manualRevealObjects while
+        // this is running for an unrelated connection.
+        NetworkObject[] objects = _manualRevealObjects.ToArray();
+        foreach (NetworkObject netObj in objects)
+        {
+            if (netObj == null) continue;
+            ManualRevealCondition condition = GetManualRevealCondition(netObj);
+            condition?.Reveal(conn);
+            yield return null;
+        }
     }
     // --- Player Spawn Points ---
     // Anchors now live as real Transforms in the scene (_playerSpawnPoints) instead of raw
@@ -319,7 +520,10 @@ public class LobbySpawner : MonoBehaviour
                 obj.name = $"{setup.SetupLabel}_{entry.Label}";
                 NetworkObject netObj = obj.GetComponent<NetworkObject>();
                 if (netObj != null)
+                {
                     InstanceFinder.ServerManager.Spawn(netObj);
+                    RegisterManualRevealObject(netObj);
+                }
             }
         }
     }
@@ -353,7 +557,10 @@ public class LobbySpawner : MonoBehaviour
             rack.name = $"{setup.SetupLabel}_Rack";
             NetworkObject rackNetObj = rack.GetComponent<NetworkObject>();
             if (rackNetObj != null)
+            {
                 InstanceFinder.ServerManager.Spawn(rackNetObj);
+                RegisterManualRevealObject(rackNetObj);
+            }
 
             int patternIndex = setup.RandomizePattern
                 ? Random.Range(0, setup.Patterns.Count)
@@ -382,7 +589,10 @@ public class LobbySpawner : MonoBehaviour
                 cueBall.name = $"{setup.SetupLabel}_CueBall";
                 NetworkObject cueBallNetObj = cueBall.GetComponent<NetworkObject>();
                 if (cueBallNetObj != null)
+                {
                     InstanceFinder.ServerManager.Spawn(cueBallNetObj);
+                    RegisterManualRevealObject(cueBallNetObj);
+                }
                 instance.SpawnedCueBall = cueBall.GetComponent<CueBall>();
             }
             else if (instance.CueBallPrefab != null || instance.CueBallAnchor != null)
@@ -405,7 +615,10 @@ public class LobbySpawner : MonoBehaviour
                     cue.name = $"{setup.SetupLabel}_Cue_{i}";
                     NetworkObject cueNetObj = cue.GetComponent<NetworkObject>();
                     if (cueNetObj != null)
+                    {
                         InstanceFinder.ServerManager.Spawn(cueNetObj);
+                        RegisterManualRevealObject(cueNetObj);
+                    }
                 }
             }
 
@@ -425,7 +638,10 @@ public class LobbySpawner : MonoBehaviour
                 holdingRack.name = $"{setup.SetupLabel}_HoldingRack";
                 NetworkObject holdingRackNetObj = holdingRack.GetComponent<NetworkObject>();
                 if (holdingRackNetObj != null)
+                {
                     InstanceFinder.ServerManager.Spawn(holdingRackNetObj);
+                    RegisterManualRevealObject(holdingRackNetObj);
+                }
                 else
                     Debug.LogWarning($"[LobbySpawner] Pool setup '{setup.SetupLabel}' HoldingRackPrefab has no NetworkObject — it will only appear on the host/server, not on remote clients.");
                 instance.SpawnedHoldingRack = holdingRack.transform;
@@ -471,7 +687,10 @@ public class LobbySpawner : MonoBehaviour
             ball.name = $"{setup.SetupLabel}_{runtimeSlot.name}";
             NetworkObject ballNetObj = ball.GetComponent<NetworkObject>();
             if (ballNetObj != null)
+            {
                 InstanceFinder.ServerManager.Spawn(ballNetObj);
+                RegisterManualRevealObject(ballNetObj);
+            }
 
             // Lock it completely fixed right away — nothing should be able
             // to nudge the rack formation before a player deliberately
@@ -649,6 +868,13 @@ public class LobbySpawner : MonoBehaviour
                 NetworkObject ballNetObj = ball.GetComponent<NetworkObject>();
                 if (ballNetObj != null && ballNetObj.IsSpawned)
                     InstanceFinder.ServerManager.Despawn(ballNetObj);
+                // Drop it from the manual-reveal tracking list too — otherwise
+                // a repeatedly-switched pattern would leave stale (destroyed)
+                // entries piling up in _manualRevealObjects forever. Harmless
+                // either way (RevealManualObjectsToConnection already skips
+                // null entries), but there's no reason to let it grow.
+                if (ballNetObj != null)
+                    _manualRevealObjects.Remove(ballNetObj);
                 yield return null;
             }
         }
@@ -679,7 +905,10 @@ public class LobbySpawner : MonoBehaviour
             ball.name = $"{setup.SetupLabel}_{runtimeSlot.name}";
             NetworkObject ballNetObj = ball.GetComponent<NetworkObject>();
             if (ballNetObj != null)
+            {
                 InstanceFinder.ServerManager.Spawn(ballNetObj);
+                RegisterManualRevealObject(ballNetObj);
+            }
 
             PoolBall poolBall = ball.GetComponent<PoolBall>();
             if (poolBall != null)
@@ -758,7 +987,10 @@ public class LobbySpawner : MonoBehaviour
             pinObj.name = $"{lane.LaneLabel}_Pin_{i}";
             NetworkObject netObj = pinObj.GetComponent<NetworkObject>();
             if (netObj != null)
+            {
                 InstanceFinder.ServerManager.Spawn(netObj);
+                RegisterManualRevealObject(netObj);
+            }
 
             Pin pin = pinObj.GetComponent<Pin>();
             if (pin != null)
@@ -793,7 +1025,10 @@ public class LobbySpawner : MonoBehaviour
                 ballObj.name = $"{lane.LaneLabel}_{ballSlot.BallPrefab.name}";
                 NetworkObject ballNetObj = ballObj.GetComponent<NetworkObject>();
                 if (ballNetObj != null)
+                {
                     InstanceFinder.ServerManager.Spawn(ballNetObj);
+                    RegisterManualRevealObject(ballNetObj);
+                }
 
                 BowlingBall ball = ballObj.GetComponent<BowlingBall>();
                 if (ball != null)

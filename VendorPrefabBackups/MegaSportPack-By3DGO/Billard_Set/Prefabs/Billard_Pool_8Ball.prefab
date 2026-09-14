@@ -202,7 +202,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: FishNet.Runtime::FishNet.Object.NetworkObject
   <IsNested>k__BackingField: 0
   WasActiveDuringEdit: 0
@@ -210,7 +210,8 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
+  NetworkBehaviours:
+  - {fileID: 5284350891942142031}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -261,9 +262,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 723f14de07acede4b8ec89479ddd51a7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PoolPocket
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: 1030278867086195612}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 1030278867086195612}
   _cueBallResetAnchor: {fileID: 0}
   _holdingRackOverride: {fileID: 0}
   _resetDelay: 2
@@ -1133,7 +1134,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: FishNet.Runtime::FishNet.Object.NetworkObject
   <IsNested>k__BackingField: 0
   WasActiveDuringEdit: 0
@@ -1141,7 +1142,8 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
+  NetworkBehaviours:
+  - {fileID: 3748606050788093690}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -1192,9 +1194,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b3305a16729d6f54b8cbc356f7aa81a3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PoolResetButton
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: 5644435890792362491}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 5644435890792362491}
   _mode: 1
   _poolSetupIndex: 0
   _targetPatternIndex: 1
@@ -1265,7 +1267,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: FishNet.Runtime::FishNet.Object.NetworkObject
   <IsNested>k__BackingField: 0
   WasActiveDuringEdit: 0
@@ -1273,7 +1275,8 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
+  NetworkBehaviours:
+  - {fileID: 8157962741042756402}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -1324,9 +1327,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b3305a16729d6f54b8cbc356f7aa81a3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PoolResetButton
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: 4224040109012578703}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 4224040109012578703}
   _mode: 0
   _poolSetupIndex: 0
   _targetPatternIndex: 0
@@ -2069,7 +2072,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: FishNet.Runtime::FishNet.Object.NetworkObject
   <IsNested>k__BackingField: 0
   WasActiveDuringEdit: 0
@@ -2077,7 +2080,8 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
+  NetworkBehaviours:
+  - {fileID: 6509191737642982198}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -2128,9 +2132,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b3305a16729d6f54b8cbc356f7aa81a3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PoolResetButton
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: 5225874726560016374}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 5225874726560016374}
   _mode: 2
   _poolSetupIndex: 0
   _targetPatternIndex: 1
@@ -2255,7 +2259,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: FishNet.Runtime::FishNet.Object.NetworkObject
   <IsNested>k__BackingField: 0
   WasActiveDuringEdit: 0
@@ -2263,7 +2267,8 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
+  NetworkBehaviours:
+  - {fileID: 7691824793548868718}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -2314,9 +2319,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 723f14de07acede4b8ec89479ddd51a7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PoolPocket
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: 4514585572630104476}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 4514585572630104476}
   _cueBallResetAnchor: {fileID: 0}
   _holdingRackOverride: {fileID: 0}
   _resetDelay: 1.5

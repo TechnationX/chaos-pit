@@ -131,6 +131,9 @@ PrefabInstance:
       addedObject: {fileID: 5818327520455112558}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: ba6150fee4dd2bf4ba3d2324a545060a, type: 3}
       insertIndex: -1
+      addedObject: {fileID: 9123456789012340002}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: ba6150fee4dd2bf4ba3d2324a545060a, type: 3}
+      insertIndex: -1
       addedObject: {fileID: 2739608438598126523}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: ba6150fee4dd2bf4ba3d2324a545060a, type: 3}
       insertIndex: -1
@@ -210,7 +213,7 @@ MonoBehaviour:
   <PredictedOwner>k__BackingField: {fileID: 0}
   NetworkBehaviours:
   - {fileID: 2739608438598126523}
-  - {fileID: 0}
+  - {fileID: -267828531622148941}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -225,7 +228,7 @@ MonoBehaviour:
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
-  NetworkObserver: {fileID: 0}
+  NetworkObserver: {fileID: 9123456789012340002}
   _enablePrediction: 0
   _predictionType: 0
   _localReconcileCorrectionType: 2
@@ -307,9 +310,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 70462f2405252a74d81149662cd610db, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PoolRackGrabbable
-  _componentIndexCache: 255
+  _componentIndexCache: 1
   _addedNetworkObject: {fileID: 5818327520455112558}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 5818327520455112558}
   _promptLabel: Grab
   _dropPromptLabel: 
   _impactClips: []
@@ -321,3 +324,19 @@ MonoBehaviour:
   _settleMaxDropDistance: 2
   _settleRestOffset: 0.1
   _settleDuration: 0.3
+--- !u!114 &9123456789012340002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1078986835245863431}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 3
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}

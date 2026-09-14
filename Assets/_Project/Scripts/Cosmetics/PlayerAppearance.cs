@@ -26,14 +26,77 @@ public class PlayerAppearance : NetworkBehaviour
             var localSlots = LoadLocalLoadout();
             if (localSlots == null) return;
 
-            CharacterLoadout.Apply(outfitSystem, localSlots, registry);
-            SubmitLoadout(CharacterLoadout.Pack(localSlots));
+            ApplyOwnerLoadout(localSlots);
         }
         else if (_loadoutData.Value is { Length: > 0 })
         {
             // Late join: remote player's loadout already replicated on spawn
             ApplyReceivedLoadout(_loadoutData.Value);
         }
+    }
+
+    // Only the owner's own build passes keepHeadPiecesSeparate: true, so only this
+    // client's own copy of each slot in CharacterLoadout.KeepSeparateWhenOwned (Head,
+    // hair, glasses/eyewear, facial hair — anything that would clip into the first-person
+    // camera) survives merge as its own toggleable GameObject — see CharacterLoadout.Apply
+    // and SetOwnHeadPiecesVisible below. Everyone else still builds and merges this player
+    // fully from the synced bytes SubmitLoadout sends out.
+    private async void ApplyOwnerLoadout(List<SlotLoadout> localSlots)
+    {
+        await CharacterLoadout.Apply(outfitSystem, localSlots, registry, keepHeadPiecesSeparate: true);
+        SubmitLoadout(CharacterLoadout.Pack(localSlots));
+
+        // These outfit pieces don't exist until the await above finishes, so re-apply
+        // whatever camera mode we're already in now that they do — otherwise a
+        // SetOwnHeadPiecesVisible(false) call PlayerCamera fired earlier (before this
+        // finished) would silently get lost and they'd show up even in first person.
+        var camera = GetComponent<PlayerCamera>();
+        if (camera != null)
+            SetOwnHeadPiecesVisible(camera.CurrentMode != PlayerCamera.CameraMode.FirstPerson);
+    }
+
+    private const string OwnHeadLayerName = "OwnHead";
+
+    // Called by PlayerCamera.SwitchTo whenever the local player's camera mode changes.
+    // Toggles every slot in CharacterLoadout.KeepSeparateWhenOwned (Head, HairFront,
+    // HairBack, UpperFace, LowerFace) the same way Head alone used to be handled — add a
+    // slot name there, not here, to give another piece this same treatment. No-op per
+    // slot for every non-owner copy of this player — their pieces were merged normally,
+    // so GetOutfit(slotName) returns null there (see CharacterLoadout.Apply).
+    public void SetOwnHeadPiecesVisible(bool visible)
+    {
+        int ownHeadLayer = LayerMask.NameToLayer(OwnHeadLayerName);
+
+        foreach (var slotName in CharacterLoadout.KeepSeparateWhenOwned)
+        {
+            var piece = outfitSystem.GetOutfit(slotName);
+            if (piece == null) continue; // slot empty (e.g. no hair/glasses equipped) — nothing to toggle
+
+            // BSMC's merge step deactivates the source outfit root after building its
+            // CombinedSkinnedMesh renderer, even when mergeMesh is false. Force it back
+            // active every time — visibility is now handled entirely by the layer +
+            // culling mask below, not by activation, since a mirror camera needs this
+            // object active regardless of what the local player's own camera shows.
+            piece.gameObject.SetActive(true);
+
+            if (ownHeadLayer != -1 && piece.gameObject.layer != ownHeadLayer)
+                SetLayerRecursively(piece.gameObject, ownHeadLayer);
+        }
+
+        var mainCam = Camera.main;
+        if (mainCam == null || ownHeadLayer == -1) return;
+
+        int headBit = 1 << ownHeadLayer;
+        mainCam.cullingMask = visible
+            ? mainCam.cullingMask | headBit
+            : mainCam.cullingMask & ~headBit;
+    }
+
+    private static void SetLayerRecursively(GameObject go, int layer)
+    {
+        go.layer = layer;
+        foreach (Transform child in go.transform)
+            SetLayerRecursively(child.gameObject, layer);
     }
 
     [ServerRpc(RequireOwnership = true)]

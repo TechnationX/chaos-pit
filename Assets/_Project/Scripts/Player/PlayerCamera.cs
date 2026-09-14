@@ -54,6 +54,7 @@ public class PlayerCamera : NetworkBehaviour
 
     public CameraMode CurrentMode => _currentMode;
     private bool _isPaused = false;
+    private bool _hasActivatedCameraOnce = false;
 
     public void Initialize(PlayerObject player)
     {
@@ -76,6 +77,23 @@ public class PlayerCamera : NetworkBehaviour
 
         SetupFirstPersonCam();
         SetupThirdPersonCam();
+
+        // The very first activation ever for this player would otherwise blend
+        // from wherever the Main Camera's raw Transform sits in the scene (a
+        // stale level-editing vantage point high overhead) down to the player,
+        // since CinemachineBrain treats that transform as the outgoing camera
+        // state until some vcam has ever gone live. Cut just this one
+        // activation instantly; every later mode switch (first-person <->
+        // third-person, minigame entry/exit round-trips) keeps its normal
+        // blend, since this guard only fires once per player.
+        if (!_hasActivatedCameraOnce)
+        {
+            _hasActivatedCameraOnce = true;
+            var brain = Camera.main != null ? Camera.main.GetComponent<CinemachineBrain>() : null;
+            if (brain != null)
+                StartCoroutine(CutInitialActivation(brain));
+        }
+
         SwitchTo(_startingMode);
 
         Cursor.lockState = CursorLockMode.Locked;
@@ -101,6 +119,24 @@ public class PlayerCamera : NetworkBehaviour
         SettingsManager.OnSensitivityChanged += HandleSensitivityChanged;
         SettingsManager.OnInvertYChanged += HandleInvertYChanged;
         SettingsManager.OnFOVChanged += ApplyFOV;
+    }
+
+    // Zeroes the brain's blend time for a couple frames so the very first vcam
+    // activation snaps instead of blending, then restores it so every later
+    // transition (mode switches, minigame round-trips) blends normally again.
+    // Only touches Time — never assumes a specific Style enum name/value, so
+    // this stays correct across Cinemachine package versions.
+    private System.Collections.IEnumerator CutInitialActivation(CinemachineBrain brain)
+    {
+        var originalBlend = brain.DefaultBlend;
+        var instantBlend = originalBlend;
+        instantBlend.Time = 0f;
+        brain.DefaultBlend = instantBlend;
+
+        yield return null;
+        yield return null;
+
+        brain.DefaultBlend = originalBlend;
     }
 
     private void Update()
@@ -186,6 +222,13 @@ public class PlayerCamera : NetworkBehaviour
     {
         // Debug.Log($"SwitchTo: {mode}, FP Priority before: {_vcamFirstPerson.Priority.Value}, TP Priority before: {_vcamThirdPerson.Priority.Value}");
         _currentMode = mode;
+
+        // Local-only: hides the player's own head, hair, and face-worn pieces (glasses,
+        // facial hair) while looking through them in first person (so the anchor can sit
+        // at true eye level without seeing the inside of the head), and shows them again
+        // in third person/minigame view. Only does anything on the owner's own build —
+        // see PlayerAppearance.SetOwnHeadPiecesVisible.
+        _player.Appearance?.SetOwnHeadPiecesVisible(mode != CameraMode.FirstPerson);
 
         SetPriority(_vcamFirstPerson, PRIORITY_INACTIVE);
         SetPriority(_vcamThirdPerson, PRIORITY_INACTIVE);

@@ -17,6 +17,11 @@ public class GameRoomManager : NetworkBehaviour
 {
     public static GameRoomManager Instance { get; private set; }
 
+    // Pseudo minigame id used to select "Private" mode through the same
+    // SelectGame/GetNextGameId cycle real minigames use, instead of adding a
+    // second parallel path just for this one mode.
+    public const string PrivateModeId = "__private__";
+
     [Header("Settings")]
     [SerializeField] private float _countdownDuration = 10f;
     [SerializeField] private float _introDuration = 6f;
@@ -77,6 +82,7 @@ public class GameRoomManager : NetworkBehaviour
     public void RequestJoin(int stationIndex, PlayerObject player)
     {
         if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) return;
+        if (session.IsLocked) return; // private room — no new joins until the host unlocks it
         if (session.State != GameRoomState.Idle && session.State != GameRoomState.Waiting) return;
         if (session.Players.Contains(player)) return;
 
@@ -125,6 +131,43 @@ public class GameRoomManager : NetworkBehaviour
             ResetSession(stationIndex);
             if (_stations.TryGetValue(stationIndex, out MinigameStation station))
                 SyncSessionToClients(stationIndex, _sessions[stationIndex]);
+            return;
+        }
+
+        session.State = GameRoomState.Waiting;
+        _stations[stationIndex].OnSessionUpdated(session);
+        SyncSessionToClients(stationIndex, session);
+    }
+
+    // Host-only removal of a specific non-host player, triggered by that
+    // player's physical KickButton in the room's console. Mirrors
+    // RequestLeave's cleanup for the target player, just initiated by the
+    // host instead of by the player themselves.
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestKickPlayer(int stationIndex, int targetClientId, PlayerObject requestingPlayer)
+    {
+        if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) return;
+        if (session.HostPlayer?.Owner?.ClientId != requestingPlayer?.Owner?.ClientId) return;
+        if (targetClientId == requestingPlayer?.Owner?.ClientId) return; // host can't kick themselves
+
+        PlayerObject target = session.Players.FirstOrDefault(p => p.Owner?.ClientId == targetClientId);
+        if (target == null) return;
+
+        if (session.State == GameRoomState.Countdown)
+        {
+            if (session.CountdownCoroutine != null)
+                StopCoroutine(session.CountdownCoroutine);
+            session.CountdownCoroutine = null;
+        }
+
+        RemovePlayerFromSession(session, target, stationIndex);
+        ReturnPlayerToLobby(target);
+        RpcForceCloseStationPanel(target.Owner, stationIndex);
+
+        if (session.Players.Count == 0)
+        {
+            ResetSession(stationIndex);
+            SyncSessionToClients(stationIndex, _sessions[stationIndex]);
             return;
         }
 
@@ -303,6 +346,19 @@ public class GameRoomManager : NetworkBehaviour
         // anyone can reach, so this needs real server-side enforcement now.
         if (session.HostPlayer?.Owner?.ClientId != requestingPlayer?.Owner?.ClientId) return;
 
+        // Room must be unlocked before its mode can change — host presses
+        // Start again to unlock first.
+        if (session.IsLocked) return;
+
+        if (miniGameId == PrivateModeId)
+        {
+            session.SelectedGame = null;
+            session.IsPrivateMode = true;
+            _stations[stationIndex].OnSessionUpdated(session);
+            SyncSessionToClients(stationIndex, session);
+            return;
+        }
+
         MiniGameRegistryEntry entry = session.Registry?.GetById(miniGameId);
         if (entry == null)
         {
@@ -311,6 +367,7 @@ public class GameRoomManager : NetworkBehaviour
         }
 
         session.SelectedGame = entry;
+        session.IsPrivateMode = false;
         _stations[stationIndex].OnSessionUpdated(session);
         SyncSessionToClients(stationIndex, session);
     }
@@ -321,12 +378,31 @@ public class GameRoomManager : NetworkBehaviour
         if (!_sessions.TryGetValue(stationIndex, out GameRoomSession session)) return;
         if (session.State != GameRoomState.Waiting) return;
         if (session.HostPlayer?.Owner?.ClientId != requestingPlayer?.Owner?.ClientId) return;
+
+        if (session.IsPrivateMode)
+        {
+            // Private mode never starts a countdown or loads a scene —
+            // pressing Start just flips the room's lock instantly. Players
+            // stay exactly where they are. Pressing it again unlocks.
+            session.IsLocked = !session.IsLocked;
+            _stations[stationIndex].OnSessionUpdated(session);
+            SyncSessionToClients(stationIndex, session);
+            return;
+        }
+
         if (session.SelectedGame == null) return;
         if (session.Players.Count < session.SelectedGame.MinPlayers) return;
 
         session.State = GameRoomState.Countdown;
         session.CountdownCoroutine = StartCoroutine(CountdownCoroutine(stationIndex));
         _stations[stationIndex].OnSessionUpdated(session);
+
+        // Previously only the countdown-tick RPC kept clients updated (label
+        // text only) — _syncedState itself stayed "Waiting" on every client
+        // for the whole countdown, so the status label and Join button's
+        // interactable state were stale (harmless since the server still
+        // rejects a join here, but worth being accurate).
+        SyncSessionToClients(stationIndex, session);
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -341,9 +417,13 @@ public class GameRoomManager : NetworkBehaviour
         foreach (PlayerObject player in session.Players.ToList())
             ReturnPlayerToLobby(player);
 
+        // ResetSession replaces the session object — this was previously
+        // syncing the stale, pre-reset "session" reference (still showing the
+        // old countdown/players/game), not the fresh empty one that's now
+        // actually authoritative. Same fix as HandlePlayerDisconnected below.
         ResetSession(stationIndex);
-        _stations[stationIndex].OnSessionUpdated(session);
-        SyncSessionToClients(stationIndex, session);
+        SyncSessionToClients(stationIndex, _sessions[stationIndex]);
+        _stations[stationIndex].OnSessionUpdated(_sessions[stationIndex]);
     }
 
     [ObserversRpc]
@@ -382,6 +462,13 @@ public class GameRoomManager : NetworkBehaviour
         Debug.Log($"[GameRoomManager] GAME STARTING — station {stationIndex}, game: {session.SelectedGame?.SceneName}, players: {session.Players.Count}, time: {Time.realtimeSinceStartup:F1}s");
 
         session.State = GameRoomState.Loading;
+        // Clients were otherwise never told the room left Countdown until
+        // InProgress synced after scene load — same staleness pattern as
+        // RequestStartCountdown above, closed here too. UpdateSessionState
+        // already closes any open panel on Loading, so this also makes that
+        // trigger correctly for a client whose panel is somehow still open.
+        SyncSessionToClients(stationIndex, session);
+
         string sessionId = GetSessionId(stationIndex);
 
         ScoreManager.Instance.RegisterSession(sessionId);
@@ -430,6 +517,10 @@ public class GameRoomManager : NetworkBehaviour
         Debug.Log($"[GameRoomManager] GAME COMPLETE — station {stationIndex}, results count: {results?.Count ?? 0}, time: {Time.realtimeSinceStartup:F1}s");
 
         session.State = GameRoomState.Results;
+        // No console/kiosk UI is visible during a live round anyway, but keep
+        // _syncedState accurate for consistency with every other transition.
+        SyncSessionToClients(stationIndex, session);
+
         string sessionId = GetSessionId(stationIndex);
 
         ScoreManager.Instance.SubmitResults(sessionId, results);
@@ -655,9 +746,22 @@ public class GameRoomManager : NetworkBehaviour
             if (session.State == GameRoomState.Waiting)
             {
                 RemovePlayerFromSession(session, player, stationIndex);
-                if (session.Players.Count == 0) ResetSession(stationIndex);
-                else SyncSessionToClients(stationIndex, session);
-                _stations[stationIndex].OnSessionUpdated(session);
+
+                if (session.Players.Count == 0)
+                {
+                    // ResetSession replaces the session object entirely (fresh
+                    // Private/unlocked room) — sync and refresh using the new
+                    // one, not the abandoned "session" reference, same as
+                    // RequestLeave/RequestKickPlayer already do.
+                    ResetSession(stationIndex);
+                    SyncSessionToClients(stationIndex, _sessions[stationIndex]);
+                    _stations[stationIndex].OnSessionUpdated(_sessions[stationIndex]);
+                }
+                else
+                {
+                    SyncSessionToClients(stationIndex, session);
+                    _stations[stationIndex].OnSessionUpdated(session);
+                }
             }
             else if (session.State == GameRoomState.Countdown)
             {
@@ -670,6 +774,8 @@ public class GameRoomManager : NetworkBehaviour
                 if (session.Players.Count == 0)
                 {
                     ResetSession(stationIndex);
+                    SyncSessionToClients(stationIndex, _sessions[stationIndex]);
+                    _stations[stationIndex].OnSessionUpdated(_sessions[stationIndex]);
                 }
                 else
                 {
@@ -970,11 +1076,11 @@ public class GameRoomManager : NetworkBehaviour
 
     [ObserversRpc]
     private void RpcSyncSessionState(int stationIndex, int hostClientId,
-        List<string> playerNames, List<int> clientIds, GameRoomState state, 
-        bool gameSelected, int minPlayers, string selectedGameId)
+        List<string> playerNames, List<int> clientIds, GameRoomState state,
+        bool gameSelected, int minPlayers, string selectedGameId, bool isPrivateMode, bool isLocked)
     {
         if (!_stations.TryGetValue(stationIndex, out MinigameStation station)) return;
-        station.UpdateSessionState(hostClientId, playerNames, clientIds, state, gameSelected, minPlayers, selectedGameId);
+        station.UpdateSessionState(hostClientId, playerNames, clientIds, state, gameSelected, minPlayers, selectedGameId, isPrivateMode, isLocked);
     }
 
     private void SyncSessionToClients(int stationIndex, GameRoomSession session)
@@ -990,7 +1096,7 @@ public class GameRoomManager : NetworkBehaviour
         bool gameSelected = session.SelectedGame != null;
         int minPlayers = session.SelectedGame?.MinPlayers ?? 0;
         string selectedGameId = session.SelectedGame?.MiniGameId ?? string.Empty;
-        RpcSyncSessionState(stationIndex, hostId, names, clientIds, session.State, gameSelected, minPlayers, selectedGameId);
+        RpcSyncSessionState(stationIndex, hostId, names, clientIds, session.State, gameSelected, minPlayers, selectedGameId, session.IsPrivateMode, session.IsLocked);
     }
 
     public void NotifyGameComplete(MiniGameController controller, List<RoundResult> results)

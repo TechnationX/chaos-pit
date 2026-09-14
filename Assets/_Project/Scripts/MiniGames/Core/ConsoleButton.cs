@@ -19,10 +19,19 @@ public class ConsoleButton : MonoBehaviour, IInteractable
     public string PromptLabel => _action switch
     {
         ConsoleAction.SelectGame => "Select Game",
-        ConsoleAction.Start => "Start Game",
+        ConsoleAction.Start => GetStartLabel(),
         ConsoleAction.Leave => "Leave Room",
         _ => "Interact"
     };
+
+    // Start doubles as the private-room lock toggle: it never says "Start"
+    // while in Private mode, since pressing it never starts a game there.
+    private string GetStartLabel()
+    {
+        if (_console != null && _console.IsPrivateMode)
+            return _console.IsLocked ? "Unlock Room" : "Lock Room";
+        return "Start Game";
+    }
 
     public void OnInteract(PlayerObject player)
     {
