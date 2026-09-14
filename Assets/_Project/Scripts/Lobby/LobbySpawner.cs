@@ -103,16 +103,50 @@ public class LobbySpawner : MonoBehaviour
     }
     // Shared by all three entry points (Start, WaitForServerManager, OnServerStarted) so the
     // spawn sequencing only has to live in one place.
+    //
+    // RegisterSpawnListener() and the OnRemoteConnectionState subscription run
+    // FIRST now, before any spawning starts — this used to run last, which was
+    // fine back when every Spawn*() call below was synchronous (so "last" still
+    // meant "the same frame"). Now that spawning is spread across several
+    // frames (see SpawnFurnitureRoutine etc. below), leaving the listener
+    // registration for last would open a window where a fast-connecting host's
+    // own LobbyReadyBroadcast could arrive before anything is listening for
+    // it — reintroducing the exact client-join race LobbyReadyBroadcast was
+    // built to close (see LobbyReadyBroadcast.cs). Registering first closes
+    // that window regardless of how long the spawn sequence below takes.
     private void RunServerSpawnSequence()
     {
         RegisterSpawnPoints();
-        SpawnFurniture();
-        SpawnProps();
-        SpawnPropSetups();
-        SpawnPoolSetups();
-        SpawnBowlingSetups();
         RegisterSpawnListener();
         InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
+        StartCoroutine(SpawnAllRoutine());
+    }
+
+    // Runs the furniture/props/prop-setups/pool spawn passes one after another
+    // (each spread across frames internally — see each Routine below), then
+    // kicks off bowling last. Bowling isn't chained with yield return here
+    // since SpawnBowlingSetups() already fires an independent coroutine per
+    // lane (SpawnBowlingLaneRoutine) rather than doing its own work inline —
+    // nothing else in this sequence depends on bowling finishing first.
+    //
+    // WHY THIS EXISTS: every one of these used to run as a single synchronous
+    // burst of ServerManager.Spawn() calls — furniture + generic props + all
+    // chess pieces + an entire pool setup (rack, cue ball, cues, holding rack,
+    // up to 15 racked balls) could easily total 60-100+ reliable network
+    // messages in one server frame. SwitchPoolPatternRoutine's own comment
+    // (below) already documented that bursting just ~30 such messages in one
+    // frame reliably stalled a connected client's reliable channel entirely —
+    // this was the same bug, just bigger, and firing on every Lobby load
+    // instead of only on a manual pattern switch. Spreading each pass across
+    // frames (one spawn per frame, same granularity as SpawnBowlingLaneRoutine)
+    // avoids the burst the same way bowling already did.
+    private IEnumerator SpawnAllRoutine()
+    {
+        yield return StartCoroutine(SpawnFurnitureRoutine());
+        yield return StartCoroutine(SpawnPropsRoutine());
+        yield return StartCoroutine(SpawnPropSetupsRoutine());
+        yield return StartCoroutine(SpawnPoolSetupsRoutine());
+        SpawnBowlingSetups();
     }
     private void Awake()
     {
@@ -445,9 +479,11 @@ public class LobbySpawner : MonoBehaviour
         return true;
     }
     // --- Furniture ---
-    private void SpawnFurniture()
+    // Spread across frames — see SpawnAllRoutine's comment for why a
+    // synchronous burst of ServerManager.Spawn() calls is unsafe here.
+    private IEnumerator SpawnFurnitureRoutine()
     {
-        if (_furnitureSpawnConfig == null) return;
+        if (_furnitureSpawnConfig == null) yield break;
         foreach (var entry in _furnitureSpawnConfig.Entries)
         {
             if (entry.Prefab == null)
@@ -461,12 +497,14 @@ public class LobbySpawner : MonoBehaviour
             NetworkObject netObj = obj.GetComponent<NetworkObject>();
             if (netObj != null)
                 InstanceFinder.ServerManager.Spawn(netObj);
+            yield return null;
         }
     }
-    // --- Props (single-item spawns — unchanged) ---
-    private void SpawnProps()
+    // --- Props (single-item spawns) ---
+    // Spread across frames — see SpawnAllRoutine's comment.
+    private IEnumerator SpawnPropsRoutine()
     {
-        if (_propSpawnConfig == null) return;
+        if (_propSpawnConfig == null) yield break;
         foreach (var entry in _propSpawnConfig.Entries)
         {
             if (entry.Prefab == null)
@@ -480,12 +518,17 @@ public class LobbySpawner : MonoBehaviour
             NetworkObject netObj = obj.GetComponent<NetworkObject>();
             if (netObj != null)
                 InstanceFinder.ServerManager.Spawn(netObj);
+            yield return null;
         }
     }
     // --- Prop Setups (grouped mini setups — chess, bowling, pool, etc.) ---
-    private void SpawnPropSetups()
+    // Spread across frames — see SpawnAllRoutine's comment. Chess alone is 13
+    // pieces; bursting all of them (plus every other configured prop setup)
+    // in one frame was the same class of bug SpawnBowlingLaneRoutine and
+    // SwitchPoolPatternRoutine were already fixed for.
+    private IEnumerator SpawnPropSetupsRoutine()
     {
-        if (_propSetups == null) return;
+        if (_propSetups == null) yield break;
         foreach (var instance in _propSetups)
         {
             PropSetupConfig setup = instance?.Config;
@@ -524,13 +567,23 @@ public class LobbySpawner : MonoBehaviour
                     InstanceFinder.ServerManager.Spawn(netObj);
                     RegisterManualRevealObject(netObj);
                 }
+                yield return null;
             }
         }
     }
     // --- Pool Setups (rack prefab supplies its own ball-slot positions, assigned per-slot in the Inspector) ---
-    private void SpawnPoolSetups()
+    // Spread across frames — see SpawnAllRoutine's comment. A single pool
+    // setup (rack + cue ball + cues + holding rack + up to 15 racked balls)
+    // is comfortably over the ~30-message burst SwitchPoolPatternRoutine's
+    // own comment documents as reliably stalling a connected client, and this
+    // runs once per configured setup at Lobby load. The racked-balls loop is
+    // inlined here rather than calling a shared helper, same reasoning
+    // SwitchPoolPatternRoutine's comment gives: a synchronous helper has no
+    // way to yield mid-loop. (This replaces the old SpawnRackedBalls() —
+    // removed, since after this change it has no callers left.)
+    private IEnumerator SpawnPoolSetupsRoutine()
     {
-        if (_poolSetups == null) return;
+        if (_poolSetups == null) yield break;
         foreach (var instance in _poolSetups)
         {
             PoolSetupConfig setup = instance?.Config;
@@ -561,13 +614,55 @@ public class LobbySpawner : MonoBehaviour
                 InstanceFinder.ServerManager.Spawn(rackNetObj);
                 RegisterManualRevealObject(rackNetObj);
             }
+            yield return null;
 
             int patternIndex = setup.RandomizePattern
                 ? Random.Range(0, setup.Patterns.Count)
                 : Mathf.Clamp(setup.ActivePatternIndex, 0, setup.Patterns.Count - 1);
             PoolRackPattern pattern = setup.Patterns[patternIndex];
 
-            List<PoolBall> rackedBalls = SpawnRackedBalls(instance, setup, rack, pattern);
+            // Racked balls — inlined (see method comment for why, same as
+            // SwitchPoolPatternRoutine's own ball loop below).
+            List<PoolBall> rackedBalls = new List<PoolBall>();
+            foreach (var assignment in pattern.SlotAssignments)
+            {
+                if (string.IsNullOrEmpty(assignment.SlotName))
+                {
+                    Debug.LogWarning($"[LobbySpawner] Pool setup '{setup.SetupLabel}' pattern '{pattern.PatternName}' has a slot assignment with no SlotName set.");
+                    continue;
+                }
+                if (assignment.BallPrefab == null)
+                {
+                    Debug.LogWarning($"[LobbySpawner] Pool setup '{setup.SetupLabel}' pattern '{pattern.PatternName}' slot '{assignment.SlotName}' has no BallPrefab assigned.");
+                    continue;
+                }
+                Transform runtimeSlot = rack.transform.Find(assignment.SlotName);
+                if (runtimeSlot == null)
+                {
+                    Debug.LogWarning($"[LobbySpawner] Pool setup '{setup.SetupLabel}' — couldn't find a child named '{assignment.SlotName}' on the spawned rack. Check spelling/casing against RackPrefab's Hierarchy.");
+                    continue;
+                }
+                GameObject ball = Instantiate(assignment.BallPrefab, runtimeSlot.position, runtimeSlot.rotation, _propParent);
+                ball.transform.localScale = assignment.Scale;
+                ball.name = $"{setup.SetupLabel}_{runtimeSlot.name}";
+                NetworkObject ballNetObj = ball.GetComponent<NetworkObject>();
+                if (ballNetObj != null)
+                {
+                    InstanceFinder.ServerManager.Spawn(ballNetObj);
+                    RegisterManualRevealObject(ballNetObj);
+                }
+
+                // Lock it completely fixed right away — nothing should be able
+                // to nudge the rack formation before a player deliberately
+                // lifts the rack off. PoolRackGrabbable unlocks it on grab.
+                PoolBall poolBall = ball.GetComponent<PoolBall>();
+                if (poolBall != null)
+                {
+                    poolBall.ServerSetLocked(true);
+                    rackedBalls.Add(poolBall);
+                }
+                yield return null;
+            }
 
             PoolRackGrabbable rackGrabbable = rack.GetComponent<PoolRackGrabbable>();
             if (rackGrabbable != null)
@@ -594,6 +689,7 @@ public class LobbySpawner : MonoBehaviour
                     RegisterManualRevealObject(cueBallNetObj);
                 }
                 instance.SpawnedCueBall = cueBall.GetComponent<CueBall>();
+                yield return null;
             }
             else if (instance.CueBallPrefab != null || instance.CueBallAnchor != null)
             {
@@ -619,6 +715,7 @@ public class LobbySpawner : MonoBehaviour
                         InstanceFinder.ServerManager.Spawn(cueNetObj);
                         RegisterManualRevealObject(cueNetObj);
                     }
+                    yield return null;
                 }
             }
 
@@ -645,6 +742,7 @@ public class LobbySpawner : MonoBehaviour
                 else
                     Debug.LogWarning($"[LobbySpawner] Pool setup '{setup.SetupLabel}' HoldingRackPrefab has no NetworkObject — it will only appear on the host/server, not on remote clients.");
                 instance.SpawnedHoldingRack = holdingRack.transform;
+                yield return null;
             }
             else if (instance.HoldingRackPrefab != null || instance.HoldingRackAnchor != null)
             {
@@ -653,58 +751,6 @@ public class LobbySpawner : MonoBehaviour
         }
     }
 
-    // Spawns and locks the balls for one pattern onto an already-spawned
-    // rack. Shared by the initial spawn (SpawnPoolSetups) and pattern
-    // switching (SwitchPoolPattern) below so both paths spawn balls
-    // identically instead of duplicating the loop. Does NOT touch
-    // PoolRackGrabbable/instance caching itself — callers do that with the
-    // returned list, since the two call sites need slightly different
-    // surrounding cleanup (SwitchPoolPattern also despawns the old balls first).
-    private List<PoolBall> SpawnRackedBalls(PoolSetupInstance instance, PoolSetupConfig setup, GameObject rack, PoolRackPattern pattern)
-    {
-        List<PoolBall> rackedBalls = new List<PoolBall>();
-
-        foreach (var assignment in pattern.SlotAssignments)
-        {
-            if (string.IsNullOrEmpty(assignment.SlotName))
-            {
-                Debug.LogWarning($"[LobbySpawner] Pool setup '{setup.SetupLabel}' pattern '{pattern.PatternName}' has a slot assignment with no SlotName set.");
-                continue;
-            }
-            if (assignment.BallPrefab == null)
-            {
-                Debug.LogWarning($"[LobbySpawner] Pool setup '{setup.SetupLabel}' pattern '{pattern.PatternName}' slot '{assignment.SlotName}' has no BallPrefab assigned.");
-                continue;
-            }
-            Transform runtimeSlot = rack.transform.Find(assignment.SlotName);
-            if (runtimeSlot == null)
-            {
-                Debug.LogWarning($"[LobbySpawner] Pool setup '{setup.SetupLabel}' — couldn't find a child named '{assignment.SlotName}' on the spawned rack. Check spelling/casing against RackPrefab's Hierarchy.");
-                continue;
-            }
-            GameObject ball = Instantiate(assignment.BallPrefab, runtimeSlot.position, runtimeSlot.rotation, _propParent);
-            ball.transform.localScale = assignment.Scale;
-            ball.name = $"{setup.SetupLabel}_{runtimeSlot.name}";
-            NetworkObject ballNetObj = ball.GetComponent<NetworkObject>();
-            if (ballNetObj != null)
-            {
-                InstanceFinder.ServerManager.Spawn(ballNetObj);
-                RegisterManualRevealObject(ballNetObj);
-            }
-
-            // Lock it completely fixed right away — nothing should be able
-            // to nudge the rack formation before a player deliberately
-            // lifts the rack off. PoolRackGrabbable unlocks it on grab.
-            PoolBall poolBall = ball.GetComponent<PoolBall>();
-            if (poolBall != null)
-            {
-                poolBall.ServerSetLocked(true);
-                rackedBalls.Add(poolBall);
-            }
-        }
-
-        return rackedBalls;
-    }
 
     // Used by PoolPocket to find the spawned holding rack without needing a
     // direct Inspector reference (which can't exist at design time for a
@@ -848,9 +894,11 @@ public class LobbySpawner : MonoBehaviour
     // also stop working for that same client afterward, which points at the
     // reliable channel getting stuck/backed up rather than any single
     // message being malformed. Spreading the same work across multiple
-    // frames avoids the burst entirely. Duplicates SpawnRackedBalls()'s spawn
-    // loop rather than reusing it, since that helper runs synchronously and
-    // has no way to yield mid-loop.
+    // frames avoids the burst entirely. This same bug turned out to also
+    // apply to the initial pool spawn (SpawnPoolSetupsRoutine) — see that
+    // method's comment — which duplicates this same ball-spawn loop rather
+    // than sharing it with this one, since a shared helper would need to be
+    // its own coroutine either way once both call sites yield mid-loop.
     private IEnumerator SwitchPoolPatternRoutine(PoolSetupInstance instance, PoolSetupConfig setup, int patternIndex, int setupIndex)
     {
         // Rack back to its spawn spot — a pattern switch starts a fresh
