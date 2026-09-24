@@ -4,6 +4,7 @@ using FishNet.Object;
 using System.Collections;
 using FishNet.Connection;
 using System.Collections.Generic;
+using System.Linq;
 using TMPro;
 using UnityEngine;
 
@@ -16,6 +17,24 @@ public abstract class MiniGameController : MonoBehaviour
     protected List<PlayerObject> _players = new List<PlayerObject>();
     protected int _currentRound = 0;
     protected bool _gameActive = false;
+
+    // Which station this controller instance belongs to. Set once by
+    // GameRoomManager.StartGameAfterLoad right after it finds this
+    // controller, before StartGame() runs. Every subclass call site that
+    // reports an in-round network message (round starts, timer syncs,
+    // eliminations, holder/turn changes, tile updates, game-over payloads)
+    // passes this back into GameRoomManager.RpcMinigameMessage so the
+    // server knows which station's session to fan the message out to —
+    // see RpcMinigameMessage's own comment in GameRoomManager.cs for why
+    // that's necessary (an unscoped lookup on the receiving end used to
+    // resolve broadcasts to whichever controller instance happened to load
+    // first, merging concurrent same-type games together on a host).
+    public int StationIndex { get; private set; } = -1;
+
+    public void SetStationIndex(int stationIndex)
+    {
+        StationIndex = stationIndex;
+    }
 
 
     [Header("Results Screen")]
@@ -111,32 +130,62 @@ public abstract class MiniGameController : MonoBehaviour
     // calls it as a direct method call inside a [Server]-tagged method, not
     // an RPC) — it's the path responsible for telling GameRoomManager to
     // return players to the lobby once the results screen finishes.
+    //
+    // This used to ALSO show the results panel directly, and relied on
+    // ResultsUI.Populate's own countdown coroutine (which requires the panel's
+    // GameObject to be active to run at all) to eventually fire the
+    // return-to-lobby signal. That coupling was the actual bug: this method
+    // runs on the SERVER's own process, which — on a host — is the same
+    // process as the host's own screen, so showing the panel unconditionally
+    // here meant an uninvolved host always saw this station's results screen
+    // (and whatever was rendered underneath it) for the full results
+    // duration, exactly like the intro-screen and camera bugs fixed earlier.
+    //
+    // Now split: the return-to-lobby timer runs as its own plain coroutine
+    // below, with no UI or GameObject involved at all, so it safely runs on
+    // every process regardless of who's watching. The actual panel only gets
+    // shown if the LOCAL viewer of this process is really one of this game's
+    // players — checked via PlayerObject.IsOwner, which is only ever true on
+    // the one process that actually owns that specific player object. That's
+    // reliable for a host exactly the same way it's already reliable for a
+    // remote client (see PlayerCamera.Initialize's own IsOwner check).
     public void ShowResults(ResultsData data)
     {
-        OnShowResults(data);
+        if (_players.Any(p => p != null && p.IsOwner))
+        {
+            OnShowResults(data);
+            if (_resultsScreenPanel != null) _resultsScreenPanel.SetActive(true);
+            if (ResultsUI != null) ResultsUI.Populate(data, _resultsDuration, OnResultsHidden);
+        }
 
-        if (_resultsScreenPanel != null) _resultsScreenPanel.SetActive(true);
-        if (ResultsUI != null) ResultsUI.Populate(data, _resultsDuration, HandleResultsHidden);
+        if (_resultsTimerCoroutine != null) StopCoroutine(_resultsTimerCoroutine);
+        _resultsTimerCoroutine = StartCoroutine(ResultsTimerCoroutine());
+    }
+
+    private Coroutine _resultsTimerCoroutine;
+
+    // Server-authoritative return-to-lobby timer, decoupled from any UI —
+    // see ShowResults's comment above for why this can no longer ride on
+    // ResultsUI's own countdown coroutine.
+    private IEnumerator ResultsTimerCoroutine()
+    {
+        yield return new WaitForSeconds(_resultsDuration);
+        GameRoomManager.Instance.OnResultsDismissed(this);
     }
 
     // Client-only display path: pure clients learn the game ended through a
     // results broadcast (e.g. "bt_game_over" / "tm_game_over") rather than
     // through ShowResults, so they show the same row layout and countdown
-    // locally without re-triggering the return-to-lobby flow. On a host
-    // (server+client in the same process) this simply re-populates the same
-    // panel the server path already showed, which is harmless.
+    // locally without re-triggering the return-to-lobby flow (that flow is
+    // now entirely owned by ShowResults's own timer above, regardless of
+    // whether this method or ShowResults is the one actually populating the
+    // panel on a given process).
     protected void ShowResultsClientOnly(ResultsData data)
     {
         OnShowResults(data);
 
         if (_resultsScreenPanel != null) _resultsScreenPanel.SetActive(true);
         if (ResultsUI != null) ResultsUI.Populate(data, _resultsDuration, OnResultsHidden);
-    }
-
-    private void HandleResultsHidden()
-    {
-        OnResultsHidden();
-        GameRoomManager.Instance.OnResultsDismissed(this);
     }
 
     // Override in subclass for any game-specific UI change made the moment

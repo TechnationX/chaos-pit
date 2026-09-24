@@ -233,5 +233,16 @@ namespace ChaosPit.Minigames.BombToss
         {
             if (_hudPanel != null) _hudPanel.SetActive(false);
         }
+
+        // _hudPanel starts inactive by default in the scene (see BombTossScene.unity) —
+        // otherwise it renders for anyone who has this scene loaded at all, including
+        // an uninvolved host, since the scene stays loaded server-side regardless of
+        // participation. Called from BombTossController.ClientInit(), which only ever
+        // runs on an actual participant's own process (see RpcInitMinigame's comment
+        // in GameRoomManager.cs), so this only ever shows the panel to a real player.
+        public void ShowHUD()
+        {
+            if (_hudPanel != null) _hudPanel.SetActive(true);
+        }
     }
 }

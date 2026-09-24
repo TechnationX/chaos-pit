@@ -90,7 +90,7 @@ namespace ChaosPit.Minigames.PaintTheTown
             // "colors" so the client doesn't also re-run InitScoreRows,
             // which would instantiate a second, duplicate set of rows
             // (InitScoreRows never clears existing ones first).
-            GameRoomManager.Instance.RpcMinigameMessage("refresh_names", BuildNamesPayload());
+            GameRoomManager.Instance.RpcMinigameMessage("refresh_names", BuildNamesPayload(), StationIndex);
 
             _tileGrid.ResetAllTiles();
             _tileGrid.FlushDirtyTiles();
@@ -101,9 +101,9 @@ namespace ChaosPit.Minigames.PaintTheTown
 
             _syncCoroutine = StartCoroutine(BatchSyncCoroutine());
 
-            GameRoomManager.Instance.RpcMinigameMessage("reset_tiles", "");
+            GameRoomManager.Instance.RpcMinigameMessage("reset_tiles", "", StationIndex);
             GameRoomManager.Instance.RpcMinigameMessage("round_start",
-                _roundDuration.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                _roundDuration.ToString(System.Globalization.CultureInfo.InvariantCulture), StationIndex);
 
             Debug.Log("[PaintTheTown] Round started.");
         }
@@ -111,6 +111,15 @@ namespace ChaosPit.Minigames.PaintTheTown
         public override void ClientInit()
         {
             _tileGrid.GenerateGrid();
+
+            // _hud is Inspector-wired directly to this scene's own HUD
+            // instance, so no scoped-lookup risk here — just shows the (now
+            // inactive-by-default) HUD GameObject. This only ever runs on a
+            // real participant's own process (see RpcInitMinigame's comment
+            // in GameRoomManager.cs), so it only ever shows the HUD to a
+            // real player.
+            _hud?.ShowHUD();
+
             FindLocalPlayer()?.Movement.SetStaminaLimited(true);
         }
 
@@ -119,6 +128,24 @@ namespace ChaosPit.Minigames.PaintTheTown
             foreach (var p in FindObjectsByType<PlayerObject>(FindObjectsSortMode.None))
                 if (p.IsOwner) return p;
             return null;
+        }
+
+        // ── Results Screen ─────────────────────────────────────────
+        // Was missing entirely — the score rows stayed visible underneath the
+        // results screen because nothing here ever hid them. Mirrors
+        // ThiefsMarketController's OnShowResults/OnResultsHidden pair. Paint
+        // the Town is currently single-round (see GameLoopCoroutine — one
+        // StartRound() call, then EndRound()), so OnResultsHidden never
+        // actually fires before the scene unloads, but it's kept symmetrical
+        // in case a multi-round mode is added later.
+        protected override void OnShowResults(ResultsData data)
+        {
+            _hud?.SetInRoundHudVisible(false);
+        }
+
+        protected override void OnResultsHidden()
+        {
+            _hud?.SetInRoundHudVisible(true);
         }
 
         public override void EndRound()
@@ -138,9 +165,9 @@ namespace ChaosPit.Minigames.PaintTheTown
                 _tileCounts[player.PlayerId] = _tileGrid.CountTilesForPlayer(player.PlayerId);
 
             _roundResults = BuildResults();
-            GameRoomManager.Instance.RpcMinigameMessage("results", BuildResultsPayload());
+            GameRoomManager.Instance.RpcMinigameMessage("results", BuildResultsPayload(), StationIndex);
 
-            GameRoomManager.Instance.RpcMinigameMessage("round_end", "");
+            GameRoomManager.Instance.RpcMinigameMessage("round_end", "", StationIndex);
 
             Debug.Log("[PaintTheTown] Round ended.");
         }
@@ -250,7 +277,7 @@ namespace ChaosPit.Minigames.PaintTheTown
             List<TileDelta> deltas = _tileGrid.FlushDirtyTiles();
             if (deltas.Count == 0) return;
 
-            GameRoomManager.Instance.RpcMinigameMessage("tiles", BuildTilesPayload(deltas));
+            GameRoomManager.Instance.RpcMinigameMessage("tiles", BuildTilesPayload(deltas), StationIndex);
             UpdateAndBroadcastCounts();
         }
 
@@ -259,7 +286,7 @@ namespace ChaosPit.Minigames.PaintTheTown
             foreach (PlayerObject player in _players)
                 _tileCounts[player.PlayerId] = _tileGrid.CountTilesForPlayer(player.PlayerId);
 
-            GameRoomManager.Instance.RpcMinigameMessage("counts", BuildCountsPayload());
+            GameRoomManager.Instance.RpcMinigameMessage("counts", BuildCountsPayload(), StationIndex);
         }
 
         // Updates _nameMap's existing entries in place (never reassigns the
@@ -487,7 +514,7 @@ namespace ChaosPit.Minigames.PaintTheTown
         // Shadows MonoBehaviour.SendMessage — use explicit name to avoid ambiguity
         private void SendMessage(string messageType, string payload)
         {
-            GameRoomManager.Instance.RpcMinigameMessage(messageType, payload);
+            GameRoomManager.Instance.RpcMinigameMessage(messageType, payload, StationIndex);
         }
 
     }

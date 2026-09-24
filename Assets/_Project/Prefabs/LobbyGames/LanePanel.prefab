@@ -328,6 +328,7 @@ GameObject:
   - component: {fileID: 3766176524379326496}
   - component: {fileID: 179401337151253527}
   - component: {fileID: -1262474588521090937}
+  - component: {fileID: 7002800100641272021}
   m_Layer: 0
   m_Name: LanePanel
   m_TagString: Untagged
@@ -451,7 +452,7 @@ MonoBehaviour:
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
-  NetworkObserver: {fileID: 0}
+  NetworkObserver: {fileID: 7002800100641272021}
   _enablePrediction: 0
   _predictionType: 0
   _localReconcileCorrectionType: 2
@@ -577,6 +578,7 @@ GameObject:
   - component: {fileID: 7535562648940965138}
   - component: {fileID: 4440330211313486845}
   - component: {fileID: 6283177006289815739}
+  - component: {fileID: 8673430527469389250}
   m_Layer: 7
   m_Name: FrameCountButton
   m_TagString: Untagged
@@ -673,7 +675,7 @@ MonoBehaviour:
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
-  NetworkObserver: {fileID: 0}
+  NetworkObserver: {fileID: 8673430527469389250}
   _enablePrediction: 0
   _predictionType: 0
   _localReconcileCorrectionType: 2
@@ -709,6 +711,7 @@ GameObject:
   - component: {fileID: 5448822781282836426}
   - component: {fileID: 6803324226590844938}
   - component: {fileID: 1314905689816228672}
+  - component: {fileID: 8938404420022500872}
   m_Layer: 7
   m_Name: JoinButton
   m_TagString: Untagged
@@ -805,7 +808,7 @@ MonoBehaviour:
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
-  NetworkObserver: {fileID: 0}
+  NetworkObserver: {fileID: 8938404420022500872}
   _enablePrediction: 0
   _predictionType: 0
   _localReconcileCorrectionType: 2
@@ -1122,6 +1125,7 @@ GameObject:
   - component: {fileID: 6723904924708313274}
   - component: {fileID: 4176041313427401367}
   - component: {fileID: 3702129960761961867}
+  - component: {fileID: 533032183845478321}
   m_Layer: 7
   m_Name: PinLayoutButton
   m_TagString: Untagged
@@ -1218,7 +1222,7 @@ MonoBehaviour:
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
-  NetworkObserver: {fileID: 0}
+  NetworkObserver: {fileID: 533032183845478321}
   _enablePrediction: 0
   _predictionType: 0
   _localReconcileCorrectionType: 2
@@ -1941,6 +1945,7 @@ GameObject:
   - component: {fileID: 4178623438124785809}
   - component: {fileID: 8339056726302277744}
   - component: {fileID: 6855692775374387996}
+  - component: {fileID: 518802410073766767}
   m_Layer: 7
   m_Name: StartButton
   m_TagString: Untagged
@@ -2037,7 +2042,7 @@ MonoBehaviour:
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
-  NetworkObserver: {fileID: 0}
+  NetworkObserver: {fileID: 518802410073766767}
   _enablePrediction: 0
   _predictionType: 0
   _localReconcileCorrectionType: 2
@@ -2176,6 +2181,7 @@ GameObject:
   - component: {fileID: 3721090961090084048}
   - component: {fileID: 5110948012624976648}
   - component: {fileID: 6542484150271255390}
+  - component: {fileID: 4390040193713440846}
   m_Layer: 7
   m_Name: LeaveButton
   m_TagString: Untagged
@@ -2272,7 +2278,7 @@ MonoBehaviour:
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
-  NetworkObserver: {fileID: 0}
+  NetworkObserver: {fileID: 4390040193713440846}
   _enablePrediction: 0
   _predictionType: 0
   _localReconcileCorrectionType: 2
@@ -2452,3 +2458,99 @@ MonoBehaviour:
   _stat: 1
   _labelPrefix: 'Pins: '
   _text: {fileID: 0}
+--- !u!114 &7002800100641272021
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1638304004582535590}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 3
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}
+--- !u!114 &8673430527469389250
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3448196671864298223}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 3
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}
+--- !u!114 &8938404420022500872
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3708782102723426667}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 3
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}
+--- !u!114 &533032183845478321
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4579822091111324723}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 3
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}
+--- !u!114 &518802410073766767
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6722234050686798829}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 3
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}
+--- !u!114 &4390040193713440846
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7976128893492922885}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 3
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}

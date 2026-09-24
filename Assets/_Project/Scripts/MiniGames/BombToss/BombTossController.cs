@@ -37,7 +37,6 @@ namespace ChaosPit.Minigames.BombToss
         private List<int> _activePlayers = new List<int>();
         private List<int> _eliminatedPlayers = new List<int>();
         private int _currentHolderId = -1;
-        private int _eliminationOrder = 0;
         private Dictionary<int, int> _cumulativeScores = new Dictionary<int, int>();
         private Dictionary<int, string> _nameMap = new Dictionary<int, string>();
         private bool _roundActive = false;
@@ -59,7 +58,6 @@ namespace ChaosPit.Minigames.BombToss
             _eliminatedPlayers.Clear();
             _cumulativeScores.Clear();
             _nameMap.Clear();
-            _eliminationOrder = 0;
 
             foreach (PlayerObject p in _players)
             {
@@ -67,7 +65,7 @@ namespace ChaosPit.Minigames.BombToss
                 _cumulativeScores[p.Owner.ClientId] = 0;
             }
 
-            GameRoomManager.Instance.RpcMinigameMessage("bt_players", BuildPlayersPayload());
+            GameRoomManager.Instance.RpcMinigameMessage("bt_players", BuildPlayersPayload(), StationIndex);
 
             StartCoroutine(StartRoundDelayed(2f));
         }
@@ -76,7 +74,6 @@ namespace ChaosPit.Minigames.BombToss
         {
             _currentRound++;
             _roundActive = true;
-            _eliminationOrder = 0;
 
             // Re-resolve every active player's current display name and push
             // it to clients before this round's holder text goes out. Fixes
@@ -94,7 +91,7 @@ namespace ChaosPit.Minigames.BombToss
             // (BombTossHUD.RefreshNames) instead of re-running Init(), which
             // would also destroy/recreate the score rows and wipe any
             // eliminated-row marker already applied this game.
-            GameRoomManager.Instance.RpcMinigameMessage("bt_refresh_names", BuildPlayersPayload());
+            GameRoomManager.Instance.RpcMinigameMessage("bt_refresh_names", BuildPlayersPayload(), StationIndex);
 
             RespawnActivePlayers();
 
@@ -108,7 +105,7 @@ namespace ChaosPit.Minigames.BombToss
                 $"{fuseTime.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
                 $"{_currentRound},0";
 
-            GameRoomManager.Instance.RpcMinigameMessage("bt_round_start", payload);
+            GameRoomManager.Instance.RpcMinigameMessage("bt_round_start", payload, StationIndex);
 
             StartCoroutine(FuseCoroutine(fuseTime));
         }
@@ -149,7 +146,29 @@ namespace ChaosPit.Minigames.BombToss
 
         public override void ClientInit()
         {
-            _hud = FindFirstObjectByType<BombTossHUD>();
+            // Scoped to this controller's own scene instance, not a global
+            // FindFirstObjectByType — see FindHudInOwnScene's comment. Also
+            // shows the (now inactive-by-default) HUD panel here, since this
+            // only ever runs on a real participant's own process.
+            _hud = FindHudInOwnScene();
+            _hud?.ShowHUD();
+        }
+
+        // FindFirstObjectByType<BombTossHUD>() used to search every loaded
+        // scene, not just this controller's own. On a host running two
+        // concurrent Bomb Toss games (two stations), that could resolve to
+        // the OTHER station's HUD instance instead of this one's — same bug
+        // class as GameRoomManager's FindActiveMinigameController before it
+        // was scoped to GetStationScene(stationIndex). Scoped here the same
+        // way: only look inside this controller's own Scene.
+        private BombTossHUD FindHudInOwnScene()
+        {
+            foreach (GameObject root in gameObject.scene.GetRootGameObjects())
+            {
+                BombTossHUD hud = root.GetComponentInChildren<BombTossHUD>(true);
+                if (hud != null) return hud;
+            }
+            return null;
         }
 
         // ── Round Flow ─────────────────────────────────────────────
@@ -170,7 +189,7 @@ namespace ChaosPit.Minigames.BombToss
                 string sync =
                     $"{_currentHolderId}," +
                     $"{Mathf.Max(0f, remaining).ToString("F1", System.Globalization.CultureInfo.InvariantCulture)}";
-                GameRoomManager.Instance.RpcMinigameMessage("bt_fuse_sync", sync);
+                GameRoomManager.Instance.RpcMinigameMessage("bt_fuse_sync", sync, StationIndex);
                 yield return new WaitForSeconds(0.5f);
             }
 
@@ -183,10 +202,23 @@ namespace ChaosPit.Minigames.BombToss
             _roundActive = false;
 
             int eliminated = _currentHolderId;
+
+            // Standing = how many players (including this one) were still active
+            // the instant before this elimination — eliminated 1st out of 4
+            // finishes 4th, eliminated 3rd out of 4 finishes 2nd, etc. Must be
+            // read before Remove() below drops this player out of _activePlayers.
+            //
+            // Replaces the old "_eliminationOrder + 1" calc. _eliminationOrder
+            // was reset to 0 at the top of every round and never incremented, so
+            // every single elimination — and the final survivor — always
+            // computed the same standing (1). That's what was handing out
+            // identical placement points to everyone instead of ranking them
+            // (e.g. both players in a 2-player game getting 2 points each).
+            int standing = _activePlayers.Count;
+
             _activePlayers.Remove(eliminated);
             _eliminatedPlayers.Add(eliminated);
 
-            int standing = _eliminationOrder + 1;
             int points = CalculatePlacementPoints(standing, _players.Count);
             _cumulativeScores[eliminated] += points;
 
@@ -205,17 +237,17 @@ namespace ChaosPit.Minigames.BombToss
 
             string scoresPayload = BuildScoresPayload();
             GameRoomManager.Instance.RpcMinigameMessage("bt_player_eliminated",
-                $"{eliminated},{points},{scoresPayload}");
+                $"{eliminated},{points},{scoresPayload}", StationIndex);
 
             bool gameOver = _activePlayers.Count <= 1;
 
             if (gameOver)
             {
-                // Award points to last survivor
+                // Award points to last survivor — always finishes 1st.
                 if (_activePlayers.Count == 1)
                 {
                     int survivor = _activePlayers[0];
-                    int survivorPoints = CalculatePlacementPoints(_eliminationOrder + 1, _players.Count);
+                    int survivorPoints = CalculatePlacementPoints(1, _players.Count);
                     _cumulativeScores[survivor] += survivorPoints;
                 }
 
@@ -233,7 +265,7 @@ namespace ChaosPit.Minigames.BombToss
 
             _finalResults = BuildFinalResults();
 
-            GameRoomManager.Instance.RpcMinigameMessage("bt_game_over", BuildFinalResultsPayload());
+            GameRoomManager.Instance.RpcMinigameMessage("bt_game_over", BuildFinalResultsPayload(), StationIndex);
             GameRoomManager.Instance.NotifyGameComplete(this, _finalResults);
         }
 
@@ -270,7 +302,7 @@ namespace ChaosPit.Minigames.BombToss
             //Debug.Log($"[BombToss] distance: {dist}, passDistance: {_passDistance}");
 
             _currentHolderId = targetId;
-            GameRoomManager.Instance.RpcMinigameMessage("bt_holder_changed", $"{_currentHolderId}");
+            GameRoomManager.Instance.RpcMinigameMessage("bt_holder_changed", $"{_currentHolderId}", StationIndex);
         }
 
         // ── Network Messages (all clients receive) ─────────────────

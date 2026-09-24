@@ -14,8 +14,24 @@ using UnityEngine.UI;
 public class GameRoomConsole : MonoBehaviour
 {
     [Header("Station")]
-    [SerializeField] private int _stationIndex;
+    // No longer manually entered in the Inspector. Every console used to
+    // need its own hand-typed index kept in sync with the owning
+    // MinigameStation's — and it silently defaulted to 0 wherever that
+    // second entry was forgotten, which is exactly what happened to rooms
+    // 1-3: every physical console button in those rooms was sending
+    // Start/SelectGame/Leave to station 0's session instead of its own.
+    // MinigameStation.Awake() now pushes its own authoritative index in via
+    // SetStationIndex() below, so there is exactly one place this number is
+    // ever typed. Starts at -1 (not a real station) so a console that never
+    // gets wired up fails loudly — every lookup against it simply no-ops —
+    // instead of quietly colliding with real station 0 again.
+    private int _stationIndex = -1;
     public int StationIndex => _stationIndex;
+
+    /// Called once by the owning MinigameStation right after its own Awake —
+    /// MinigameStation already holds the authoritative station index, so
+    /// this just relays it instead of duplicating it.
+    public void SetStationIndex(int stationIndex) => _stationIndex = stationIndex;
 
     [Header("UI — Status")]
     [SerializeField] private TextMeshProUGUI _statusText;

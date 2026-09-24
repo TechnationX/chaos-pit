@@ -190,13 +190,17 @@ public class JoinSessionScreen : UIScreenBase
         // synchronous load doesn't yield any. LoadSceneAsync keeps frames
         // (and this client's own rendering/coroutines) running while Lobby
         // loads in the background.
-        Debug.Log("[DIAGNOSTIC][JoinSessionScreen] Starting SceneManager.LoadSceneAsync(Lobby).");
         AsyncOperation op = SceneManager.LoadSceneAsync(lobbySceneName);
         if (op != null)
         {
             op.completed += _ =>
             {
-                Debug.Log("[DIAGNOSTIC][JoinSessionScreen] Lobby scene LoadSceneAsync completed (Unity scene load finished on this client).");
+                // Diagnostic for the intermittent "client hangs on join" bug
+                // — confirms, from the CLIENT's own perspective, that the
+                // Lobby scene actually finished loading and the broadcast
+                // really was sent. See LobbySpawner.OnLobbyReadyBroadcast for
+                // the matching server-side log.
+                Debug.Log("[JoinSessionScreen] Lobby scene load completed — sending LobbyReadyBroadcast.");
 
                 // Tell the server this client's own Lobby scene is actually
                 // ready — see LobbyReadyBroadcast.cs for why LobbySpawner
@@ -204,6 +208,10 @@ public class JoinSessionScreen : UIScreenBase
                 // becoming ready.
                 InstanceFinder.ClientManager.Broadcast(new LobbyReadyBroadcast());
             };
+        }
+        else
+        {
+            Debug.LogWarning("[JoinSessionScreen] SceneManager.LoadSceneAsync returned null for Lobby — LobbyReadyBroadcast will never be sent, client will hang.");
         }
     }
 }

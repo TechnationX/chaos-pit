@@ -12,11 +12,13 @@
     "com.unity.multiplayer.center": "1.0.1",
     "com.unity.multiplayer.playmode": "2.0.2",
     "com.unity.multiplayer.tools": "2.2.11",
+    "com.unity.pipeline": "0.6.0-exp.1",
     "com.unity.postprocessing": "3.5.4",
     "com.unity.render-pipelines.universal": "17.3.0",
     "com.unity.services.authentication": "3.7.4",
     "com.unity.services.deployment": "1.7.2",
     "com.unity.services.multiplayer": "2.2.2",
+    "com.unity.services.vivox": "16.12.1",
     "com.unity.shadergraph": "17.3.0",
     "com.unity.test-framework": "1.6.0",
     "com.unity.timeline": "1.8.13",
@@ -55,7 +57,6 @@
     "com.unity.modules.video": "1.0.0",
     "com.unity.modules.vr": "1.0.0",
     "com.unity.modules.wind": "1.0.0",
-    "com.unity.modules.xr": "1.0.0",
-    "com.unity.pipeline": "0.6.0-exp.1"
+    "com.unity.modules.xr": "1.0.0"
   }
 }

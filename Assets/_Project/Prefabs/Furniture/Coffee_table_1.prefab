@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 7675867306544210370}
   - component: {fileID: 3994601484997189089}
   - component: {fileID: 5300669193914157004}
+  - component: {fileID: 5515316336679800295}
   - component: {fileID: -1615461478718239095}
   m_Layer: 0
   m_Name: Coffee_table_1
@@ -148,7 +149,7 @@ MonoBehaviour:
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
-  NetworkObserver: {fileID: 0}
+  NetworkObserver: {fileID: 5515316336679800295}
   _enablePrediction: 0
   _predictionType: 0
   _localReconcileCorrectionType: 2
@@ -187,3 +188,19 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 5300669193914157004}
   _networkObjectCache: {fileID: 5300669193914157004}
+--- !u!114 &5515316336679800295
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8180459787196399639}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 3
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}

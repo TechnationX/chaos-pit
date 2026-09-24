@@ -1,0 +1,102 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa5ecb881de78be428840d6de4240bad, type: 3}
+  m_Name: StageSetupConfig
+  m_EditorClassIdentifier: Assembly-CSharp::StageSetupConfig
+  SetupLabel: Stage Setup
+  Acts:
+  - ActName: Mic Only
+    MicStandPrefab: {fileID: 6617212960991538781, guid: e852262cfc1ea8f4092046a56796b913, type: 3}
+    MicStandPosition: {x: 0, y: 0.5, z: 1.5}
+    MicStandRotation: {x: 0, y: 0, z: 0}
+    MicStandScale: {x: 1, y: 1, z: 1}
+    MicPrefab: {fileID: 4643765623717110848, guid: 957305762f4ca7849ac0e38563cb1d4d, type: 3}
+    MicAnchorName: Mic_A_MicPlace
+    MicScale: {x: 1, y: 1, z: 1}
+    InstrumentVariants: []
+    DefaultVariantIndex: 0
+    InstrumentPosition: {x: 0, y: 0, z: 0}
+    InstrumentRotation: {x: 0, y: 0, z: 0}
+    InstrumentScale: {x: 0, y: 0, z: 0}
+  - ActName: Guitar
+    MicStandPrefab: {fileID: 6617212960991538781, guid: e852262cfc1ea8f4092046a56796b913, type: 3}
+    MicStandPosition: {x: 0, y: 0.5, z: 1.5}
+    MicStandRotation: {x: 0, y: 0, z: 0}
+    MicStandScale: {x: 1, y: 1, z: 1}
+    MicPrefab: {fileID: 4643765623717110848, guid: 957305762f4ca7849ac0e38563cb1d4d, type: 3}
+    MicAnchorName: Mic_A_MicPlace
+    MicScale: {x: 1, y: 1, z: 1}
+    InstrumentVariants:
+    - VariantName: Blue Metal
+      Prefab: {fileID: 9155113361819130101, guid: 3616207b96592f84eb0e190453957792, type: 3}
+    - VariantName: Rock Lava
+      Prefab: {fileID: 4493078367350159787, guid: 07fac16109fc4b54f90e29239298dd7f, type: 3}
+    - VariantName: Scorpion Red
+      Prefab: {fileID: 3221082068026073614, guid: 2d62285c242f98048abea852e6c6562d, type: 3}
+    - VariantName: Tentacle Purple
+      Prefab: {fileID: 9018155884298779719, guid: 6a127bc9027b0e440b2e52dd8b03e8c0, type: 3}
+    - VariantName: Smiley Pink
+      Prefab: {fileID: 7254187914246232322, guid: 4aaf6211c13bef143ad4e92b87333607, type: 3}
+    DefaultVariantIndex: 0
+    InstrumentPosition: {x: 2, y: 0.5, z: 1}
+    InstrumentRotation: {x: 0, y: 180, z: 0}
+    InstrumentScale: {x: 1, y: 1, z: 1}
+  - ActName: Piano
+    MicStandPrefab: {fileID: 2841428392998611763, guid: b7a2e777f1d25e6458e1f8904b3f1947, type: 3}
+    MicStandPosition: {x: 0, y: 0.5, z: 0}
+    MicStandRotation: {x: 0, y: 0, z: 0}
+    MicStandScale: {x: 1, y: 1, z: 1}
+    MicPrefab: {fileID: 4643765623717110848, guid: 957305762f4ca7849ac0e38563cb1d4d, type: 3}
+    MicAnchorName: Mic_B_MicPlace
+    MicScale: {x: 1, y: 1, z: 1}
+    InstrumentVariants:
+    - VariantName: Electric Piano
+      Prefab: {fileID: 1785620586125087470, guid: 98ea15acd4af41342a8cb5f6a5b31077, type: 3}
+    - VariantName: Standup Piano
+      Prefab: {fileID: 4783086268077998020, guid: c7b710ea7b440f24f9abdb8d7a84975b, type: 3}
+    DefaultVariantIndex: 0
+    InstrumentPosition: {x: 0, y: 0.5, z: 0}
+    InstrumentRotation: {x: 0, y: 0, z: 0}
+    InstrumentScale: {x: 1, y: 1, z: 1}
+  - ActName: Flute
+    MicStandPrefab: {fileID: 6617212960991538781, guid: e852262cfc1ea8f4092046a56796b913, type: 3}
+    MicStandPosition: {x: 0, y: 0, z: 0}
+    MicStandRotation: {x: 0, y: 0, z: 0}
+    MicStandScale: {x: 1, y: 1, z: 1}
+    MicPrefab: {fileID: 4643765623717110848, guid: 957305762f4ca7849ac0e38563cb1d4d, type: 3}
+    MicAnchorName: Mic_A_MicPlace
+    MicScale: {x: 1, y: 1, z: 1}
+    InstrumentVariants:
+    - VariantName: Flute Purple Black
+      Prefab: {fileID: 5737857991443728327, guid: 7beae30d8f35fe44b87ba27eb70842fd, type: 3}
+    - VariantName: Flute Black Purple
+      Prefab: {fileID: 5737857991443728327, guid: 7beae30d8f35fe44b87ba27eb70842fd, type: 3}
+    - VariantName: Flute Teal Magenta
+      Prefab: {fileID: 5737857991443728327, guid: 98012372f1fa45941acc3cd08790e394, type: 3}
+    DefaultVariantIndex: 0
+    InstrumentPosition: {x: 0, y: 0, z: 0}
+    InstrumentRotation: {x: 0, y: 0, z: 0}
+    InstrumentScale: {x: 1, y: 1, z: 1}
+  - ActName: Extra
+    MicStandPrefab: {fileID: 6617212960991538781, guid: e852262cfc1ea8f4092046a56796b913, type: 3}
+    MicStandPosition: {x: 0, y: 0, z: 0}
+    MicStandRotation: {x: 0, y: 0, z: 0}
+    MicStandScale: {x: 1, y: 1, z: 1}
+    MicPrefab: {fileID: 4643765623717110848, guid: 957305762f4ca7849ac0e38563cb1d4d, type: 3}
+    MicAnchorName: Mic_A_MicPlace
+    MicScale: {x: 1, y: 1, z: 1}
+    InstrumentVariants: []
+    DefaultVariantIndex: 0
+    InstrumentPosition: {x: 0, y: 0, z: 0}
+    InstrumentRotation: {x: 0, y: 0, z: 0}
+    InstrumentScale: {x: 0, y: 0, z: 0}
+  DefaultActIndex: 0

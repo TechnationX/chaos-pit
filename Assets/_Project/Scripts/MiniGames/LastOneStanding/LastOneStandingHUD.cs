@@ -53,6 +53,14 @@ namespace ChaosPit.Minigames.LastOneStanding
         private int _totalPlayers;
         private int _aliveCount;
 
+        // Remember whether the elimination banner / between-round countdown
+        // panel were actually up right before SetInRoundHudVisible(false)
+        // forced them down for the results screen, so restoring visibility
+        // doesn't force either one back ON when it wasn't showing, or leave
+        // it off when it was.
+        private bool _eliminationBannerWasActive;
+        private bool _countdownPanelWasActive;
+
         // ── Round Lifecycle ───────────────────────────────────────
 
         public void OnRoundStart(float duration)
@@ -163,6 +171,59 @@ namespace ChaosPit.Minigames.LastOneStanding
             _scoreRows.Clear();
         }
 
+        // Hides every piece of the in-round HUD — timer, round info, alive
+        // count, the alive/eliminated status rows, and any elimination
+        // banner/between-round countdown that happened to still be up —
+        // while the shared results screen is up (see
+        // LastOneStandingController.OnShowResults). Was SetScorePanelVisible,
+        // which only ever touched the status rows and left the timer/round
+        // info ticking away visibly underneath the results screen. Renamed
+        // and broadened to match ThiefsMarketHUD/JinxedHUD/PaintTheTownHUD.
+        // NOTE: this HUD's own _resultsPanel/_resultsText fields are
+        // currently unused dead code (nothing calls ShowClientResults) — if
+        // that ever changes, this method must NOT touch them, the same way
+        // JinxedHUD's version carefully leaves its own results panel alone.
+        public void SetInRoundHudVisible(bool visible)
+        {
+            if (_timerText != null)
+                _timerText.gameObject.SetActive(visible);
+
+            if (_roundInfoText != null)
+                _roundInfoText.gameObject.SetActive(visible);
+
+            if (_scoreRowParent != null)
+                _scoreRowParent.gameObject.SetActive(visible);
+
+            if (_aliveCountText != null)
+                _aliveCountText.gameObject.SetActive(visible);
+
+            if (_eliminationBanner != null)
+            {
+                if (!visible)
+                {
+                    _eliminationBannerWasActive = _eliminationBanner.activeSelf;
+                    _eliminationBanner.SetActive(false);
+                }
+                else
+                {
+                    _eliminationBanner.SetActive(_eliminationBannerWasActive);
+                }
+            }
+
+            if (_countdownPanel != null)
+            {
+                if (!visible)
+                {
+                    _countdownPanelWasActive = _countdownPanel.activeSelf;
+                    _countdownPanel.SetActive(false);
+                }
+                else
+                {
+                    _countdownPanel.SetActive(_countdownPanelWasActive);
+                }
+            }
+        }
+
         // ── Alive Count ───────────────────────────────────────────
 
         private void UpdateAliveCount()
@@ -237,6 +298,19 @@ namespace ChaosPit.Minigames.LastOneStanding
         public void HideBetweenRoundCountdown()
         {
             if (_countdownPanel != null) _countdownPanel.SetActive(false);
+        }
+
+        // This whole GameObject starts inactive by default in the scene (see
+        // LastOneStandingScene.unity) — otherwise it renders for anyone who
+        // has this scene loaded at all, including an uninvolved host, since
+        // the scene stays loaded server-side regardless of participation.
+        // Called from LastOneStandingController.ClientInit(), which only
+        // ever runs on an actual participant's own process (see
+        // RpcInitMinigame's comment in GameRoomManager.cs), so this only
+        // ever shows the HUD to a real player.
+        public void ShowHUD()
+        {
+            gameObject.SetActive(true);
         }
     }
 }

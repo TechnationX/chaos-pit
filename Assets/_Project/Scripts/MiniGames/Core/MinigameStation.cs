@@ -60,6 +60,11 @@ public class MinigameStation : MonoBehaviour
     {
         _stationVal = _stationIndex + 1;
 
+        // Hand this room's own console its station index directly, rather
+        // than relying on a second manually-entered copy living on
+        // GameRoomConsole itself — see GameRoomConsole.SetStationIndex.
+        _console?.SetStationIndex(_stationIndex);
+
         _exteriorHeaderText.text = $"Game Room {_stationVal}";
         RefreshExteriorDisplay();
         _kioskJoinButton?.Refresh();

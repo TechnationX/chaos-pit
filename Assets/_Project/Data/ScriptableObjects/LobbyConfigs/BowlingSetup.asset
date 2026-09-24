@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f70fcaadffdd3a64384671123f4f76cf, type: 3}
   m_Name: BowlingSetup
   m_EditorClassIdentifier: Assembly-CSharp::PropSetupConfig
-  SetupLabel: Bowling Set
+  SetupLabel: Bowling Setup
   Patterns:
   - PatternName: Standard Setup
     Entries:

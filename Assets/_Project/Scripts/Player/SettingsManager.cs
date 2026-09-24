@@ -21,12 +21,18 @@ public class SettingsManager : MonoBehaviour
     public static event Action<bool> OnInvertYChanged;
     public static event Action<string> OnVoiceInputDeviceChanged;
     public static event Action<string> OnVoiceOutputDeviceChanged;
+    public static event Action<bool> OnVoiceChatMutedChanged;
+    public static event Action<float> OnVoiceChatVolumeChanged;
+    public static event Action<VoiceChatMode> OnVoiceChatModeChanged;
 
     private const string KeyMaster = "Settings_MasterVolume";
     private const string KeyMusic = "Settings_MusicVolume";
     private const string KeySFX = "Settings_SFXVolume";
     private const string KeyVoiceInputDevice = "Settings_VoiceInputDevice";
     private const string KeyVoiceOutputDevice = "Settings_VoiceOutputDevice";
+    private const string KeyVoiceChatMuted = "Settings_VoiceChatMuted";
+    private const string KeyVoiceChatVolume = "Settings_VoiceChatVolume";
+    private const string KeyVoiceChatMode = "Settings_VoiceChatMode";
     private const string KeyResolutionIndex = "Settings_ResolutionIndex";
     private const string KeyDisplayMode = "Settings_DisplayMode";
     private const string KeyQuality = "Settings_QualityLevel";
@@ -57,6 +63,9 @@ public class SettingsManager : MonoBehaviour
         Current.sfxVolume = PlayerPrefs.GetFloat(KeySFX, 1f);
         Current.voiceInputDeviceName = PlayerPrefs.GetString(KeyVoiceInputDevice, "Disabled");
         Current.voiceOutputDeviceName = PlayerPrefs.GetString(KeyVoiceOutputDevice, "Default");
+        Current.voiceChatMuted = PlayerPrefs.GetInt(KeyVoiceChatMuted, 0) == 1;
+        Current.voiceChatVolume = PlayerPrefs.GetFloat(KeyVoiceChatVolume, 0.5f);
+        Current.voiceChatMode = (VoiceChatMode)PlayerPrefs.GetInt(KeyVoiceChatMode, (int)VoiceChatMode.PushToTalk);
 
         Current.resolutionIndex = PlayerPrefs.GetInt(KeyResolutionIndex, -1);
         Current.displayMode = (FullScreenMode)PlayerPrefs.GetInt(KeyDisplayMode, (int)FullScreenMode.FullScreenWindow);
@@ -76,6 +85,9 @@ public class SettingsManager : MonoBehaviour
         PlayerPrefs.SetFloat(KeySFX, Current.sfxVolume);
         PlayerPrefs.SetString(KeyVoiceInputDevice, Current.voiceInputDeviceName);
         PlayerPrefs.SetString(KeyVoiceOutputDevice, Current.voiceOutputDeviceName);
+        PlayerPrefs.SetInt(KeyVoiceChatMuted, Current.voiceChatMuted ? 1 : 0);
+        PlayerPrefs.SetFloat(KeyVoiceChatVolume, Current.voiceChatVolume);
+        PlayerPrefs.SetInt(KeyVoiceChatMode, (int)Current.voiceChatMode);
 
         PlayerPrefs.SetInt(KeyResolutionIndex, Current.resolutionIndex);
         PlayerPrefs.SetInt(KeyDisplayMode, (int)Current.displayMode);
@@ -129,8 +141,9 @@ public class SettingsManager : MonoBehaviour
         Save();
     }
 
-    // TODO: VOICE - no active voice system consumes these yet; a future VoiceChatManager
-    // should subscribe to these events to actually switch the mic/output device.
+    // VoiceChatManager subscribes to all five voice-related events below
+    // instead of this class reaching into it directly — same convention as
+    // OnFOVChanged/OnSensitivityChanged/OnInvertYChanged above.
     public void SetVoiceInputDevice(string deviceName)
     {
         Current.voiceInputDeviceName = deviceName;
@@ -142,6 +155,27 @@ public class SettingsManager : MonoBehaviour
     {
         Current.voiceOutputDeviceName = deviceName;
         OnVoiceOutputDeviceChanged?.Invoke(deviceName);
+        Save();
+    }
+
+    public void SetVoiceChatMuted(bool muted)
+    {
+        Current.voiceChatMuted = muted;
+        OnVoiceChatMutedChanged?.Invoke(muted);
+        Save();
+    }
+
+    public void SetVoiceChatVolume(float value)
+    {
+        Current.voiceChatVolume = value;
+        OnVoiceChatVolumeChanged?.Invoke(value);
+        Save();
+    }
+
+    public void SetVoiceChatMode(VoiceChatMode mode)
+    {
+        Current.voiceChatMode = mode;
+        OnVoiceChatModeChanged?.Invoke(mode);
         Save();
     }
 

@@ -11,19 +11,32 @@ using UnityEngine;
 /// Layer Matrix changes are required for that filtering to work, though
 /// you can still add a dedicated layer as an extra safety net if you want.
 ///
-/// Runs identically on every client — Cue's shoot routine executes via
-/// ObserversRpc, so each client's own physics independently detects contact
-/// and calls Strike() on its own local Rigidbody. Same "everyone simulates
-/// the same input" pattern Throwable already uses for its AddForce-on-throw.
-/// Keep this ball's NetworkTransform permanently enabled (unlike Grabbable's
-/// held objects, never toggle it off) so the server's simulation
-/// periodically corrects any client-side physics drift.
+/// Strike() itself runs as a plain local AddForce, called both by Cue.cs's
+/// local cosmetic-prediction path (every peer, purely visual/audio, applies
+/// zero real force server-side) and by Cue.ServerReportHit's authoritative
+/// path (server only, applies the real impulse) — see Cue.cs's class
+/// comment for the full explanation of that split. Strike() doesn't need to
+/// know which caller it is; only the Rigidbody's kinematic state below
+/// decides whether the AddForce actually does anything.
+///
+/// FULL SERVER AUTHORITY: only the server's own copy of this ball actually
+/// simulates physics. Every other peer's Rigidbody is kept permanently
+/// kinematic (see OnStartServer/OnStartClient below) and just displays
+/// whatever position/rotation NetworkTransform pushes out — NetworkTransform
+/// is now server-authoritative (_clientAuthoritative: 0 on the prefab), not
+/// client-authoritative. This replaces the old "every peer independently
+/// simulates the same input" approach, which let each peer's local physics
+/// drift out of sync with everyone else's after a strike (different peers
+/// could see the ball end up in different places / bounce differently off
+/// rails and other balls). A kinematic Rigidbody never fires
+/// OnCollisionEnter against another kinematic Rigidbody, which is why the
+/// ball-vs-ball impact SFX below had to move from "every peer detects and
+/// plays its own copy locally" to "server detects and broadcasts."
 ///
 /// Now a NetworkBehaviour (was a plain MonoBehaviour) so it can broadcast a
 /// server-authoritative reset via ServerResetTo/ObserversResetTo — see
 /// PoolPocket.cs, which calls ServerResetTo when the cue ball falls in a
-/// pocket. Strike() itself is unchanged: still a plain local AddForce, still
-/// runs independently on every client exactly as before.
+/// pocket.
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class CueBall : NetworkBehaviour
@@ -50,6 +63,28 @@ public class CueBall : NetworkBehaviour
         _rigidbody = GetComponent<Rigidbody>();
     }
 
+    // Kinematic baseline for full server authority — see the class comment.
+    // Set here rather than in OnStartNetwork(): FishNet's own doc comment on
+    // IsServerInitialized says it "is set true right before server start
+    // callbacks," meaning it isn't reliable yet inside OnStartNetwork()
+    // (which runs before OnStartServer). Splitting across OnStartServer/
+    // OnStartClient avoids that entirely — on host both fire, but
+    // OnStartServer always runs first, so OnStartClient's IsServerInitialized
+    // check below already sees true and correctly leaves a host's ball
+    // non-kinematic.
+    public override void OnStartServer()
+    {
+        base.OnStartServer();
+        _rigidbody.isKinematic = false;
+    }
+
+    public override void OnStartClient()
+    {
+        base.OnStartClient();
+        if (!IsServerInitialized)
+            _rigidbody.isKinematic = true;
+    }
+
     public void Strike(Vector3 direction, float force)
     {
         _rigidbody.AddForce(direction.normalized * force, ForceMode.Impulse);
@@ -72,8 +107,17 @@ public class CueBall : NetworkBehaviour
     // list. Both balls in a collision fire OnCollisionEnter independently;
     // only the lower-InstanceID side actually plays the clip so a single
     // hit doesn't stack two copies of the same sound on top of each other.
+    //
+    // Server-only now — see the class comment. Non-server peers' balls are
+    // kinematic, and Unity never raises OnCollisionEnter between two
+    // kinematic Rigidbodies, so this would simply stop firing on clients
+    // anyway; detecting on the server and broadcasting which clip to play
+    // is what keeps the sound audible for everyone instead of going silent
+    // on non-host players.
     private void OnCollisionEnter(Collision collision)
     {
+        if (!IsServerInitialized) return;
+
         GameObject other = ResolveOtherBall(collision.collider);
         if (other == null) return; // rail/table felt — no dedicated sound for that
 
@@ -85,8 +129,20 @@ public class CueBall : NetworkBehaviour
         if (_ballImpactClips == null || _ballImpactClips.Length == 0) return;
 
         _lastBallImpactTime = Time.time;
-        AudioClip clip = _ballImpactClips[Random.Range(0, _ballImpactClips.Length)];
-        AudioManager.Instance?.PlaySFXAtPosition(clip, transform.position, 0.05f);
+        int clipIndex = Random.Range(0, _ballImpactClips.Length);
+        ObserversPlayBallImpactSfx(clipIndex, transform.position);
+    }
+
+    // Broadcasts the clip the server already chose so every peer (including
+    // the server's own host client) plays the identical sound at the same
+    // moment, replacing the old "every peer detects and picks its own random
+    // clip independently" approach that stopped working once balls went
+    // kinematic on non-server peers.
+    [ObserversRpc]
+    private void ObserversPlayBallImpactSfx(int clipIndex, Vector3 position)
+    {
+        if (_ballImpactClips == null || clipIndex < 0 || clipIndex >= _ballImpactClips.Length) return;
+        AudioManager.Instance?.PlaySFXAtPosition(_ballImpactClips[clipIndex], position, 0.05f);
     }
 
     private static GameObject ResolveOtherBall(Collider other)
@@ -113,8 +169,15 @@ public class CueBall : NetworkBehaviour
     [ObserversRpc]
     private void ObserversResetTo(Vector3 position, Quaternion rotation)
     {
-        _rigidbody.linearVelocity = Vector3.zero;
-        _rigidbody.angularVelocity = Vector3.zero;
+        // Only clear velocity where the Rigidbody is actually non-kinematic
+        // (the server) — Unity logs a warning when velocity is set on a
+        // kinematic body, which every non-server peer's ball now is (see
+        // the class comment).
+        if (IsServerInitialized)
+        {
+            _rigidbody.linearVelocity = Vector3.zero;
+            _rigidbody.angularVelocity = Vector3.zero;
+        }
         transform.SetPositionAndRotation(position, rotation);
     }
 }

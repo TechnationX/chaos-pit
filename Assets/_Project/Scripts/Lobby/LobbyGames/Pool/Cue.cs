@@ -6,7 +6,8 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// A pool cue. Extends Grabbable but changes what LMB/RMB do while held:
+/// A pool cue. Extends SettlingGrabbable (see the note further down) but
+/// changes what LMB/RMB do while held:
 /// LMB (routed through OnInteract by InteractionManager, same wiring as any
 /// other held Grabbable) triggers a shoot — a short forward thrust of the
 /// cue itself. It stays in hand the whole time: kinematic, parented to
@@ -47,8 +48,20 @@ using UnityEngine.InputSystem;
 /// rolling don't have this failure mode (continuous multi-step contact,
 /// not a single fast trigger check), so this fix is scoped to the strike
 /// moment only.
+///
+/// Extends SettlingGrabbable (not plain Grabbable) so a drop doesn't hand
+/// off to real dynamic Rigidbody physics — that was the cause of the cue
+/// glitching/clipping into the floor on drop, same failure mode
+/// SettlingGrabbable was originally built to fix for the pool rack. Instead
+/// the Rigidbody stays kinematic permanently and OnObserversDrop (inherited,
+/// unchanged here) raycasts straight down and lerps the cue to rest on
+/// whatever it finds. Tune _settleRestOffset in the Inspector to roughly the
+/// distance from the cue's pivot to the bottom of its collider — the
+/// rack's tuned value won't be right for the cue's very different shape.
+/// One tradeoff: the cue no longer tumbles/bounces on drop, it settles
+/// directly to rest — see SettlingGrabbable's own class comment.
 /// </summary>
-public class Cue : Grabbable
+public class Cue : SettlingGrabbable
 {
     [Header("Cue Tip")]
     [Tooltip("Child GameObject with a CueTip component + trigger Collider, positioned at the business end of the cue model.")]
@@ -121,6 +134,23 @@ public class Cue : Grabbable
 
         if (!_isHeld || _holdingPlayer == null) return;
         if (!_holdingPlayer.IsOwner) return;
+
+        // Live-tuning support: normally _handPositionOffset/_handRotationOffset
+        // are applied once, at grab time (OnObserversGrab below), so editing
+        // them in the Inspector while already holding the cue did nothing until
+        // you dropped and re-grabbed. Reapplying them here every frame instead
+        // makes Inspector edits show up immediately — grab the cue in Play mode,
+        // tweak the two fields, watch it move live, then copy the final values
+        // into the prefab's default. Skipped while _isShooting so this doesn't
+        // fight ShootRoutine's thrust lerp (which also writes localPosition).
+        // Owner-only, same as the RMB-drop check below, so this has zero
+        // networking effect — every other peer still only sees the grab-time
+        // OnObserversGrab placement plus whatever ShootRoutine broadcasts.
+        if (!_isShooting)
+        {
+            transform.localPosition = _handPositionOffset;
+            transform.localRotation = Quaternion.Euler(_handRotationOffset);
+        }
 
         // RMB drops — mirrors Throwable's RMB-for-secondary-action pattern,
         // since LMB is now dedicated to shooting instead of dropping.
@@ -248,6 +278,11 @@ public class Cue : Grabbable
     }
 
     // Guard against a runaway thrust coroutine if the cue gets dropped mid-shot.
+    // base.OnObserversDrop now resolves to SettlingGrabbable's version (see
+    // the class comment above) — it starts the raycast-and-settle routine
+    // instead of flipping the Rigidbody back to dynamic, which is the actual
+    // fix for the floor-clipping glitch. Nothing else in this override needed
+    // to change for that; it was already just deferring to base.
     protected override void OnObserversDrop(NetworkObject playerNetObj)
     {
         StopAllCoroutines();
@@ -259,9 +294,17 @@ public class Cue : Grabbable
     // and _handPositionOffset instead of hardcoding Quaternion.identity /
     // Vector3.zero — that's the one block that differs. Duplicated rather than
     // calling base + patching afterward, since the base version sets these
-    // itself; there's no hook to intercept just those lines.
+    // itself; there's no hook to intercept just those lines. StopAllCoroutines()
+    // is added here (SettlingGrabbable's own OnObserversGrab does the same)
+    // to cancel a grab-mid-settle race if the cue is picked back up while
+    // still lerping down from a previous drop — this override fully replaces
+    // SettlingGrabbable.OnObserversGrab rather than calling it, same as it
+    // always fully replaced Grabbable's version, so that guard has to be
+    // repeated here.
     protected override void OnObserversGrab(NetworkObject playerNetObj)
     {
+        StopAllCoroutines();
+
         PlayerObject player = playerNetObj.GetComponent<PlayerObject>();
         if (player == null) return;
 

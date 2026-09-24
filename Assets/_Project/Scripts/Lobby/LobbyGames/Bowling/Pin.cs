@@ -270,7 +270,7 @@ public class Pin : NetworkBehaviour
     //
     // Root cause of this sound being silent for a while wasn't in this
     // method at all — LobbySpawner's Lane R Pin Prefab field had drifted to
-    // a different, older prefab asset than this script/BowlingPin.prefab.
+    // a different, older prefab asset than this script/Bowling_Pin.prefab.
     // Confirmed fixed once that field was reassigned in the Inspector.
     private void OnCollisionEnter(Collision collision)
     {

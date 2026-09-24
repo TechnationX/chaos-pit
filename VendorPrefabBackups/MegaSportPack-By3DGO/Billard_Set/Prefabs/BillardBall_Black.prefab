@@ -97,8 +97,8 @@ Rigidbody:
   m_GameObject: {fileID: 6058722752062277322}
   serializedVersion: 5
   m_Mass: 1
-  m_LinearDamping: 0.4
-  m_AngularDamping: 0.5
+  m_LinearDamping: 0.2
+  m_AngularDamping: 0.2
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -141,7 +141,7 @@ MonoBehaviour:
   _extrapolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  _clientAuthoritative: 1
+  _clientAuthoritative: 0
   _sendToOwner: 1
   _interval: 1
   _synchronizePosition: 1
@@ -192,7 +192,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584143208140488810
+  _initializedTimestamp: -8584118271980933803
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
@@ -211,7 +211,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 34
+  <PrefabId>k__BackingField: 51
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 11972306720079809062
   SceneId: 0
@@ -220,6 +220,22 @@ MonoBehaviour:
     Rotation: {x: 0, y: 0, z: 0, w: 1}
     Scale: {x: 1, y: 1, z: 1}
     IsValid: 1
+--- !u!114 &9123456789012340002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6058722752062277322}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 3
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}
 --- !u!135 &6816301548102939266
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -258,19 +274,6 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 2137714220703270790}
   _holdingSlotName: BallHolder_8
   _disableGravityWhenParked: 1
---- !u!114 &9123456789012340002
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6058722752062277322}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
-  _overrideType: 3
-  _updateHostVisibility: 1
-  _observerConditions:
-  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}
+  _ballImpactClips: []
+  _minBallImpactVelocity: 1
+  _ballImpactCooldown: 0.1

@@ -13,6 +13,21 @@ using UnityEngine;
 /// prefab (e.g. "BallHolder_8") — resolved via Transform.Find at reset time,
 /// same pattern PoolSetupConfig already uses to place balls on the triangle
 /// rack at spawn. Set one value per numbered-ball prefab in the Inspector.
+///
+/// FULL SERVER AUTHORITY: only the server's own copy of this ball actually
+/// simulates physics. Every other peer's Rigidbody is kept permanently
+/// kinematic (see OnStartServer/OnStartClient below) and just displays
+/// whatever position/rotation NetworkTransform pushes out — NetworkTransform
+/// is now server-authoritative (_clientAuthoritative: 0 on the prefab), not
+/// client-authoritative. This replaces the old "every peer independently
+/// simulates the same input" approach, which let each peer's local physics
+/// drift out of sync with everyone else's (different peers could see a
+/// break scatter the balls differently, or end up in different final
+/// positions). A kinematic Rigidbody never fires OnCollisionEnter against
+/// another kinematic Rigidbody, which is why the ball-vs-ball impact SFX
+/// below had to move from "every peer detects and plays its own copy
+/// locally" to "server detects and broadcasts." See CueBall.cs's matching
+/// comment — the two scripts use the identical pattern.
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class PoolBall : NetworkBehaviour
@@ -54,6 +69,29 @@ public class PoolBall : NetworkBehaviour
         _spawnRotation = transform.rotation;
     }
 
+    // Kinematic baseline for full server authority — see the class comment.
+    // Set here rather than in OnStartNetwork(): FishNet's own doc comment on
+    // IsServerInitialized says it "is set true right before server start
+    // callbacks," meaning it isn't reliable yet inside OnStartNetwork()
+    // (which runs before OnStartServer). Splitting across OnStartServer/
+    // OnStartClient avoids that entirely — on host both fire, but
+    // OnStartServer always runs first, so OnStartClient's IsServerInitialized
+    // check below already sees true and correctly leaves a host's ball
+    // non-kinematic. LobbySpawner's ServerSetLocked(true) call right after
+    // spawn (racking) still wins either way — see ObserversSetLocked below.
+    public override void OnStartServer()
+    {
+        base.OnStartServer();
+        _rigidbody.isKinematic = false;
+    }
+
+    public override void OnStartClient()
+    {
+        base.OnStartClient();
+        if (!IsServerInitialized)
+            _rigidbody.isKinematic = true;
+    }
+
     // See CueBall.ServerResetTo for the full explanation — same pattern,
     // called directly from PoolPocket's already-server-side code.
     //
@@ -81,8 +119,15 @@ public class PoolBall : NetworkBehaviour
     [ObserversRpc]
     private void ObserversResetTo(Vector3 position, Quaternion rotation, bool restoreGravity)
     {
-        _rigidbody.linearVelocity = Vector3.zero;
-        _rigidbody.angularVelocity = Vector3.zero;
+        // Only clear velocity where the Rigidbody is actually non-kinematic
+        // (the server) — Unity logs a warning when velocity is set on a
+        // kinematic body, which every non-server peer's ball now is (see
+        // the class comment).
+        if (IsServerInitialized)
+        {
+            _rigidbody.linearVelocity = Vector3.zero;
+            _rigidbody.angularVelocity = Vector3.zero;
+        }
         transform.SetPositionAndRotation(position, rotation);
 
         if (restoreGravity)
@@ -108,7 +153,14 @@ public class PoolBall : NetworkBehaviour
     [ObserversRpc]
     private void ObserversSetLocked(bool locked)
     {
-        _rigidbody.isKinematic = locked;
+        // Full server authority: unlocking must only let the SERVER's own
+        // copy of this ball start simulating — every other peer's Rigidbody
+        // has to stay kinematic regardless of the locked flag, or it goes
+        // back to independently resimulating this ball's physics the moment
+        // the rack is grabbed (see the class comment). Locking still applies
+        // everywhere unconditionally, since a locked ball must never move on
+        // any peer.
+        _rigidbody.isKinematic = locked || !IsServerInitialized;
     }
 
     // Ball-vs-ball impact only — anything that isn't a CueBall/PoolBall on
@@ -117,8 +169,17 @@ public class PoolBall : NetworkBehaviour
     // list. Both balls in a collision fire OnCollisionEnter independently;
     // only the lower-InstanceID side actually plays the clip so a single
     // hit doesn't stack two copies of the same sound on top of each other.
+    //
+    // Server-only now — see the class comment. Non-server peers' balls are
+    // kinematic, and Unity never raises OnCollisionEnter between two
+    // kinematic Rigidbodies, so this would simply stop firing on clients
+    // anyway; detecting on the server and broadcasting which clip to play
+    // is what keeps the sound audible for everyone instead of going silent
+    // on non-host players.
     private void OnCollisionEnter(Collision collision)
     {
+        if (!IsServerInitialized) return;
+
         GameObject other = ResolveOtherBall(collision.collider);
         if (other == null) return; // rail/table felt — no dedicated sound for that
 
@@ -130,8 +191,20 @@ public class PoolBall : NetworkBehaviour
         if (_ballImpactClips == null || _ballImpactClips.Length == 0) return;
 
         _lastBallImpactTime = Time.time;
-        AudioClip clip = _ballImpactClips[Random.Range(0, _ballImpactClips.Length)];
-        AudioManager.Instance?.PlaySFXAtPosition(clip, transform.position, 0.05f);
+        int clipIndex = Random.Range(0, _ballImpactClips.Length);
+        ObserversPlayBallImpactSfx(clipIndex, transform.position);
+    }
+
+    // Broadcasts the clip the server already chose so every peer (including
+    // the server's own host client) plays the identical sound at the same
+    // moment, replacing the old "every peer detects and picks its own random
+    // clip independently" approach that stopped working once balls went
+    // kinematic on non-server peers.
+    [ObserversRpc]
+    private void ObserversPlayBallImpactSfx(int clipIndex, Vector3 position)
+    {
+        if (_ballImpactClips == null || clipIndex < 0 || clipIndex >= _ballImpactClips.Length) return;
+        AudioManager.Instance?.PlaySFXAtPosition(_ballImpactClips[clipIndex], position, 0.05f);
     }
 
     private static GameObject ResolveOtherBall(Collider other)

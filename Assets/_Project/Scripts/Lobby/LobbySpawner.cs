@@ -22,9 +22,13 @@ public class LobbySpawner : MonoBehaviour
     [SerializeField] private List<PoolSetupInstance> _poolSetups;
     [Tooltip("Bowling lane setups — pins are generated procedurally from a head-pin anchor + spacing rather than authored per-slot like the pool rack, see BowlingPinConfig.")]
     [SerializeField] private List<BowlingLaneInstance> _bowlingLanes;
+    [Tooltip("Stage setups — each pairs a Stage Setup Config (the act list: mic stand + optional instrument per act) with the scene Anchor Transform and SpeakerAnchors list for that physical stage.")]
+    [SerializeField] private List<StageSetupInstance> _stageSetups;
     [Header("Parents")]
     [SerializeField] private Transform _furnitureParent;
     [SerializeField] private Transform _propParent;
+    [Tooltip("Root Transform whose whole hierarchy gets scanned for scene-placed NetworkObjects that carry a NetworkObserver (see RegisterSceneManualRevealRoutine) — assign LobbyRoot. These objects (bowling lanes, sittable furniture, the pool rack) are scattered across BowlingRoot/PoolRoot/Bar&TableRoom rather than all living under one dedicated parent like _furnitureParent, so this scans broadly instead of per-area.")]
+    [SerializeField] private Transform _manualRevealSceneRoot;
     private List<Vector3> _availableSpawnPoints = new List<Vector3>();
     private List<Quaternion> _availableSpawnRotations = new List<Quaternion>();
     private bool _spawnListenerRegistered = false;
@@ -142,11 +146,94 @@ public class LobbySpawner : MonoBehaviour
     // avoids the burst the same way bowling already did.
     private IEnumerator SpawnAllRoutine()
     {
+        yield return StartCoroutine(RegisterSceneFurnitureRoutine());
+        yield return StartCoroutine(RegisterSceneManualRevealRoutine());
         yield return StartCoroutine(SpawnFurnitureRoutine());
         yield return StartCoroutine(SpawnPropsRoutine());
         yield return StartCoroutine(SpawnPropSetupsRoutine());
         yield return StartCoroutine(SpawnPoolSetupsRoutine());
+        yield return StartCoroutine(SpawnStageSetupsRoutine());
         SpawnBowlingSetups();
+    }
+    // --- Scene-Placed Furniture (manual reveal registration) ---
+    // FurnitureSpawnConfig/SpawnFurnitureRoutine below exist for
+    // runtime-driven furniture spawning, but that config is currently empty
+    // (not in use yet — confirmed 2026-09-17) — today's furniture is
+    // hand-placed directly in the Lobby scene as prefab instances under
+    // _furnitureParent instead. As FishNet scene objects they're already
+    // spawned by the time the server starts, but a late-joining connection
+    // still catches up on all of them (plus every other already-spawned
+    // NetworkObject) in one automatic, un-paced burst — the exact same class
+    // of bug already fixed for chess/pool/bowling (see the Manual Reveal
+    // region above and RegisterManualRevealObject's own comment). Only
+    // Armchair_Classic, Coffee_table_1, Sofa_2Seat, and Table currently carry
+    // a NetworkObject component (and now NetworkObserver +
+    // ManualRevealCondition, added alongside this) — Stool_1_New,
+    // Stool_4_New, and TV_Modern_New have no NetworkObject at all, so they're
+    // untouched by any of this either way.
+    //
+    // IMPORTANT ASSUMPTION: this only finds furniture that's actually parented
+    // under _furnitureParent in the scene. If the hand-placed instances live
+    // somewhere else in the hierarchy, this scan finds nothing — meaning the
+    // NetworkObserver added to those 4 prefabs would default them to
+    // invisible-until-revealed with nothing ever revealing them, hiding that
+    // furniture from everyone. Worth confirming in the Editor after this
+    // lands (select _furnitureParent in the Inspector and check its children)
+    // before relying on this fix.
+    private IEnumerator RegisterSceneFurnitureRoutine()
+    {
+        // One frame so any same-frame FishNet scene-object spawning (part of
+        // the server starting) has finished before we go looking.
+        yield return null;
+
+        if (_furnitureParent == null) yield break;
+
+        foreach (NetworkObject netObj in _furnitureParent.GetComponentsInChildren<NetworkObject>(true))
+            RegisterManualRevealObject(netObj);
+    }
+    // --- Scene-Placed Manual-Reveal Objects (bowling lanes, sittable
+    // furniture, pool rack) ---
+    // RegisterSceneFurnitureRoutine above only scans _furnitureParent, which
+    // only covers furniture that's actually parented there — an audit of
+    // every prefab placed in the Lobby (2026-09-18) found several more
+    // networked, scene-placed objects that carry NO NetworkObserver at all
+    // and are scattered under BowlingRoot, PoolRoot, and Bar&TableRoom
+    // instead: BowlingLaneL/R, LanePanel's buttons (nested inside the
+    // lanes), the MedievalTavernPack bar stool (Stool_02, has a Sittable
+    // component), the MegaSportPack pool ball rack (Billard_Pool_8Ball — 9
+    // separate NetworkObjects, one per ball), and three FoundryStudios sofas
+    // (Sofa2, Sofa2_Small, Sofa_Circular, also Sittable). All of them are
+    // now fixed at the prefab level (NetworkObserver + ManualRevealCondition
+    // added, same as the furniture fix above) — this routine is what wires
+    // them into the reveal system, since none of them live under
+    // _furnitureParent.
+    //
+    // Scans from _manualRevealSceneRoot (assign LobbyRoot in the Inspector)
+    // instead of a narrow per-area parent, since these objects don't share
+    // one — LobbyRoot is the closest common ancestor for all of them. To
+    // avoid the same "silently invisible forever" risk this fix is patching,
+    // and to avoid re-registering things that aren't part of this system on
+    // purpose (LobbyRoot's own NetworkObject, GameRoomManager, and other
+    // core scene NetworkObjects have no NetworkObserver at all, by design —
+    // they need to stay visible to everyone immediately), the scan only acts
+    // on a NetworkObject that already HAS a NetworkObserver component. That
+    // makes it safe to scan broadly: anything without a NetworkObserver is
+    // silently skipped rather than logging RegisterManualRevealObject's
+    // "check the prefab" warning, and anything that DOES have one (meaning
+    // it's meant to be manually revealed) still gets that warning if its
+    // NetworkObserver isn't actually configured with ManualRevealCondition —
+    // a real misconfiguration worth flagging.
+    private IEnumerator RegisterSceneManualRevealRoutine()
+    {
+        yield return null;
+
+        if (_manualRevealSceneRoot == null) yield break;
+
+        foreach (NetworkObject netObj in _manualRevealSceneRoot.GetComponentsInChildren<NetworkObject>(true))
+        {
+            if (netObj.GetComponent<NetworkObserver>() == null) continue;
+            RegisterManualRevealObject(netObj);
+        }
     }
     private void Awake()
     {
@@ -233,7 +320,6 @@ public class LobbySpawner : MonoBehaviour
     }
     private void RegisterSpawnListener()
     {
-        Debug.Log($"[LobbySpawner] RegisterSpawnListener called. AlreadyRegistered: {_spawnListenerRegistered}");
         if (_spawnListenerRegistered) return;
         _spawnListenerRegistered = true;
         InstanceFinder.SceneManager.OnClientLoadedStartScenes += OnClientLoadedStartScenes;
@@ -254,10 +340,15 @@ public class LobbySpawner : MonoBehaviour
     // a new cause. Requiring both together is what actually closes both gaps.
     private void OnClientLoadedStartScenes(FishNet.Connection.NetworkConnection conn, bool asServer)
     {
-        Debug.Log($"[LobbySpawner] OnClientLoadedStartScenes — connId: {conn.ClientId}, asServer: {asServer}, alreadySpawned: {_spawnedConnections.Contains(conn.ClientId)}");
         if (!asServer) return;
+        // Diagnostic for the intermittent "client hangs on join" bug — see
+        // TrySpawnIfReady's own comment for why this and the broadcast below
+        // are each only half of what's needed to spawn a connection's player.
+        Debug.Log($"[LobbySpawner] OnClientLoadedStartScenes — ClientId: {conn.ClientId}");
         _startScenesLoadedConnections.Add(conn.ClientId);
         TrySpawnIfReady(conn);
+        if (!_spawnedConnections.Contains(conn.ClientId))
+            StartCoroutine(WarnIfStillNotSpawned(conn));
     }
     // The other required signal — see TrySpawnIfReady. Fires once a
     // connection's own client confirms that its local Lobby scene has
@@ -273,9 +364,47 @@ public class LobbySpawner : MonoBehaviour
     // silently receives nothing ever again" symptom.
     private void OnLobbyReadyBroadcast(NetworkConnection conn, LobbyReadyBroadcast msg, Channel channel)
     {
-        Debug.Log($"[LobbySpawner] OnLobbyReadyBroadcast — connId: {conn.ClientId}, alreadySpawned: {_spawnedConnections.Contains(conn.ClientId)}");
+        // Diagnostic for the intermittent "client hangs on join" bug — see
+        // TrySpawnIfReady's own comment for why this and
+        // OnClientLoadedStartScenes above are each only half of what's
+        // needed to spawn a connection's player.
+        Debug.Log($"[LobbySpawner] OnLobbyReadyBroadcast — ClientId: {conn.ClientId}");
         _lobbyReadyConnections.Add(conn.ClientId);
         TrySpawnIfReady(conn);
+        if (!_spawnedConnections.Contains(conn.ClientId))
+            StartCoroutine(WarnIfStillNotSpawned(conn));
+    }
+
+    // Diagnostic-only watchdog for the intermittent "second player hangs on
+    // join" bug — TrySpawnIfReady requires BOTH OnClientLoadedStartScenes and
+    // OnLobbyReadyBroadcast to have fired for a connection (see its own
+    // comment), and until now gave no indication at all if one of the two
+    // just never arrived — the connection would sit there forever with
+    // nothing in the console to explain why. This doesn't fix or retry
+    // anything; a few seconds after the FIRST of the two signals comes in,
+    // it checks whether the connection is still waiting on the other one and
+    // names exactly which is missing, so the next time this happens the
+    // console says what's actually stuck instead of the join just silently
+    // never completing.
+    private IEnumerator WarnIfStillNotSpawned(NetworkConnection conn)
+    {
+        int clientId = conn.ClientId;
+        yield return new WaitForSeconds(8f);
+
+        if (_spawnedConnections.Contains(clientId)) yield break; // resolved itself — nothing to report
+        if (!InstanceFinder.ServerManager.Clients.ContainsKey(clientId)) yield break; // disconnected in the meantime
+
+        bool startScenesLoaded = _startScenesLoadedConnections.Contains(clientId);
+        bool lobbyReady = _lobbyReadyConnections.Contains(clientId);
+
+        string missing = !lobbyReady
+            ? "the client's own LobbyReadyBroadcast never arrived — its Lobby scene load may have stalled, or the broadcast was sent before this server finished registering its handler (see RegisterSpawnListener)"
+            : !startScenesLoaded
+                ? "FishNet's own OnClientLoadedStartScenes never fired for this connection"
+                : "both signals ARE present but the spawn still didn't happen — check for a swallowed exception inside TrySpawnIfReady";
+
+        Debug.LogWarning($"[LobbySpawner] ClientId {clientId} still not spawned 8s after its first ready signal — " +
+            $"startScenesLoaded: {startScenesLoaded}, lobbyReady: {lobbyReady}. Likely cause: {missing}.");
     }
     // Spawns a connection's player (and starts its manual-reveal coroutine)
     // the moment BOTH OnClientLoadedStartScenes and OnLobbyReadyBroadcast
@@ -283,11 +412,28 @@ public class LobbySpawner : MonoBehaviour
     // see the comments on each for why neither alone is sufficient.
     private void TrySpawnIfReady(NetworkConnection conn)
     {
-        if (_spawnedConnections.Contains(conn.ClientId)) return;
-        if (!_startScenesLoadedConnections.Contains(conn.ClientId)) return;
-        if (!_lobbyReadyConnections.Contains(conn.ClientId)) return;
+        // Diagnostic for the intermittent "client hangs on join" bug — logs
+        // exactly which of the two gate checks is holding a connection back,
+        // instead of the method just silently returning. See
+        // WarnIfStillNotSpawned for the higher-level "still stuck after 8s"
+        // summary that reads off the same two HashSets.
+        if (_spawnedConnections.Contains(conn.ClientId))
+        {
+            Debug.Log($"[LobbySpawner] TrySpawnIfReady — ClientId {conn.ClientId} already spawned, skipping.");
+            return;
+        }
+        if (!_startScenesLoadedConnections.Contains(conn.ClientId))
+        {
+            Debug.Log($"[LobbySpawner] TrySpawnIfReady — ClientId {conn.ClientId} waiting on OnClientLoadedStartScenes (lobbyReady: {_lobbyReadyConnections.Contains(conn.ClientId)}).");
+            return;
+        }
+        if (!_lobbyReadyConnections.Contains(conn.ClientId))
+        {
+            Debug.Log($"[LobbySpawner] TrySpawnIfReady — ClientId {conn.ClientId} waiting on OnLobbyReadyBroadcast (startScenesLoaded: {_startScenesLoadedConnections.Contains(conn.ClientId)}).");
+            return;
+        }
 
-        Debug.Log($"[LobbySpawner] TrySpawnIfReady — both signals received for connId: {conn.ClientId}. Spawning.");
+        Debug.Log($"[LobbySpawner] TrySpawnIfReady — ClientId {conn.ClientId} has both signals, spawning now.");
         _spawnedConnections.Add(conn.ClientId);
         if (_playerSpawnConfig.PlayerPrefab == null)
         {
@@ -310,6 +456,8 @@ public class LobbySpawner : MonoBehaviour
         playerObj?.SetPlayerData(displayName, conn.ClientId);
         //Debug.Log($"[LobbySpawner] Calling LeaderboardManager.Refresh — instance: {LeaderboardManager.Instance != null}");
         GameRoomManager.Instance?.SyncLeaderboardToClients();
+
+        Debug.Log($"[LobbySpawner] TrySpawnIfReady — ClientId {conn.ClientId} spawn complete, displayName: {displayName}.");
 
         // Chess pieces are hidden from this connection by default (see the
         // Manual Reveal region above) — reveal them gradually now instead of
@@ -374,6 +522,15 @@ public class LobbySpawner : MonoBehaviour
     private void RegisterManualRevealObject(NetworkObject netObj)
     {
         if (netObj == null) return;
+        // Guards against double-registration — needed now that furniture can
+        // reach this method two ways: once via RegisterSceneFurnitureRoutine
+        // for whatever's already hand-placed under _furnitureParent, and
+        // again via SpawnFurnitureRoutine if/when FurnitureSpawnConfig is
+        // ever populated and that runtime-spawn path is turned on. Without
+        // this, the same NetworkObject could pile up multiple entries in
+        // _manualRevealObjects, wasting a frame per duplicate in
+        // RevealManualObjectsToConnection for every future joiner.
+        if (_manualRevealObjects.Contains(netObj)) return;
         ManualRevealCondition condition = GetManualRevealCondition(netObj);
         if (condition == null)
         {
@@ -977,6 +1134,244 @@ public class LobbySpawner : MonoBehaviour
         instance.ActiveSwitchRoutine = null;
     }
 
+    // --- Stage Setups (mic stand + optional instrument per act, one act live at a time) ---
+    // Spread across frames for the same reason as every other Spawn*Routine
+    // above — see SpawnAllRoutine's comment. A stage spawn is small (at most
+    // two objects: mic stand + instrument) so the burst risk here is low, but
+    // there's no reason to special-case it out of the shared convention.
+    private IEnumerator SpawnStageSetupsRoutine()
+    {
+        if (_stageSetups == null) yield break;
+        foreach (var instance in _stageSetups)
+        {
+            StageSetupConfig setup = instance?.Config;
+            if (setup == null) continue;
+            if (instance.Anchor == null)
+            {
+                Debug.LogWarning($"[LobbySpawner] Stage setup '{setup.SetupLabel}' has no Anchor Transform assigned — skipping.");
+                continue;
+            }
+            if (setup.Acts == null || setup.Acts.Count == 0)
+            {
+                Debug.LogWarning($"[LobbySpawner] Stage setup '{setup.SetupLabel}' has no acts defined.");
+                continue;
+            }
+
+            int actIndex = Mathf.Clamp(setup.DefaultActIndex, 0, setup.Acts.Count - 1);
+            StageAct defaultAct = setup.Acts[actIndex];
+            int variantIndex = (defaultAct.InstrumentVariants != null && defaultAct.InstrumentVariants.Count > 0)
+                ? Mathf.Clamp(defaultAct.DefaultVariantIndex, 0, defaultAct.InstrumentVariants.Count - 1)
+                : 0;
+            yield return StartCoroutine(SpawnStageActRoutine(instance, setup, actIndex, variantIndex));
+        }
+    }
+
+    // Does the actual spawn work for a single act — shared by both the
+    // initial Lobby-load spawn above and SwitchStageActRoutine below, unlike
+    // SpawnPoolSetupsRoutine/SwitchPoolPatternRoutine (which duplicate their
+    // ball-spawn loop rather than share it) since a stage spawn is only ever
+    // "mic stand, then optionally an instrument" — simple enough that a
+    // shared coroutine doesn't lose anything by being reused from both call
+    // sites.
+    //
+    // variantIndex picks which of the act's (purely visual) InstrumentVariants
+    // spawns — ignored/harmless if the act has none. Callers are responsible
+    // for clamping it against the act's actual variant count; this just
+    // re-clamps defensively before indexing.
+    private IEnumerator SpawnStageActRoutine(StageSetupInstance instance, StageSetupConfig setup, int actIndex, int variantIndex)
+    {
+        StageAct act = setup.Acts[actIndex];
+        Vector3 anchorPosition = instance.Anchor.position;
+        Quaternion anchorRotation = instance.Anchor.rotation;
+
+        if (act.MicStandPrefab != null)
+        {
+            Vector3 worldPosition = anchorPosition + (anchorRotation * act.MicStandPosition);
+            Quaternion worldRotation = anchorRotation * Quaternion.Euler(act.MicStandRotation);
+            GameObject micStand = Instantiate(act.MicStandPrefab, worldPosition, worldRotation, _propParent);
+            micStand.transform.localScale = act.MicStandScale;
+            micStand.name = $"{setup.SetupLabel}_{act.ActName}_MicStand";
+            NetworkObject micStandNetObj = micStand.GetComponent<NetworkObject>();
+            if (micStandNetObj != null)
+            {
+                InstanceFinder.ServerManager.Spawn(micStandNetObj);
+                RegisterManualRevealObject(micStandNetObj);
+            }
+            instance.SpawnedMicStand = micStand;
+            yield return null;
+
+            // Mic attaches to a named child on the STAND'S SPAWNED INSTANCE,
+            // not on the stand prefab asset — the anchor only exists once
+            // Instantiate() above has actually created it, same reasoning as
+            // PoolSetupConfig's rack-slot resolution (Transform.Find by name
+            // against the spawned rack, not the prefab).
+            if (act.MicPrefab != null)
+            {
+                if (string.IsNullOrEmpty(act.MicAnchorName))
+                {
+                    Debug.LogWarning($"[LobbySpawner] Stage setup '{setup.SetupLabel}' act '{act.ActName}' has a MicPrefab but no MicAnchorName set.");
+                }
+                else
+                {
+                    Transform micAnchor = micStand.transform.Find(act.MicAnchorName);
+                    if (micAnchor == null)
+                    {
+                        Debug.LogWarning($"[LobbySpawner] Stage setup '{setup.SetupLabel}' act '{act.ActName}' — couldn't find a child named '{act.MicAnchorName}' on the spawned mic stand. Check spelling/casing against MicStandPrefab's Hierarchy.");
+                    }
+                    else
+                    {
+                        GameObject mic = Instantiate(act.MicPrefab, micAnchor.position, micAnchor.rotation, _propParent);
+                        mic.transform.localScale = act.MicScale;
+                        mic.name = $"{setup.SetupLabel}_{act.ActName}_Mic";
+                        NetworkObject micNetObj = mic.GetComponent<NetworkObject>();
+                        if (micNetObj != null)
+                        {
+                            InstanceFinder.ServerManager.Spawn(micNetObj);
+                            RegisterManualRevealObject(micNetObj);
+                        }
+                        instance.SpawnedMic = mic;
+                    }
+                }
+                yield return null;
+            }
+        }
+
+        GameObject instrumentPrefab = null;
+        if (act.InstrumentVariants != null && act.InstrumentVariants.Count > 0)
+        {
+            int clampedVariant = Mathf.Clamp(variantIndex, 0, act.InstrumentVariants.Count - 1);
+            instrumentPrefab = act.InstrumentVariants[clampedVariant]?.Prefab;
+            instance.ActiveVariantIndex = clampedVariant;
+        }
+        else
+        {
+            instance.ActiveVariantIndex = -1;
+        }
+
+        if (instrumentPrefab != null)
+        {
+            Vector3 worldPosition = anchorPosition + (anchorRotation * act.InstrumentPosition);
+            Quaternion worldRotation = anchorRotation * Quaternion.Euler(act.InstrumentRotation);
+            GameObject instrument = Instantiate(instrumentPrefab, worldPosition, worldRotation, _propParent);
+            instrument.transform.localScale = act.InstrumentScale;
+            instrument.name = $"{setup.SetupLabel}_{act.ActName}_Instrument";
+            NetworkObject instrumentNetObj = instrument.GetComponent<NetworkObject>();
+            if (instrumentNetObj != null)
+            {
+                InstanceFinder.ServerManager.Spawn(instrumentNetObj);
+                RegisterManualRevealObject(instrumentNetObj);
+            }
+            else
+            {
+                Debug.LogWarning($"[LobbySpawner] Stage setup '{setup.SetupLabel}' act '{act.ActName}' instrument variant prefab has no NetworkObject — it will only appear on the host/server, not on remote clients.");
+            }
+
+            // Scene references (the stage's speakers) that the instrument
+            // prefab can't hold at design time — same pattern as
+            // BowlingBall.SetHolderAnchor(). Empty (falls back to the
+            // instrument's own position — see InstrumentInteractable) if
+            // this stage has no SpeakerAnchors assigned.
+            InstrumentInteractable interactable = instrument.GetComponent<InstrumentInteractable>();
+            if (interactable != null)
+            {
+                List<StageSpeaker> speakers = new List<StageSpeaker>();
+                if (instance.SpeakerAnchors != null)
+                {
+                    foreach (Transform speakerAnchor in instance.SpeakerAnchors)
+                    {
+                        StageSpeaker speaker = speakerAnchor != null ? speakerAnchor.GetComponent<StageSpeaker>() : null;
+                        if (speaker != null) speakers.Add(speaker);
+                        else if (speakerAnchor != null) Debug.LogWarning($"[LobbySpawner] Stage setup '{setup.SetupLabel}' has a SpeakerAnchor entry with no StageSpeaker component: '{speakerAnchor.name}'.");
+                    }
+                }
+                interactable.SetSpeakerAnchors(speakers);
+            }
+
+            instance.SpawnedInstrument = instrument;
+            yield return null;
+        }
+
+        instance.ActiveActIndex = actIndex;
+    }
+
+    // Switches this stage to a different Act — e.g. Talk Mic switching to
+    // Piano + Mic — despawning whatever's currently spawned for this stage
+    // and spawning the new act's prefabs in their place. Validates
+    // synchronously, then hands off to a coroutine that does the actual
+    // despawn/spawn work spread across frames, same convention as
+    // SwitchPoolPattern/SwitchPoolPatternRoutine.
+    // variantIndex selects which (purely visual) InstrumentVariant of the
+    // target act spawns — harmless/ignored if that act has none or the index
+    // is out of range (re-clamped in SpawnStageActRoutine). Defaults to 0 so
+    // existing callers that only care about the act itself don't need to
+    // change.
+    public void SwitchStageAct(int setupIndex, int actIndex, int variantIndex = 0)
+    {
+        if (_stageSetups == null || setupIndex < 0 || setupIndex >= _stageSetups.Count)
+        {
+            Debug.LogWarning($"[LobbySpawner] SwitchStageAct — invalid setup index {setupIndex}.");
+            return;
+        }
+        StageSetupInstance instance = _stageSetups[setupIndex];
+        StageSetupConfig setup = instance.Config;
+        if (setup == null || setup.Acts == null || actIndex < 0 || actIndex >= setup.Acts.Count)
+        {
+            Debug.LogWarning($"[LobbySpawner] SwitchStageAct — invalid act index {actIndex} for setup {setupIndex}.");
+            return;
+        }
+
+        // Stop any switch already in progress for this stage before starting
+        // a new one — same reasoning as SwitchPoolPattern: otherwise two
+        // overlapping coroutines could both end up despawning/spawning
+        // against the same instance at once.
+        if (instance.ActiveSwitchRoutine != null)
+            StopCoroutine(instance.ActiveSwitchRoutine);
+        instance.ActiveSwitchRoutine = StartCoroutine(SwitchStageActRoutine(instance, setup, actIndex, variantIndex));
+    }
+
+    private IEnumerator SwitchStageActRoutine(StageSetupInstance instance, StageSetupConfig setup, int actIndex, int variantIndex)
+    {
+        if (instance.SpawnedInstrument != null)
+        {
+            NetworkObject instrumentNetObj = instance.SpawnedInstrument.GetComponent<NetworkObject>();
+            if (instrumentNetObj != null && instrumentNetObj.IsSpawned)
+            {
+                _manualRevealObjects.Remove(instrumentNetObj);
+                InstanceFinder.ServerManager.Despawn(instrumentNetObj);
+            }
+            instance.SpawnedInstrument = null;
+            yield return null;
+        }
+
+        if (instance.SpawnedMic != null)
+        {
+            NetworkObject micNetObj = instance.SpawnedMic.GetComponent<NetworkObject>();
+            if (micNetObj != null && micNetObj.IsSpawned)
+            {
+                _manualRevealObjects.Remove(micNetObj);
+                InstanceFinder.ServerManager.Despawn(micNetObj);
+            }
+            instance.SpawnedMic = null;
+            yield return null;
+        }
+
+        if (instance.SpawnedMicStand != null)
+        {
+            NetworkObject micStandNetObj = instance.SpawnedMicStand.GetComponent<NetworkObject>();
+            if (micStandNetObj != null && micStandNetObj.IsSpawned)
+            {
+                _manualRevealObjects.Remove(micStandNetObj);
+                InstanceFinder.ServerManager.Despawn(micStandNetObj);
+            }
+            instance.SpawnedMicStand = null;
+            yield return null;
+        }
+
+        yield return StartCoroutine(SpawnStageActRoutine(instance, setup, actIndex, variantIndex));
+
+        instance.ActiveSwitchRoutine = null;
+    }
+
     // --- Bowling Setups (pins generated procedurally from a head-pin anchor + spacing) ---
 
     // Standard bowling triangle, local (row, col) grid indexed 0-9 in
@@ -1397,4 +1792,34 @@ public class BowlingBallSlot
     [Tooltip("Where this ball spawns and returns to after each roll.")]
     public Transform HolderAnchor;
     public Vector3 Scale = Vector3.one;
+}
+
+[System.Serializable]
+public class StageSetupInstance
+{
+    [Tooltip("The act list for this stage (e.g. StageSetup) — act names and mic stand/instrument prefabs, offsets, and clips live on this config's Acts.")]
+    public StageSetupConfig Config;
+    [Tooltip("Scene Transform marking where this stage's mic stand/instrument offsets are measured from — an empty GameObject placed at the stage's center.")]
+    public Transform Anchor;
+    [Tooltip("Scene Transforms, each carrying a StageSpeaker component — this stage's physical speaker props (e.g. two left, two right, one center). All of them are assigned onto each spawned InstrumentInteractable, which plays sound from every one simultaneously rather than a single point, so a listener naturally hears it loudest from whichever speaker(s) are physically closest to them. Optional — leave empty and instruments fall back to playing from their own Transform.")]
+    public List<Transform> SpeakerAnchors = new List<Transform>();
+
+    // Runtime-only, populated by SpawnStageSetupsRoutine()/SwitchStageActRoutine()
+    // — used so a switch or a future reset doesn't need to re-discover the
+    // spawned objects each time.
+    [System.NonSerialized] public GameObject SpawnedMicStand;
+    [System.NonSerialized] public GameObject SpawnedMic;
+    [System.NonSerialized] public GameObject SpawnedInstrument;
+    [System.NonSerialized] public int ActiveActIndex = -1;
+    // Which InstrumentVariant of the active act is currently spawned, or -1
+    // if that act has no variants (nothing to track). Set by
+    // SpawnStageActRoutine so StageActSelector can default its variant
+    // dropdown to what's actually live when the menu reopens.
+    [System.NonSerialized] public int ActiveVariantIndex = -1;
+
+    // Tracks the in-progress SwitchStageAct coroutine, if any — same
+    // reasoning as PoolSetupInstance.ActiveSwitchRoutine: lets a re-press
+    // stop a still-running switch cleanly instead of letting two coroutines
+    // overlap against the same instance.
+    [System.NonSerialized] public Coroutine ActiveSwitchRoutine;
 }

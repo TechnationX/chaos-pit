@@ -129,9 +129,9 @@ namespace ChaosPit.Minigames.ThiefsMarket
             BuildItemPool();
 
             _gameSeed = UnityEngine.Random.Range(int.MinValue, int.MaxValue);
-            GameRoomManager.Instance.RpcMinigameMessage("tm_seed", _gameSeed.ToString());
+            GameRoomManager.Instance.RpcMinigameMessage("tm_seed", _gameSeed.ToString(), StationIndex);
 
-            GameRoomManager.Instance.RpcMinigameMessage("tm_players", BuildPlayersPayload());
+            GameRoomManager.Instance.RpcMinigameMessage("tm_players", BuildPlayersPayload(), StationIndex);
 
             StartCoroutine(StartRoundDelayed(2f));
         }
@@ -152,14 +152,14 @@ namespace ChaosPit.Minigames.ThiefsMarket
             // message rather than re-sending "tm_players" so the client
             // doesn't also re-run Init(), which would destroy and recreate
             // every score row.
-            GameRoomManager.Instance.RpcMinigameMessage("tm_refresh_names", BuildPlayersPayload());
+            GameRoomManager.Instance.RpcMinigameMessage("tm_refresh_names", BuildPlayersPayload(), StationIndex);
 
             ResetItemsForRound();
             RespawnPlayers();
 
-            GameRoomManager.Instance.RpcMinigameMessage("tm_round_reset", _currentRound.ToString());
+            GameRoomManager.Instance.RpcMinigameMessage("tm_round_reset", _currentRound.ToString(), StationIndex);
             GameRoomManager.Instance.RpcMinigameMessage("tm_round_start",
-                $"{_currentRound},{_roundDuration.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+                $"{_currentRound},{_roundDuration.ToString(System.Globalization.CultureInfo.InvariantCulture)}", StationIndex);
 
             // Explicit per-player TargetRpc rather than client self-discovery
             // (see SetPlayerThiefsMarketPunchMode) — timing-safe here because
@@ -201,7 +201,12 @@ namespace ChaosPit.Minigames.ThiefsMarket
 
         public override void ClientInit()
         {
-            _hud = FindFirstObjectByType<ThiefsMarketHUD>();
+            // Scoped to this controller's own scene instance, not a global
+            // FindFirstObjectByType — see FindHudInOwnScene's comment. Also
+            // shows the (now inactive-by-default) HUD GameObject here, since
+            // this only ever runs on a real participant's own process.
+            _hud = FindHudInOwnScene();
+            _hud?.ShowHUD();
 
             // "tm_players" is broadcast the instant StartGame() runs on the
             // server, which can reach this client before RpcInitMinigame does
@@ -224,6 +229,25 @@ namespace ChaosPit.Minigames.ThiefsMarket
             // enable-punch-mode call made this early. Activation happens on
             // "tm_round_start" instead — see OnNetworkMessage below — mirroring
             // when BombTossController activates its own interaction mode.
+        }
+
+        // FindFirstObjectByType<ThiefsMarketHUD>() used to search every
+        // loaded scene, not just this controller's own. On a host running
+        // two concurrent Thief's Market games (two stations), that could
+        // resolve to the OTHER station's HUD instance instead of this one's
+        // — same bug class as GameRoomManager's FindActiveMinigameController
+        // before it was scoped to GetStationScene(stationIndex). Scoped here
+        // the same way: only look inside this controller's own Scene. The
+        // HUD's own GameObject starts inactive by default (see ShowHUD's
+        // comment), so this must search inactive objects too.
+        private ThiefsMarketHUD FindHudInOwnScene()
+        {
+            foreach (GameObject root in gameObject.scene.GetRootGameObjects())
+            {
+                ThiefsMarketHUD hud = root.GetComponentInChildren<ThiefsMarketHUD>(true);
+                if (hud != null) return hud;
+            }
+            return null;
         }
 
         public override void RemovePlayer(PlayerObject player)
@@ -319,7 +343,7 @@ namespace ChaosPit.Minigames.ThiefsMarket
             {
                 remaining -= 0.5f;
                 GameRoomManager.Instance.RpcMinigameMessage("tm_timer_sync",
-                    Mathf.Max(0f, remaining).ToString("F1", System.Globalization.CultureInfo.InvariantCulture));
+                    Mathf.Max(0f, remaining).ToString("F1", System.Globalization.CultureInfo.InvariantCulture), StationIndex);
                 yield return new WaitForSeconds(0.5f);
             }
 
@@ -357,7 +381,7 @@ namespace ChaosPit.Minigames.ThiefsMarket
 
             string countsPayload = string.Join("|", counts.Select(kvp => $"{kvp.Key},{kvp.Value}"));
             string winnersPayload = string.Join(",", roundWinners);
-            GameRoomManager.Instance.RpcMinigameMessage("tm_round_result", $"{countsPayload};{winnersPayload}");
+            GameRoomManager.Instance.RpcMinigameMessage("tm_round_result", $"{countsPayload};{winnersPayload}", StationIndex);
 
             if (_currentRound >= _roundCount)
                 StartCoroutine(EndGameDelayed(2f));
@@ -372,7 +396,7 @@ namespace ChaosPit.Minigames.ThiefsMarket
             ActivatePunchModeForAllPlayers(false);
 
             _finalResults = BuildFinalResults();
-            GameRoomManager.Instance.RpcMinigameMessage("tm_game_over", BuildFinalResultsPayload());
+            GameRoomManager.Instance.RpcMinigameMessage("tm_game_over", BuildFinalResultsPayload(), StationIndex);
             GameRoomManager.Instance.NotifyGameComplete(this, _finalResults);
         }
 
@@ -420,7 +444,7 @@ namespace ChaosPit.Minigames.ThiefsMarket
             held.Add(itemId);
             int heldValue = held.Sum(id => _items[id].PointValue);
 
-            GameRoomManager.Instance.RpcMinigameMessage("tm_pickup_confirm", $"{itemId},{playerId},{heldValue}");
+            GameRoomManager.Instance.RpcMinigameMessage("tm_pickup_confirm", $"{itemId},{playerId},{heldValue}", StationIndex);
         }
 
         private void HandlePunchRequest(string payload, NetworkConnection sender)
@@ -451,7 +475,7 @@ namespace ChaosPit.Minigames.ThiefsMarket
 
             if (!_heldItemsByPlayer.TryGetValue(victim.PlayerId, out var victimItems) || victimItems.Count == 0)
             {
-                GameRoomManager.Instance.RpcMinigameMessage("tm_punch_whiff", $"{attackerId},{victimId}");
+                GameRoomManager.Instance.RpcMinigameMessage("tm_punch_whiff", $"{attackerId},{victimId}", StationIndex);
                 return;
             }
 
@@ -487,7 +511,7 @@ namespace ChaosPit.Minigames.ThiefsMarket
 
             string dropPayload = string.Join(";", dropParts);
             GameRoomManager.Instance.RpcMinigameMessage("tm_stolen",
-                $"{attacker.PlayerId},{victim.PlayerId},{victimNewValue},{dropPayload}");
+                $"{attacker.PlayerId},{victim.PlayerId},{victimNewValue},{dropPayload}", StationIndex);
         }
 
         private IEnumerator ClearStunAfterDelay(PlayerObject victim)
@@ -713,12 +737,12 @@ namespace ChaosPit.Minigames.ThiefsMarket
         // [Server]-tagged OnGameComplete executes (the server/host instance).
         protected override void OnShowResults(ResultsData data)
         {
-            _hud?.SetScorePanelVisible(false);
+            _hud?.SetInRoundHudVisible(false);
         }
 
         protected override void OnResultsHidden()
         {
-            _hud?.SetScorePanelVisible(true);
+            _hud?.SetInRoundHudVisible(true);
         }
 
         // Pure-client broadcast path — mirrors BombTossController's

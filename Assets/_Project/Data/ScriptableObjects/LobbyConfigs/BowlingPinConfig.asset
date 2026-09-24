@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 486893a3ad592a54489f4a0c94755559, type: 3}
   m_Name: BowlingPinConfig
   m_EditorClassIdentifier: Assembly-CSharp::BowlingPinConfig
-  SetupLabel: 
+  SetupLabel: Bowling Pin Setup
   Patterns:
   - PatternName: Standard 10
     ActiveSlotIndices: 00000000010000000200000003000000040000000500000006000000070000000800000009000000

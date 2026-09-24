@@ -286,6 +286,7 @@ GameObject:
   - component: {fileID: 8912088780821925264}
   - component: {fileID: 445275413362853031}
   - component: {fileID: 1394994484171101665}
+  - component: {fileID: 3330023737541237597}
   m_Layer: 0
   m_Name: BowlingLaneR
   m_TagString: Untagged
@@ -390,7 +391,7 @@ MonoBehaviour:
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
-  NetworkObserver: {fileID: 0}
+  NetworkObserver: {fileID: 3330023737541237597}
   _enablePrediction: 0
   _predictionType: 0
   _localReconcileCorrectionType: 2
@@ -2267,3 +2268,19 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 1901326426521266044, guid: e4ad2308fb20d6147acd267361d5f199, type: 3}
   m_PrefabInstance: {fileID: 9072911994479740949}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &3330023737541237597
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5876780289126653422}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 3
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}

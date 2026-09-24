@@ -103,7 +103,11 @@ public class SettingsPanelController : MonoBehaviour
 
     private void BuildVoiceDeviceOptions()
     {
-        _inputDeviceOptions = new List<string> { "Disabled" };
+        // "Default" lets Vivox pick the OS default mic — same sentinel
+        // _outputDeviceOptions already uses below. Muting/push-to-talk are
+        // the actual way to go silent now (see VoiceChatManager), so there's
+        // no separate "Disabled" device entry anymore.
+        _inputDeviceOptions = new List<string> { "Default" };
         _inputDeviceOptions.AddRange(Microphone.devices);
 
         _voiceInputDeviceDropdown.ClearOptions();

@@ -6,6 +6,7 @@ using FishNet.Connection;
 using UnityEngine;
 using UnityEngine.Rendering;
 using FishNet.Object.Synchronizing;
+using Unity.Services.Vivox;
 
 public class PlayerObject : NetworkBehaviour
 {
@@ -78,12 +79,35 @@ public class PlayerObject : NetworkBehaviour
             //Debug.Log($"[PlayerObject] Position changed to {transform.position} — frame: {Time.frameCount}");
             _lastPosition = transform.position;
         }
+
+        // Reports this player's position into both persistent Vivox
+        // channels every frame so positional audio falloff/panning tracks
+        // movement — mirrors how _lastPosition above is already a
+        // per-frame local check. Only the owner's own client needs to
+        // report its own position (Vivox handles broadcasting it to
+        // everyone else listening in-channel), so this is gated the same
+        // way _playerMovement/_playerCamera are elsewhere in this class.
+        if (IsOwner && VoiceChatManager.Instance != null && VoiceChatManager.Instance.IsLoggedIn)
+        {
+            VivoxService.Instance.Set3DPosition(gameObject, VoiceChatManager.LobbyProximityChannel);
+            VivoxService.Instance.Set3DPosition(gameObject, VoiceChatManager.StageBroadcastChannel);
+        }
     }
 
     public override void OnStartClient()
     {
         base.OnStartClient();
-        Debug.Log($"[DIAGNOSTIC] OnStartClient — obj: {gameObject.name}, IsOwner: {IsOwner}, Owner.ClientId: {(Owner != null ? Owner.ClientId : -1)}, _initialized(before): {_initialized}");
+
+        // Diagnostic for the intermittent "client hangs on join, stuck on
+        // skybox" bug — confirms whether this connection's OWN player
+        // object ever actually starts on the client at all. If this never
+        // logs for the local player after a hung join, the spawn message
+        // itself never reached the client even though the server logged a
+        // successful spawn (see LobbySpawner.TrySpawnIfReady's own log) —
+        // pointing at a network delivery/channel problem rather than
+        // anything in this class. See OnOwnershipClient/
+        // TryInitializeAsLocalOwner below for the rest of this path.
+        Debug.Log($"[PlayerObject] OnStartClient — ObjectId: {ObjectId}, IsOwner: {IsOwner}, alreadyInitialized: {_initialized}");
 
         _hasStartedClient = true;
 
@@ -137,7 +161,13 @@ public class PlayerObject : NetworkBehaviour
     public override void OnOwnershipClient(NetworkConnection prevOwner)
     {
         base.OnOwnershipClient(prevOwner);
-        Debug.Log($"[DIAGNOSTIC] OnOwnershipClient — obj: {gameObject.name}, IsOwner: {IsOwner}, Owner.ClientId: {(Owner != null ? Owner.ClientId : -1)}, prevOwner.ClientId: {(prevOwner != null ? prevOwner.ClientId : -1)}, _hasStartedClient: {_hasStartedClient}, _initialized(before): {_initialized}");
+
+        // Diagnostic — see OnStartClient's comment. This and OnStartClient
+        // are the two callbacks that gate TryInitializeAsLocalOwner, and
+        // FishNet doesn't guarantee their order (that's the whole reason
+        // TryInitializeAsLocalOwner exists) — logging both separately shows
+        // which one actually fires for a hung client, if either does.
+        Debug.Log($"[PlayerObject] OnOwnershipClient — ObjectId: {ObjectId}, IsOwner: {IsOwner}");
 
         TryInitializeAsLocalOwner();
     }
@@ -149,24 +179,26 @@ public class PlayerObject : NetworkBehaviour
     // the actual bug.
     private void TryInitializeAsLocalOwner()
     {
-        Debug.Log($"[DIAGNOSTIC] TryInitializeAsLocalOwner called — obj: {gameObject.name}, _initialized: {_initialized}, _hasStartedClient: {_hasStartedClient}, IsOwner: {IsOwner}");
-
         if (_initialized || !_hasStartedClient || !IsOwner)
         {
-            Debug.Log($"[DIAGNOSTIC] TryInitializeAsLocalOwner — early-return (guard failed) on obj: {gameObject.name}");
+            // Only worth logging the "still waiting" case for a connection
+            // that actually owns this object — every other client's copy of
+            // every OTHER player also calls this and will always fail the
+            // IsOwner check, which would otherwise spam the console for
+            // every player in the room.
+            if (IsOwner && !_initialized)
+                Debug.Log($"[PlayerObject] TryInitializeAsLocalOwner — ObjectId: {ObjectId} is ours but not ready yet (hasStartedClient: {_hasStartedClient}).");
             return;
         }
+
+        Debug.Log($"[PlayerObject] TryInitializeAsLocalOwner — ObjectId: {ObjectId} initializing local player now.");
 
         _initialized = true;
         _playerMovement.enabled = true;
         _playerCamera.enabled = true;
         _interactionManager.enabled = true;
 
-        Debug.Log($"[DIAGNOSTIC] TryInitializeAsLocalOwner — guard passed, enabling subsystems and calling Initialize() on obj: {gameObject.name}. _playerMovement null? {_playerMovement == null}, _playerCamera null? {_playerCamera == null}, _interactionManager null? {_interactionManager == null}");
-
         Initialize();
-
-        Debug.Log($"[DIAGNOSTIC] TryInitializeAsLocalOwner — Initialize() returned on obj: {gameObject.name}");
     }
 
     private void Initialize()
@@ -176,6 +208,13 @@ public class PlayerObject : NetworkBehaviour
         _playerMovement.Initialize(this);
         _playerCamera.Initialize(this);
         _interactionManager.Initialize(this);
+
+        // Kicks off Vivox login + persistent channel joins for the local
+        // owner only, once, right after this player is fully ready — see
+        // VoiceChatManager.EnsureVoiceReadyAsync for why it's safe to fire
+        // this here without worrying about double-init.
+        if (VoiceChatManager.Instance != null)
+            _ = VoiceChatManager.Instance.EnsureVoiceReadyAsync();
     }
 
     // Called by external systems to set identity data

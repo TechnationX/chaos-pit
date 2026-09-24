@@ -38,7 +38,15 @@ public class ScoreManager : MonoBehaviour
     {
         if (_sessionScores.ContainsKey(sessionId))
         {
-            Debug.LogWarning($"[ScoreManager] Session {sessionId} already registered.");
+            // Expected on every second-and-later game at the same station —
+            // RegisterSession no-ops here on purpose so a station's session
+            // score keeps accumulating game after game instead of getting
+            // wiped when players return to the lobby (see
+            // GameRoomManager.ReturnPlayersDelayed's comment on why
+            // UnregisterSession is deliberately NOT called there). Not a
+            // warning-worthy condition — logged at Log level so it doesn't
+            // read as an error during totally normal play.
+            Debug.Log($"[ScoreManager] Session {sessionId} already registered — reusing existing session score.");
             return;
         }
 

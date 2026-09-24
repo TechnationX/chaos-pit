@@ -62,7 +62,7 @@ namespace ChaosPit.Minigames.Template
             _gameActive   = true;
 
             // Send player identity to all clients so they can display names
-            GameRoomManager.Instance.RpcMinigameMessage("tmpl_players", BuildPlayersPayload());
+            GameRoomManager.Instance.RpcMinigameMessage("tmpl_players", BuildPlayersPayload(), StationIndex);
 
             // TODO: send any additional setup data to clients here
             // e.g. GameRoomManager.Instance.RpcMinigameMessage("tmpl_setup", BuildSetupPayload());
@@ -88,7 +88,7 @@ namespace ChaosPit.Minigames.Template
             // TODO: reset any per-round server state here
 
             GameRoomManager.Instance.RpcMinigameMessage("tmpl_round_start",
-                _roundDuration.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                _roundDuration.ToString(System.Globalization.CultureInfo.InvariantCulture), StationIndex);
 
             Debug.Log($"[Template] StartRound {_currentRound}.");
         }
@@ -101,8 +101,8 @@ namespace ChaosPit.Minigames.Template
 
             _roundResults = BuildResults();
 
-            GameRoomManager.Instance.RpcMinigameMessage("tmpl_round_end", "");
-            GameRoomManager.Instance.RpcMinigameMessage("tmpl_results", BuildResultsPayload());
+            GameRoomManager.Instance.RpcMinigameMessage("tmpl_round_end", "", StationIndex);
+            GameRoomManager.Instance.RpcMinigameMessage("tmpl_results", BuildResultsPayload(), StationIndex);
 
             Debug.Log($"[Template] EndRound {_currentRound}.");
         }

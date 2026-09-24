@@ -34,6 +34,30 @@ public class PlayerCamera : NetworkBehaviour
     private float _verticalRotation;
     private CinemachineCamera _activeMiniGameCam;
 
+    // The minigame scene's own physical Camera (the one its CinemachineBrain
+    // actually renders through) — a separate object from the CinemachineCamera
+    // vcam above. SetOwnHeadPiecesVisible needs to edit THIS camera's culling
+    // mask while in MiniGame mode, since it's the one actually on screen during
+    // minigames, not Camera.main. See SetMiniGameCamera/SwitchTo below.
+    private Camera _activeMiniGameRenderCamera;
+
+    // Whichever minigame render Camera SwitchTo has actually turned ON, if any —
+    // tracked separately from _activeMiniGameRenderCamera above (which just holds
+    // "the camera to switch TO next," and gets overwritten by SetMiniGameCamera
+    // before SwitchTo runs). SwitchTo uses this to know what to turn back OFF.
+    //
+    // Every minigame scene's own Camera+CinemachineBrain now starts disabled by
+    // default in the scene file (see the scene's "Camera" GameObject) instead of
+    // always-on. It used to be always-on the instant the scene loaded, for ANY
+    // process that had that scene loaded at all — and since a host's process is
+    // also the server, the host has every active station's scene loaded
+    // regardless of which station they're actually at, so that always-on camera
+    // was rendering over the host's own view for a game they were never in. Now
+    // it's off by default and only SwitchTo(MiniGame), running locally on the
+    // actual participant's own process, turns it on — and turns it back off the
+    // moment that same process leaves MiniGame mode.
+    private Camera _enabledMiniGameRenderCamera;
+
     // Minigames use a fixed, scene-placed top-down camera (see
     // GameRoomManager.FindActiveMinigameCamera) rather than any
     // player-controlled look — this just exposes its transform so
@@ -56,11 +80,42 @@ public class PlayerCamera : NetworkBehaviour
     private bool _isPaused = false;
     private bool _hasActivatedCameraOnce = false;
 
+    // Runs for EVERY peer's copy of EVERY PlayerCamera, unlike Initialize()
+    // below, which is owner-gated and — per PlayerObject.TryInitializeAsLocalOwner
+    // — never even called for a remote client's view of another player's
+    // PlayerCamera. Without this, OnSyncedPitchChanged's subscription (added
+    // inside Initialize()) never happened on remote observers, so the cue/
+    // hand-socket pitch synced correctly over the network but nobody's client
+    // ever applied it visually except the owner's own. OnSyncedPitchChanged
+    // already guards `if (IsOwner) return;`, so subscribing unconditionally
+    // here is safe — it simply no-ops for the owner, who's already covered by
+    // the identical subscribe call inside Initialize().
+    public override void OnStartClient()
+    {
+        base.OnStartClient();
+
+        _syncedPitch.OnChange -= OnSyncedPitchChanged;
+        _syncedPitch.OnChange += OnSyncedPitchChanged;
+    }
+
     public void Initialize(PlayerObject player)
     {
         _player = player;
 
-        if (!IsOwner) return;
+        // Diagnostic for the intermittent "client hangs on join, stuck on
+        // skybox" bug — see PlayerObject.TryInitializeAsLocalOwner, which is
+        // the only caller of this for the local player. If OnStartClient/
+        // OnOwnershipClient logged there but THIS never logs "setting up
+        // local camera", something between those two points broke; if this
+        // DOES log but the view still never leaves the skybox, the problem
+        // is downstream of here (missing CinemachineBrain, vcam references,
+        // or the scene's Main Camera itself).
+        if (!IsOwner)
+        {
+            Debug.Log("[PlayerCamera] Initialize called on a non-owner copy — skipping (expected for every other player in the room).");
+            return;
+        }
+        Debug.Log("[PlayerCamera] Initialize — setting up local camera (owner).");
 
         // Defensive reset — Initialize() runs on every minigame-entry and
         // lobby-return round-trip. If pause state was ever left stuck true
@@ -95,6 +150,8 @@ public class PlayerCamera : NetworkBehaviour
         }
 
         SwitchTo(_startingMode);
+
+        Debug.Log($"[PlayerCamera] SwitchTo({_startingMode}) complete — Camera.main: {(Camera.main != null ? Camera.main.name : "NULL — no scene camera found")}, brain: {(Camera.main != null && Camera.main.GetComponent<CinemachineBrain>() != null ? "present" : "MISSING")}.");
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
@@ -228,7 +285,28 @@ public class PlayerCamera : NetworkBehaviour
         // at true eye level without seeing the inside of the head), and shows them again
         // in third person/minigame view. Only does anything on the owner's own build —
         // see PlayerAppearance.SetOwnHeadPiecesVisible.
-        _player.Appearance?.SetOwnHeadPiecesVisible(mode != CameraMode.FirstPerson);
+        //
+        // MiniGame mode renders through the minigame scene's own top-down camera
+        // (_activeMiniGameRenderCamera), not the persistent Camera.main this trick
+        // otherwise targets, so pass that camera explicitly — this was the actual bug
+        // behind "head invisible in minigames": the culling mask was being flipped on
+        // the wrong camera entirely.
+        Camera headVisibilityCamera = mode == CameraMode.MiniGame ? _activeMiniGameRenderCamera : null;
+        _player.Appearance?.SetOwnHeadPiecesVisible(mode != CameraMode.FirstPerson, headVisibilityCamera);
+
+        // Turn off whatever minigame render Camera this process previously turned
+        // on, unconditionally, before possibly turning a (new) one on below — this
+        // runs on every mode switch, not just ones leaving MiniGame, so a
+        // minigame-to-minigame round trip (finish one, immediately reinitialize
+        // into another) can't leave the old scene's camera stuck enabled. See
+        // _enabledMiniGameRenderCamera's comment for why this needs to exist at all.
+        if (_enabledMiniGameRenderCamera != null)
+        {
+            _enabledMiniGameRenderCamera.enabled = false;
+            CinemachineBrain oldBrain = _enabledMiniGameRenderCamera.GetComponent<CinemachineBrain>();
+            if (oldBrain != null) oldBrain.enabled = false;
+            _enabledMiniGameRenderCamera = null;
+        }
 
         SetPriority(_vcamFirstPerson, PRIORITY_INACTIVE);
         SetPriority(_vcamThirdPerson, PRIORITY_INACTIVE);
@@ -255,6 +333,20 @@ public class PlayerCamera : NetworkBehaviour
             case CameraMode.MiniGame:
                 if (_activeMiniGameCam != null)
                     SetPriority(_activeMiniGameCam, PRIORITY_ACTIVE);
+
+                // The vcam priority above only matters if something is actually
+                // rendering through this scene's Brain — that Brain (and its
+                // Camera) starts disabled by default now, so turn it on here,
+                // specifically, only on the process that's actually entering
+                // MiniGame mode. See _enabledMiniGameRenderCamera's comment.
+                if (_activeMiniGameRenderCamera != null)
+                {
+                    _activeMiniGameRenderCamera.enabled = true;
+                    CinemachineBrain brain = _activeMiniGameRenderCamera.GetComponent<CinemachineBrain>();
+                    if (brain != null) brain.enabled = true;
+                    _enabledMiniGameRenderCamera = _activeMiniGameRenderCamera;
+                }
+
                 // This case didn't set cursor state before (nothing used
                 // MiniGame mode yet) — locking/hiding it here matches the
                 // other two active modes, since there's no cursor-driven
@@ -267,14 +359,20 @@ public class PlayerCamera : NetworkBehaviour
         // Debug.Log($"After switch — FP: {_vcamFirstPerson.Priority.Value}, TP: {_vcamThirdPerson.Priority.Value}");
     }
 
-    public void SetMiniGameCamera(CinemachineCamera vcam)
+    // renderCamera: the minigame scene's own physical Camera (see
+    // GameRoomManager.FindActiveMinigameRenderCamera) — stored so SwitchTo can point
+    // SetOwnHeadPiecesVisible's culling-mask trick at the camera actually on screen
+    // during minigames instead of Camera.main.
+    public void SetMiniGameCamera(CinemachineCamera vcam, Camera renderCamera)
     {
         _activeMiniGameCam = vcam;
+        _activeMiniGameRenderCamera = renderCamera;
     }
 
     public void ClearMiniGameCamera()
     {
         _activeMiniGameCam = null;
+        _activeMiniGameRenderCamera = null;
         SwitchTo(CameraMode.FirstPerson);
     }
 

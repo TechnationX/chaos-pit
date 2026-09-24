@@ -37,6 +37,12 @@ namespace ChaosPit.Minigames.PaintTheTown
 
         private Dictionary<int, PaintScoreRow> _scoreRows = new();
 
+        // Remembers whether the round-end panel was actually up right before
+        // SetInRoundHudVisible(false) forced it down for the results screen,
+        // so restoring visibility doesn't force it back ON when it wasn't
+        // showing to begin with (or leave it off when it was).
+        private bool _roundEndPanelWasActive;
+
         // ── Round Lifecycle ───────────────────────────────────────
 
         public void OnRoundStart(float duration)
@@ -148,6 +154,50 @@ namespace ChaosPit.Minigames.PaintTheTown
                 if (row != null) Destroy(row.gameObject);
             }
             _scoreRows.Clear();
+        }
+
+        // This whole GameObject starts inactive by default in the scene (see
+        // PaintTheTownScene.unity) — otherwise it renders for anyone who has
+        // this scene loaded at all, including an uninvolved host, since the
+        // scene stays loaded server-side regardless of participation. Called
+        // from PaintTheTownController.ClientInit(), which only ever runs on
+        // an actual participant's own process (see RpcInitMinigame's comment
+        // in GameRoomManager.cs), so this only ever shows the HUD to a real
+        // player.
+        public void ShowHUD()
+        {
+            gameObject.SetActive(true);
+        }
+
+        // Hides every piece of the in-round HUD — timer, score rows, and the
+        // round-end panel — while the shared results screen is up (see
+        // PaintTheTownController.OnShowResults), not just the score panel.
+        // Was SetScorePanelVisible, which only ever touched the score rows —
+        // the timer kept ticking away visibly underneath the results screen,
+        // which is what this widens the fix to cover. Restored via
+        // OnResultsHidden. Matches the same rename/broadening done on
+        // ThiefsMarketHUD/JinxedHUD/LastOneStandingHUD's own
+        // SetScorePanelVisible.
+        public void SetInRoundHudVisible(bool visible)
+        {
+            if (_timerText != null)
+                _timerText.gameObject.SetActive(visible);
+
+            if (_scoreRowParent != null)
+                _scoreRowParent.gameObject.SetActive(visible);
+
+            if (_roundEndPanel != null)
+            {
+                if (!visible)
+                {
+                    _roundEndPanelWasActive = _roundEndPanel.activeSelf;
+                    _roundEndPanel.SetActive(false);
+                }
+                else
+                {
+                    _roundEndPanel.SetActive(_roundEndPanelWasActive);
+                }
+            }
         }
     }
 }

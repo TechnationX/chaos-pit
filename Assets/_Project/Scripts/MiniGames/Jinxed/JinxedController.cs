@@ -68,7 +68,40 @@ namespace ChaosPit.Minigames.Jinxed
         private Coroutine _fallCoroutine;
         private Coroutine _clientFallCoroutine;
 
+        private JinxedHUD _hud;
+
         // ── MiniGameController Overrides ──────────────────────────
+
+        public override void ClientInit()
+        {
+            // Shows the (now inactive-by-default) HUD GameObject — see
+            // JinxedHUD.ShowHUD's comment. This only ever runs on a real
+            // participant's own process (see RpcInitMinigame's comment in
+            // GameRoomManager.cs), so it only ever shows the HUD to a real
+            // player.
+            GetHud()?.ShowHUD();
+        }
+
+        // Every method below used to call FindFirstObjectByType<JinxedHUD>(...)
+        // fresh, each time, searching every loaded scene rather than just this
+        // controller's own. On a host running two concurrent Jinxed games (two
+        // stations), that could resolve to the OTHER station's HUD instance
+        // instead of this one's — same bug class as GameRoomManager's
+        // FindActiveMinigameController before it was scoped to
+        // GetStationScene(stationIndex). Cached and scoped here the same way:
+        // resolved once, from this controller's own Scene, and reused.
+        private JinxedHUD GetHud()
+        {
+            if (_hud != null) return _hud;
+
+            foreach (GameObject root in gameObject.scene.GetRootGameObjects())
+            {
+                JinxedHUD hud = root.GetComponentInChildren<JinxedHUD>(true);
+                if (hud != null) { _hud = hud; break; }
+            }
+
+            return _hud;
+        }
 
         public override void StartGame(List<PlayerObject> players)
         {
@@ -399,8 +432,8 @@ namespace ChaosPit.Minigames.Jinxed
 
         protected override void OnShowResults(ResultsData data)
         {
-            JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
-            hud?.SetScorePanelVisible(false);
+            JinxedHUD hud = GetHud();
+            hud?.SetInRoundHudVisible(false);
 
             if (_resultsScreenPanel != null)
                 _resultsScreenPanel.SetActive(true);
@@ -421,7 +454,7 @@ namespace ChaosPit.Minigames.Jinxed
             float remaining = _resultsDuration;
             while (remaining > 0f)
             {
-                JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
+                JinxedHUD hud = GetHud();
                 hud?.SetResultsCountdown(Mathf.CeilToInt(remaining));
                 yield return new WaitForSeconds(1f);
                 remaining -= 1f;
@@ -430,8 +463,8 @@ namespace ChaosPit.Minigames.Jinxed
             if (_resultsScreenPanel != null)
                 _resultsScreenPanel.SetActive(false);
 
-            JinxedHUD hudFinal = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
-            hudFinal?.SetScorePanelVisible(true);
+            JinxedHUD hudFinal = GetHud();
+            hudFinal?.SetInRoundHudVisible(true);
 
             NotifyResultsDismissed();
         }
@@ -484,7 +517,7 @@ namespace ChaosPit.Minigames.Jinxed
             _clientFallCoroutine = StartCoroutine(ClientTileFallCoroutine(
                 fallIndices, fallInterval, warnDur, dangerDur));
 
-            JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
+            JinxedHUD hud = GetHud();
             if (hud != null)
             {
                 hud.InitScoreRows(nameMap);
@@ -522,12 +555,12 @@ namespace ChaosPit.Minigames.Jinxed
             PlayerObject local = _players.FirstOrDefault(p => p.IsOwner);
             if (local != null && local.Owner?.ClientId == playerId)
             {
-                JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
+                JinxedHUD hud = GetHud();
                 hud?.SetPlayerStatus(playerId, state);
             }
 
             // Update score row status for all players
-            JinxedHUD allHud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
+            JinxedHUD allHud = GetHud();
             allHud?.SetPlayerStatus(playerId, state);
 
             // Apply visual effect
@@ -554,7 +587,7 @@ namespace ChaosPit.Minigames.Jinxed
         private void HandleTimerClient(string payload)
         {
             if (!int.TryParse(payload, out int seconds)) return;
-            JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
+            JinxedHUD hud = GetHud();
             hud?.SetTimer(seconds);
         }
 
@@ -566,7 +599,7 @@ namespace ChaosPit.Minigames.Jinxed
                 _clientFallCoroutine = null;
             }
 
-            JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
+            JinxedHUD hud = GetHud();
             if (hud == null) return;
 
             hud.OnRoundEnd();
@@ -584,8 +617,8 @@ namespace ChaosPit.Minigames.Jinxed
 
         private void HandleGameEndClient(string payload)
         {
-            JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
-            hud?.SetScorePanelVisible(false);
+            JinxedHUD hud = GetHud();
+            hud?.SetInRoundHudVisible(false);
 
             if (_resultsScreenPanel != null)
                 _resultsScreenPanel.SetActive(true);
@@ -613,14 +646,14 @@ namespace ChaosPit.Minigames.Jinxed
             float remaining = _resultsDuration;
             while (remaining > 0f)
             {
-                JinxedHUD hud = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
+                JinxedHUD hud = GetHud();
                 hud?.SetResultsCountdown(Mathf.CeilToInt(remaining));
                 yield return new WaitForSeconds(1f);
                 remaining -= 1f;
             }
 
-            JinxedHUD hudFinal = FindFirstObjectByType<JinxedHUD>(FindObjectsInactive.Include);
-            hudFinal?.SetScorePanelVisible(true);
+            JinxedHUD hudFinal = GetHud();
+            hudFinal?.SetInRoundHudVisible(true);
         }
 
         // ── Teleport ──────────────────────────────────────────────
@@ -705,7 +738,7 @@ namespace ChaosPit.Minigames.Jinxed
 
         private void BroadcastMessage(string messageType, string payload)
         {
-            GameRoomManager.Instance.RpcMinigameMessage(messageType, payload);
+            GameRoomManager.Instance.RpcMinigameMessage(messageType, payload, StationIndex);
         }
     }
 }

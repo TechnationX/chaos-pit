@@ -225,10 +225,38 @@ namespace ChaosPit.Minigames.ThiefsMarket
             return -1;
         }
 
-        public void SetScorePanelVisible(bool visible)
+        // Hides every piece of the in-round HUD — round text, timer, feed
+        // text, and score rows — while the shared results screen is up (see
+        // ThiefsMarketController.OnShowResults), not just the score rows.
+        // Was SetScorePanelVisible, which left the round/timer/feed text
+        // visible underneath the results screen. Renamed and broadened to
+        // match PaintTheTownHUD/LastOneStandingHUD/JinxedHUD.
+        public void SetInRoundHudVisible(bool visible)
         {
+            if (_roundText != null)
+                _roundText.gameObject.SetActive(visible);
+
+            if (_timerText != null)
+                _timerText.gameObject.SetActive(visible);
+
+            if (_feedText != null)
+                _feedText.gameObject.SetActive(visible);
+
             if (_scoreRowContainer != null)
                 _scoreRowContainer.gameObject.SetActive(visible);
+        }
+
+        // This whole GameObject starts inactive by default in the scene (see
+        // ThiefsMarketScene.unity) — otherwise it renders for anyone who has
+        // this scene loaded at all, including an uninvolved host, since the
+        // scene stays loaded server-side regardless of participation. Called
+        // from ThiefsMarketController.ClientInit(), which only ever runs on
+        // an actual participant's own process (see RpcInitMinigame's comment
+        // in GameRoomManager.cs), so this only ever shows the HUD to a real
+        // player.
+        public void ShowHUD()
+        {
+            gameObject.SetActive(true);
         }
     }
 }

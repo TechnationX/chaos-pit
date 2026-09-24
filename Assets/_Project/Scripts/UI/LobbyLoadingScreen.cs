@@ -33,6 +33,15 @@ public class LobbyLoadingScreen : SingletonBehaviour<LobbyLoadingScreen>
     private Coroutine _activeRoutine;
     private float _lastSpawnTime;
 
+    // Diagnostic-only counter for the intermittent "client hangs on join,
+    // stuck on skybox" bug — reset each time ShowAndWaitForSettled() runs,
+    // so WaitForSpawnsToSettle's own log can report how many NetworkObjects
+    // this client actually received while the screen was up. If this stays
+    // at 0 for a hung client — not even the client's own player object —
+    // the spawn message(s) never arrived at all, which points at a network
+    // delivery/channel stall rather than anything client-side.
+    private int _spawnCountThisWait = 0;
+
     protected override void Awake()
     {
         base.Awake();
@@ -44,10 +53,13 @@ public class LobbyLoadingScreen : SingletonBehaviour<LobbyLoadingScreen>
     // from their LoadLobby().
     public void ShowAndWaitForSettled()
     {
+        Debug.Log("[LobbyLoadingScreen] ShowAndWaitForSettled — loading screen up, waiting for catch-up spawns to settle.");
+
         if (_activeRoutine != null)
             StopCoroutine(_activeRoutine);
 
         SetInstant(true);
+        _spawnCountThisWait = 0;
         _activeRoutine = StartCoroutine(WaitForSpawnsToSettle());
     }
 
@@ -84,6 +96,17 @@ public class LobbyLoadingScreen : SingletonBehaviour<LobbyLoadingScreen>
             yield return null;
         }
 
+        // Diagnostic for the intermittent "client hangs on join, stuck on
+        // skybox" bug — tells us whether this loading screen actually
+        // settled normally (spawns arrived, then went quiet for
+        // _settleDebounceSeconds) or got dragged all the way to the 30s
+        // hard cap and faded out anyway, which is exactly what would make a
+        // broken/incomplete lobby (no furniture, no local player camera,
+        // etc.) suddenly reveal itself as "stuck on skybox" instead of
+        // staying on the loading screen.
+        bool hitHardCap = Time.unscaledTime - startTime >= _maxWaitSeconds;
+        Debug.Log($"[LobbyLoadingScreen] WaitForSpawnsToSettle finished — {(hitHardCap ? "HIT THE 30s HARD CAP (spawns never settled)" : "settled normally")}, objects observed: {_spawnCountThisWait}, elapsed: {Time.unscaledTime - startTime:F1}s.");
+
         UnsubscribeFromSpawns();
         yield return StartCoroutine(Fade(false));
         _activeRoutine = null;
@@ -106,11 +129,8 @@ public class LobbyLoadingScreen : SingletonBehaviour<LobbyLoadingScreen>
 
     private void HandleObjectSpawned(int objectId, NetworkObject networkObject)
     {
-        // [DIAGNOSTIC] Temporary — confirms whether the local client is
-        // receiving ANY catch-up spawns at all after joining. Remove once
-        // the join-hang investigation is done.
-        Debug.Log($"[DIAGNOSTIC][LobbyLoadingScreen] OnSpawnedAdd — objectId: {objectId}, name: {(networkObject != null ? networkObject.name : "null")}");
         _lastSpawnTime = Time.unscaledTime;
+        _spawnCountThisWait++;
     }
 
     private void SetInstant(bool visible)

@@ -163,7 +163,18 @@ public class CreateSessionScreen : UIScreenBase
             // every spawn (including the host's own player) on this signal
             // instead of FishNet's OnClientLoadedStartScenes — see
             // LobbyReadyBroadcast.cs and JoinSessionScreen.LoadLobby for why.
-            op.completed += _ => InstanceFinder.ClientManager.Broadcast(new LobbyReadyBroadcast());
+            op.completed += _ =>
+            {
+                // Diagnostic for the intermittent "client hangs on join" bug
+                // — matches the log added to JoinSessionScreen.LoadLobby, so
+                // the host's own path shows up the same way in the console.
+                Debug.Log("[CreateSessionScreen] Lobby scene load completed — sending LobbyReadyBroadcast.");
+                InstanceFinder.ClientManager.Broadcast(new LobbyReadyBroadcast());
+            };
+        }
+        else
+        {
+            Debug.LogWarning("[CreateSessionScreen] SceneManager.LoadSceneAsync returned null for Lobby — LobbyReadyBroadcast will never be sent, host will hang.");
         }
     }
 }

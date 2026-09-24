@@ -47,6 +47,12 @@ namespace ChaosPit.Minigames.Jinxed
 
         private Coroutine _bannerCoroutine;
 
+        // Remembers whether the tag/jinx banner was actually up right before
+        // SetInRoundHudVisible(false) forced it down for the results screen,
+        // so restoring visibility doesn't force it back ON when it wasn't
+        // showing, or leave it off when it was.
+        private bool _bannerWasActive;
+
         // ── Unity ─────────────────────────────────────────────────
 
         private void Update()
@@ -181,10 +187,58 @@ namespace ChaosPit.Minigames.Jinxed
                 _resultsCountdownText.text = $"Returning in {seconds}...";
         }
 
-        public void SetScorePanelVisible(bool visible)
+        // Hides every piece of the in-round HUD — timer, round info, status
+        // rows, and the tag/jinx banner if it happened to still be up —
+        // while the shared results screen is up (see
+        // JinxedController.OnShowResults/HandleGameEndClient). Was
+        // SetScorePanelVisible, which only ever touched the status rows and
+        // left the timer/round text ticking away visibly underneath the
+        // results screen. Renamed and broadened to match
+        // ThiefsMarketHUD/PaintTheTownHUD/LastOneStandingHUD.
+        //
+        // Deliberately does NOT touch _resultsPanel/_resultsText/
+        // _resultsCountdownText — unlike the other three HUDs, Jinxed's own
+        // results panel is actively used (see ShowResults/
+        // SetResultsCountdown, called from both OnShowResults and
+        // HandleGameEndClient) to display results ALONGSIDE the shared
+        // ResultsScreenUI. Hiding the whole HUD root here would hide that
+        // panel too and defeat the point of showing it.
+        public void SetInRoundHudVisible(bool visible)
         {
+            if (_timerText != null)
+                _timerText.gameObject.SetActive(visible);
+
+            if (_roundText != null)
+                _roundText.gameObject.SetActive(visible);
+
             if (_scoreRowParent != null)
                 _scoreRowParent.gameObject.SetActive(visible);
+
+            if (_bannerRoot != null)
+            {
+                if (!visible)
+                {
+                    _bannerWasActive = _bannerRoot.activeSelf;
+                    _bannerRoot.SetActive(false);
+                }
+                else
+                {
+                    _bannerRoot.SetActive(_bannerWasActive);
+                }
+            }
+        }
+
+        // This whole GameObject starts inactive by default in the scene (see
+        // JinxedScene.unity) — otherwise it renders for anyone who has this
+        // scene loaded at all, including an uninvolved host, since the scene
+        // stays loaded server-side regardless of participation. Called from
+        // JinxedController.ClientInit(), which only ever runs on an actual
+        // participant's own process (see RpcInitMinigame's comment in
+        // GameRoomManager.cs), so this only ever shows the HUD to a real
+        // player.
+        public void ShowHUD()
+        {
+            gameObject.SetActive(true);
         }
     }
 }

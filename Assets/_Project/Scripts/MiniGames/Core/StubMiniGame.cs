@@ -27,7 +27,7 @@ public class StubMiniGame : MiniGameController
         _gameActive = true;
 
         // Send player identity to all clients
-        GameRoomManager.Instance.RpcMinigameMessage("stub_players", BuildPlayersPayload());
+        GameRoomManager.Instance.RpcMinigameMessage("stub_players", BuildPlayersPayload(), StationIndex);
 
         Debug.Log($"[StubMiniGame] StartGame — {_players.Count} players");
         StartRound();
@@ -44,7 +44,7 @@ public class StubMiniGame : MiniGameController
         Debug.Log($"[StubMiniGame] StartRound {_currentRound} — duration: {_roundDuration}");
 
         GameRoomManager.Instance.RpcMinigameMessage("stub_start",
-            _roundDuration.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            _roundDuration.ToString(System.Globalization.CultureInfo.InvariantCulture), StationIndex);
 
         StartCoroutine(RoundCoroutine());
     }
@@ -60,7 +60,7 @@ public class StubMiniGame : MiniGameController
         Debug.Log($"[StubMiniGame] EndRound {_currentRound}");
         _lastResults = GetResults();
 
-        GameRoomManager.Instance.RpcMinigameMessage("stub_end", BuildResultsPayload());
+        GameRoomManager.Instance.RpcMinigameMessage("stub_end", BuildResultsPayload(), StationIndex);
         GameRoomManager.Instance.NotifyGameComplete(this, _lastResults);
     }
 

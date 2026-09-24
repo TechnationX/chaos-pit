@@ -109,16 +109,25 @@ namespace ChaosPit.Minigames.LastOneStanding
 
             _arenaGrid.BuildGrid();
 
-            GameRoomManager.Instance.RpcMinigameMessage("los_players", BuildPlayersPayload());
+            GameRoomManager.Instance.RpcMinigameMessage("los_players", BuildPlayersPayload(), StationIndex);
             GameRoomManager.Instance.RpcMinigameMessage("los_grid_init",
-                $"{_arenaGrid.GridWidth},{_arenaGrid.GridHeight}");
+                $"{_arenaGrid.GridWidth},{_arenaGrid.GridHeight}", StationIndex);
 
             _gameLoopCoroutine = StartCoroutine(GameLoopCoroutine());
 
             Debug.Log($"[LOS] StartGame — {_players.Count} players, {_totalRounds} rounds.");
         }
 
-        public override void ClientInit() { }
+        public override void ClientInit()
+        {
+            // _hud is Inspector-wired directly to this scene's own HUD
+            // instance, so no scoped-lookup risk here — just shows the (now
+            // inactive-by-default) HUD GameObject. This only ever runs on a
+            // real participant's own process (see RpcInitMinigame's comment
+            // in GameRoomManager.cs), so it only ever shows the HUD to a
+            // real player.
+            _hud?.ShowHUD();
+        }
 
         public override void StartRound()
         {
@@ -142,18 +151,18 @@ namespace ChaosPit.Minigames.LastOneStanding
             // doesn't also re-run InitScoreRows(), which would destroy and
             // recreate every score row and wipe out anyone's already-applied
             // eliminated/rank marker.
-            GameRoomManager.Instance.RpcMinigameMessage("los_refresh_names", BuildPlayersPayload());
+            GameRoomManager.Instance.RpcMinigameMessage("los_refresh_names", BuildPlayersPayload(), StationIndex);
 
             _arenaGrid.ResetAllTiles();
 
             // Tell clients to reset their grid
-            GameRoomManager.Instance.RpcMinigameMessage("los_grid_reset", "");
+            GameRoomManager.Instance.RpcMinigameMessage("los_grid_reset", "", StationIndex);
 
             // Respawn all players at their assigned spawn points
             RespawnAllPlayers();
 
             GameRoomManager.Instance.RpcMinigameMessage("los_round_start",
-                $"{_currentRound},{_totalRounds},{_roundDuration.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+                $"{_currentRound},{_totalRounds},{_roundDuration.ToString(System.Globalization.CultureInfo.InvariantCulture)}", StationIndex);
 
             //Debug.Log($"[LOS] StartRound {_currentRound}.");
         }
@@ -175,12 +184,31 @@ namespace ChaosPit.Minigames.LastOneStanding
             // Award points for this round based on elimination order
             AwardRoundPoints();
 
-            GameRoomManager.Instance.RpcMinigameMessage("los_round_end", "");
+            GameRoomManager.Instance.RpcMinigameMessage("los_round_end", "", StationIndex);
 
             //Debug.Log($"[LOS] EndRound {_currentRound}. Scores: {ScoreSummary()}");
         }
 
         public override List<RoundResult> GetResults() => _finalResults;
+
+        // ── Results Screen ─────────────────────────────────────────
+        // Was missing entirely, same as Paint the Town — the alive/eliminated
+        // status rows stayed visible underneath the final results screen
+        // because nothing here ever hid them. Mirrors ThiefsMarketController's
+        // OnShowResults/OnResultsHidden pair. This only covers the FINAL
+        // game-end results screen (driven by GameRoomManager.OnGameComplete
+        // via the base MiniGameController.ShowResults) — the existing
+        // between-round display (_hud.ShowBetweenRoundCountdown/
+        // HideBetweenRoundCountdown) is a separate, already-correct path.
+        protected override void OnShowResults(ResultsData data)
+        {
+            _hud?.SetInRoundHudVisible(false);
+        }
+
+        protected override void OnResultsHidden()
+        {
+            _hud?.SetInRoundHudVisible(true);
+        }
 
         public override void CleanUp()
         {
@@ -320,7 +348,7 @@ namespace ChaosPit.Minigames.LastOneStanding
 
             // All rounds done — build final results from cumulative scores
             _finalResults = BuildFinalResults();
-            GameRoomManager.Instance.RpcMinigameMessage("los_results", BuildResultsPayload());
+            GameRoomManager.Instance.RpcMinigameMessage("los_results", BuildResultsPayload(), StationIndex);
             GameRoomManager.Instance.NotifyGameComplete(this, _finalResults);
         }
 
@@ -385,7 +413,7 @@ namespace ChaosPit.Minigames.LastOneStanding
                 {
                     List<int> chunk = tilesToDrop.GetRange(i, Mathf.Min(chunkSize, tilesToDrop.Count - i));
                     string wavePayload = BuildWavePayload(chunk, wave.warningDuration, wave.dangerDuration);
-                    GameRoomManager.Instance.RpcMinigameMessage("los_wave", wavePayload);
+                    GameRoomManager.Instance.RpcMinigameMessage("los_wave", wavePayload, StationIndex);
 
                     // Small yield between chunks to avoid flooding
                     yield return null;
@@ -398,11 +426,11 @@ namespace ChaosPit.Minigames.LastOneStanding
             int remaining = Mathf.RoundToInt(_betweenRoundDuration);
             while (remaining > 0)
             {
-                GameRoomManager.Instance.RpcMinigameMessage("los_countdown", remaining.ToString());
+                GameRoomManager.Instance.RpcMinigameMessage("los_countdown", remaining.ToString(), StationIndex);
                 yield return new WaitForSeconds(1f);
                 remaining--;
             }
-            GameRoomManager.Instance.RpcMinigameMessage("los_countdown", "0");
+            GameRoomManager.Instance.RpcMinigameMessage("los_countdown", "0", StationIndex);
         }
 
         // ── Respawn ───────────────────────────────────────────────
@@ -464,7 +492,7 @@ namespace ChaosPit.Minigames.LastOneStanding
 
             // Notify all clients
             GameRoomManager.Instance.RpcMinigameMessage("los_eliminated",
-                $"{playerId},{order},{survivalTime.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+                $"{playerId},{order},{survivalTime.ToString(System.Globalization.CultureInfo.InvariantCulture)}", StationIndex);
 
             // Teleport eliminated player to wait point
             if (_eliminatedWaitPoint != null)
@@ -529,7 +557,7 @@ namespace ChaosPit.Minigames.LastOneStanding
                 _totalScores[clientId] += points;
             }
 
-            GameRoomManager.Instance.RpcMinigameMessage("los_scores", BuildScoresPayload());
+            GameRoomManager.Instance.RpcMinigameMessage("los_scores", BuildScoresPayload(), StationIndex);
         }
 
         private string BuildScoresPayload()
@@ -628,7 +656,7 @@ namespace ChaosPit.Minigames.LastOneStanding
                 $"{impulse.y.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
                 $"{impulse.z.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
 
-            GameRoomManager.Instance.RpcMinigameMessage("los_shove_result", $"{target.PlayerId},{impStr}");
+            GameRoomManager.Instance.RpcMinigameMessage("los_shove_result", $"{target.PlayerId},{impStr}", StationIndex);
         }
 
         // ── Payload Builders ──────────────────────────────────────

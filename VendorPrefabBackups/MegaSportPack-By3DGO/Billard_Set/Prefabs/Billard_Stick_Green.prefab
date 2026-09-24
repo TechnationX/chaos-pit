@@ -240,14 +240,21 @@ MonoBehaviour:
   _impactClips: []
   _minImpactVelocity: 2
   _impactCooldown: 0.2
+  _settleGroundLayer:
+    serializedVersion: 2
+    m_Bits: 64
+  _settleMaxDropDistance: 3
+  _settleRestOffset: 0.1
+  _settleDuration: 0.5
+  _restLengthAxis: {x: 0, y: 1, z: 0}
   _tip: {fileID: 3027204582775367813}
-  _handRotationOffset: {x: 65, y: -20, z: -0.84}
+  _handRotationOffset: {x: 60, y: -21, z: -0.84}
   _handPositionOffset: {x: 0.22, y: -0.3, z: -0.54}
   _thrustDirection: {x: 0, y: 1, z: 0}
-  _thrustDistance: 0.3
+  _thrustDistance: 0.5
   _thrustDuration: 0.08
   _returnDuration: 0.18
-  _hitForce: 6
+  _hitForce: 8
   _shotCooldown: 1
 --- !u!114 &8723178551226695007
 MonoBehaviour:
@@ -280,7 +287,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584142281097722705
+  _initializedTimestamp: -8584117583575207509
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
@@ -299,7 +306,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 35
+  <PrefabId>k__BackingField: 53
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 12318479485696277404
   SceneId: 0
@@ -308,6 +315,22 @@ MonoBehaviour:
     Rotation: {x: 0, y: 0, z: 0, w: 1}
     Scale: {x: 1, y: 1, z: 1}
     IsValid: 1
+--- !u!114 &9123456789012340002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2766432066226992595}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 3
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}
 --- !u!114 &405036906427660543
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -386,19 +409,3 @@ MeshCollider:
   m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: -8903036344753565625, guid: ad3406982ddefc84a8ee51610d4f9eed, type: 3}
---- !u!114 &9123456789012340002
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2766432066226992595}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
-  _overrideType: 3
-  _updateHostVisibility: 1
-  _observerConditions:
-  - {fileID: 11400000, guid: 856fcb00175f4791822f94bce6b80a99, type: 2}

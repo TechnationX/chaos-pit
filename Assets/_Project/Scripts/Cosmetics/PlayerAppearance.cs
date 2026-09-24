@@ -41,9 +41,27 @@ public class PlayerAppearance : NetworkBehaviour
     // camera) survives merge as its own toggleable GameObject — see CharacterLoadout.Apply
     // and SetOwnHeadPiecesVisible below. Everyone else still builds and merges this player
     // fully from the synced bytes SubmitLoadout sends out.
+    // async void — Unity's own event-callback pattern for a "fire and forget"
+    // entry point, but that also means an unhandled exception here doesn't
+    // propagate anywhere useful; it just becomes an unobserved exception
+    // Unity logs on its own terms, well after the fact. Wrapped in try/catch
+    // now so a failure in CharacterLoadout.Apply (which already has its own
+    // internal timeout on the BSMC merge step — see that method's comment)
+    // is at least logged clearly against this player, instead of silently
+    // leaving them stuck with no loadout submitted and no explanation in the
+    // log for why.
     private async void ApplyOwnerLoadout(List<SlotLoadout> localSlots)
     {
-        await CharacterLoadout.Apply(outfitSystem, localSlots, registry, keepHeadPiecesSeparate: true);
+        try
+        {
+            await CharacterLoadout.Apply(outfitSystem, localSlots, registry, keepHeadPiecesSeparate: true);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[PlayerAppearance] ApplyOwnerLoadout failed for {gameObject.name} — no loadout will be submitted for this join. {e}");
+            return;
+        }
+
         SubmitLoadout(CharacterLoadout.Pack(localSlots));
 
         // These outfit pieces don't exist until the await above finishes, so re-apply
@@ -63,7 +81,15 @@ public class PlayerAppearance : NetworkBehaviour
     // slot name there, not here, to give another piece this same treatment. No-op per
     // slot for every non-owner copy of this player — their pieces were merged normally,
     // so GetOutfit(slotName) returns null there (see CharacterLoadout.Apply).
-    public void SetOwnHeadPiecesVisible(bool visible)
+    //
+    // targetCamera: which camera's culling mask to flip the OwnHead layer bit on.
+    // Defaults to Camera.main, which is correct for first/third person — but minigames
+    // render through their own scene-placed top-down camera instead of Camera.main, so
+    // PlayerCamera passes that camera explicitly while in MiniGame mode. Editing
+    // Camera.main's mask during a minigame was the earlier bug here: it changed a
+    // camera that wasn't actually the one on screen, so the player's own head visibly
+    // stayed hidden even though this method "succeeded."
+    public void SetOwnHeadPiecesVisible(bool visible, Camera targetCamera = null)
     {
         int ownHeadLayer = LayerMask.NameToLayer(OwnHeadLayerName);
 
@@ -83,13 +109,13 @@ public class PlayerAppearance : NetworkBehaviour
                 SetLayerRecursively(piece.gameObject, ownHeadLayer);
         }
 
-        var mainCam = Camera.main;
-        if (mainCam == null || ownHeadLayer == -1) return;
+        Camera cam = targetCamera != null ? targetCamera : Camera.main;
+        if (cam == null || ownHeadLayer == -1) return;
 
         int headBit = 1 << ownHeadLayer;
-        mainCam.cullingMask = visible
-            ? mainCam.cullingMask | headBit
-            : mainCam.cullingMask & ~headBit;
+        cam.cullingMask = visible
+            ? cam.cullingMask | headBit
+            : cam.cullingMask & ~headBit;
     }
 
     private static void SetLayerRecursively(GameObject go, int layer)

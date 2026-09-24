@@ -40,6 +40,8 @@ public class SettlingGrabbable : Grabbable
     [SerializeField] private float _settleRestOffset = 0f;
     [Tooltip("How long the settle lerp takes, in seconds.")]
     [SerializeField] private float _settleDuration = 0.3f;
+    [Tooltip("This object's own local axis that runs along its long/flat dimension — the axis SettleRoutine lays down horizontal when leveling out pitch/roll on drop. Defaults to Forward (0,0,1). If the object lands standing on end instead of lying flat, this is almost certainly the wrong axis for how the model is actually built — try Up (0,1,0) or Right (1,0,0) instead. Doesn't need to be a unit vector; it's normalized automatically.")]
+    [SerializeField] private Vector3 _restLengthAxis = Vector3.forward;
 
     // Force kinematic immediately on spawn, rather than only when grabbed.
     // OnObserversGrab already sets isKinematic = true, but that's reactive —
@@ -97,6 +99,7 @@ public class SettlingGrabbable : Grabbable
     private IEnumerator SettleRoutine()
     {
         Vector3 startPos = transform.position;
+        Quaternion startRot = transform.rotation;
         Vector3 targetPos;
 
         bool hitGround = Physics.Raycast(startPos, Vector3.down, out RaycastHit hit, _settleMaxDropDistance, _settleGroundLayer, QueryTriggerInteraction.Ignore);
@@ -105,13 +108,52 @@ public class SettlingGrabbable : Grabbable
         else
             targetPos = startPos + Vector3.down * _settleMaxDropDistance; // fallback so it never just hangs in midair
 
+        // Position was the only thing this routine used to touch, so whatever
+        // rotation the object was held/dropped at (e.g. a cue picks up the
+        // player's camera pitch via the hand socket — see PlayerCamera) stuck
+        // around forever, which is why a dropped cue could end up standing on
+        // end instead of lying flat.
+        //
+        // This used to build the target rotation with Quaternion.LookRotation,
+        // which always maps world "forward" onto the object's local +Z axis —
+        // fine if the model's long dimension actually runs along local Z, but
+        // wrong (and exactly what caused the cue to land standing upright
+        // instead of flat) if it doesn't. Rotating by the SMALLEST delta that
+        // brings _restLengthAxis (whichever local axis actually IS the long
+        // dimension, tunable in the Inspector — see its tooltip) into the
+        // horizontal plane sidesteps that assumption entirely: it works no
+        // matter which local axis is the "long" one, and it preserves
+        // whatever heading/roll the object already had otherwise, so it
+        // settles flat facing roughly the direction it was already facing
+        // instead of snapping to some arbitrary default orientation.
+        Vector3 restNormal = hitGround ? hit.normal : Vector3.up;
+        Vector3 currentAxisWorld = (startRot * _restLengthAxis.normalized).normalized;
+        Vector3 flatAxisWorld = Vector3.ProjectOnPlane(currentAxisWorld, restNormal);
+        if (flatAxisWorld.sqrMagnitude < 0.0001f)
+        {
+            // _restLengthAxis is pointing almost straight along the surface
+            // normal already (rare — e.g. dropped while standing bolt
+            // upright) — any horizontal heading is as good as any other, so
+            // just pick one deterministically instead of leaving
+            // FromToRotation's target undefined.
+            flatAxisWorld = Vector3.ProjectOnPlane(startRot * Vector3.forward, restNormal);
+            if (flatAxisWorld.sqrMagnitude < 0.0001f)
+                flatAxisWorld = Vector3.ProjectOnPlane(startRot * Vector3.right, restNormal);
+        }
+        flatAxisWorld.Normalize();
+
+        Quaternion targetRot = Quaternion.FromToRotation(currentAxisWorld, flatAxisWorld) * startRot;
+
         float t = 0f;
         while (t < _settleDuration)
         {
             t += Time.deltaTime;
-            transform.position = Vector3.Lerp(startPos, targetPos, t / _settleDuration);
+            float frac = t / _settleDuration;
+            transform.position = Vector3.Lerp(startPos, targetPos, frac);
+            transform.rotation = Quaternion.Slerp(startRot, targetRot, frac);
             yield return null;
         }
         transform.position = targetPos;
+        transform.rotation = targetRot;
     }
 }

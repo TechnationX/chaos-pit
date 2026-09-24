@@ -29,6 +29,17 @@ public class PlayerMovement : NetworkBehaviour
     [SerializeField] private float _standHeight = 1.8f;
     [SerializeField] private float _crouchTransitionSpeed = 10f;
 
+    // Camera eye height while crouched — tune in Inspector to match how low
+    // the crouch pose actually puts the model's head. The standing target
+    // (_standCameraHeight) is NOT a field: it's captured at spawn from
+    // CameraRoot's own authored position (see Initialize), since that anchor
+    // is already placed correctly and shouldn't be re-guessed as a number
+    // here. Deriving camera height from _controller.height (the old
+    // approach) was wrong — collision capsule size and eye height are
+    // unrelated, and that coupling broke the moment Height was tuned
+    // separately for wall-clearance/collision purposes.
+    [SerializeField] private float _crouchCameraHeight = 0.7f;
+
     [Header("Animation")]
     private Animator _animator;
 
@@ -52,6 +63,11 @@ public class PlayerMovement : NetworkBehaviour
     private bool _isCrouching;
     private float _targetHeight;
     private bool _isJumping;
+
+    // Camera eye-height state — fully independent of _controller.height/
+    // _targetHeight (see _crouchCameraHeight comment above for why).
+    private float _standCameraHeight;
+    private float _targetCameraHeight;
 
     private PlayerObject _player;
     private CharacterController _controller;
@@ -97,6 +113,14 @@ public class PlayerMovement : NetworkBehaviour
         // capsule would otherwise float or sink relative to the root with no
         // transition ever running to correct it, breaking ground detection.
         _controller.center = new Vector3(_controller.center.x, _targetHeight / 2f, _controller.center.z);
+
+        // Capture the CameraRoot's own authored position as the standing eye
+        // height, rather than hardcoding a number — whatever the anchor is
+        // placed at in the prefab/scene is the source of truth for "standing."
+        if (_player.CameraRoot != null)
+            _standCameraHeight = _player.CameraRoot.localPosition.y;
+        _targetCameraHeight = _standCameraHeight;
+
         _isGrounded = true;
         _animator?.SetBool("IsGrounded", true);
         _animator?.SetBool("IsJumping", false);
@@ -118,6 +142,16 @@ public class PlayerMovement : NetworkBehaviour
         if (IsMovementLocked)
         {
             HandleSeatExit();
+
+            // Force the locomotion blend back to idle while locked. This branch
+            // used to return before UpdateAnimator() ran again, so MoveX/MoveY
+            // stayed frozen at whatever nonzero value they had the instant the
+            // lock engaged — the walk/run animation kept cycling in place for
+            // the whole lock duration (e.g. a Thief's Market punch stun) even
+            // though the character's actual position was correctly frozen.
+            _moveX = 0f;
+            _moveY = 0f;
+            UpdateAnimator();
             return;
         }
 
@@ -206,8 +240,15 @@ public class PlayerMovement : NetworkBehaviour
                 CrouchDown();
         }
 
-        // Smoothly transition controller height
-        if (!Mathf.Approximately(_controller.height, _targetHeight))
+        // Smoothly transition controller height and camera eye height. These
+        // are tracked as two independent settle checks — not just one gated
+        // on _controller.height — because they're no longer derived from
+        // each other and can finish lerping on different frames.
+        bool heightSettled = Mathf.Approximately(_controller.height, _targetHeight);
+        Vector3 camPos = _player.CameraRoot != null ? _player.CameraRoot.localPosition : Vector3.zero;
+        bool cameraSettled = _player.CameraRoot == null || Mathf.Approximately(camPos.y, _targetCameraHeight);
+
+        if (!heightSettled || !cameraSettled)
         {
             _controller.height = Mathf.Lerp(
                 _controller.height,
@@ -221,9 +262,14 @@ public class PlayerMovement : NetworkBehaviour
             // any manual horizontal center offset the moment the player crouched.
             _controller.center = new Vector3(_controller.center.x, _controller.height / 2f, _controller.center.z);
 
-            // Move camera root to match new height
+            // Move camera root toward its crouch/stand target directly — no
+            // longer derived from _controller.height (see _crouchCameraHeight
+            // comment for why that coupling broke).
             if (_player.CameraRoot != null)
-                _player.CameraRoot.localPosition = new Vector3(0, _controller.height - 0.2f, 0);
+            {
+                camPos.y = Mathf.Lerp(camPos.y, _targetCameraHeight, Time.deltaTime * _crouchTransitionSpeed);
+                _player.CameraRoot.localPosition = camPos;
+            }
         }
     }
 
@@ -231,14 +277,21 @@ public class PlayerMovement : NetworkBehaviour
     {
         _isCrouching = true;
         _targetHeight = _crouchHeight;
+        _targetCameraHeight = _crouchCameraHeight;
         _animator?.SetBool("IsCrouching", true);
     }
 
     private void TryStandUp()
     {
-        // Check if there's room to stand
+        // Check if there's room to stand. Exclude the Player layer — the cast
+        // origin sits right at the top of the character's own crouched capsule,
+        // and Physics.SphereCast (unlike Physics.Raycast) reports a hit when the
+        // sphere already overlaps a collider at the start of the sweep. Without
+        // this mask, the sphere was hitting the player's own CharacterController
+        // and permanently blocking every stand-up attempt.
         Vector3 castOrigin = transform.position + Vector3.up * _crouchHeight;
-        if (Physics.SphereCast(castOrigin, _controller.radius, Vector3.up, out _, _standHeight - _crouchHeight))
+        int obstructionMask = ~LayerMask.GetMask("Player");
+        if (Physics.SphereCast(castOrigin, _controller.radius, Vector3.up, out _, _standHeight - _crouchHeight, obstructionMask))
         {
             // Something above — can't stand
             return;
@@ -246,6 +299,7 @@ public class PlayerMovement : NetworkBehaviour
 
         _isCrouching = false;
         _targetHeight = _standHeight;
+        _targetCameraHeight = _standCameraHeight;
         _animator?.SetBool("IsCrouching", false);
     }
 
