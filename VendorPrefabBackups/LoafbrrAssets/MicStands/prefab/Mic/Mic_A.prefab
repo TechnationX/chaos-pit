@@ -16,6 +16,7 @@ GameObject:
   - component: {fileID: 292505805250602344}
   - component: {fileID: 3031704515651306967}
   - component: {fileID: -7377291504644922031}
+  - component: {fileID: 8026906038484736768}
   m_Layer: 0
   m_Name: Mic_A
   m_TagString: Untagged
@@ -140,8 +141,8 @@ Rigidbody:
     m_Bits: 0
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
-  m_UseGravity: 1
-  m_IsKinematic: 0
+  m_UseGravity: 0
+  m_IsKinematic: 1
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
@@ -234,3 +235,16 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 292505805250602344}
   _networkObjectCache: {fileID: 292505805250602344}
+--- !u!114 &8026906038484736768
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4643765623717110848}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94218cd52a456f3bdd859a857c6350b1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _pickupRange: 1

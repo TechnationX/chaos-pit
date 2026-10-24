@@ -17929,6 +17929,10 @@ PrefabInstance:
       propertyPath: m_AnchorMax.y
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 807238320828726433, guid: 8d96eba42fad7a24fb3da310d74a14a9, type: 3}
+      propertyPath: m_VerticalAlignment
+      value: 512
+      objectReference: {fileID: 0}
     - target: {fileID: 1164371801122167797, guid: 8d96eba42fad7a24fb3da310d74a14a9, type: 3}
       propertyPath: m_AnchorMax.y
       value: 1

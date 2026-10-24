@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>
 /// Defines the set of performance "acts" a stage can be switched between —
-/// Mic Only, Piano + Mic, Guitar + Mic, Flute + Mic and a 5th placeholder
+/// Talk Mic, Singing Mic, Piano + Mic, Guitar + Mic, and a 5th placeholder
 /// slot reserved for a future act. Each Act is a self-contained prefab pair
 /// (mic stand + optional instrument) with its own offset from the stage's
 /// Anchor — same authored-offset convention as PropSetupConfig's Entries,
@@ -34,7 +34,7 @@ public class StageSetupConfig : ScriptableObject
     public string SetupLabel;
 
     [Header("Acts")]
-    [Tooltip("One entry per performance act (Mic Only, Piano + Mic, Guitar + Mic, Guitar + Mic, TBD #5). Order here is what fills the StageActSelector dropdown.")]
+    [Tooltip("One entry per performance act (Talk Mic, Singing Mic, Piano + Mic, Guitar + Mic, TBD #5). Order here is what fills the StageActSelector dropdown.")]
     public List<StageAct> Acts = new List<StageAct>();
 
     [Tooltip("Index into Acts that this stage spawns with at Lobby load. There's no RandomizePattern equivalent — a stage always starts on a specific, chosen act rather than a random performance.")]
@@ -44,7 +44,7 @@ public class StageSetupConfig : ScriptableObject
 [System.Serializable]
 public class StageAct
 {
-    [Tooltip("Shown in the StageActSelector dropdown (e.g. \"Mic Only\", \"Piano + Mic\"). Leave a slot's whole entry mostly empty with just a name set (e.g. \"TBD\") to reserve the 5th act slot without it doing anything yet.")]
+    [Tooltip("Shown in the StageActSelector dropdown (e.g. \"Talk Mic\", \"Piano + Mic\"). Leave a slot's whole entry mostly empty with just a name set (e.g. \"TBD\") to reserve the 5th act slot without it doing anything yet.")]
     public string ActName;
 
     [Header("Mic Stand")]
@@ -58,7 +58,7 @@ public class StageAct
     [Header("Mic")]
     [Tooltip("The actual mic head prop, spawned separately from the stand and attached at MicAnchorName. Leave null for an act with no mic of its own (unusual, but supported the same way an empty MicStandPrefab is).")]
     public GameObject MicPrefab;
-    [Tooltip("Type the exact child name from MicStandPrefab's Hierarchy where the mic attaches (e.g. \"MicAnchor\") — plain text matching a slot name, same convention as PoolSetupConfig.PoolSlotAssignment.SlotName, not a dragged Transform reference. A design-time reference can't point at a child on a prefab instance that only exists once this act's stand is actually spawned, and different mic stand styles can name their anchor differently, so this is resolved via Transform.Find on the spawned stand at spawn time (see LobbySpawner.SpawnStageActRoutine). Must match exactly (case-sensitive) or the mic won't appear — check the Console for a warning if it doesn't.")]
+    [Tooltip("Type the exact name of the child (at ANY depth, not just a direct child) in MicStandPrefab's Hierarchy where the mic attaches (e.g. \"MicPlace\") — just the object's own name, never a path. Plain text matching a slot name, same convention as PoolSetupConfig.PoolSlotAssignment.SlotName, not a dragged Transform reference. A design-time reference can't point at a child on a prefab instance that only exists once this act's stand is actually spawned, and different mic stand styles can name their anchor differently (and bury it at different depths), so this is resolved by searching the whole hierarchy under the spawned stand at spawn time (LobbySpawner.FindDeepChild, called from SpawnStageActRoutine). Must match exactly (case-sensitive) or the mic won't appear — check the Console for a warning if it doesn't.")]
     public string MicAnchorName;
     public Vector3 MicScale = Vector3.one;
 

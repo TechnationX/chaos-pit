@@ -594,6 +594,7 @@ GameObject:
   - component: {fileID: 8616949006239623415}
   - component: {fileID: 4454865807633269655}
   - component: {fileID: 6913077238299975573}
+  - component: {fileID: 5377494041143947808}
   m_Layer: 0
   m_Name: piano
   m_TagString: Untagged
@@ -636,7 +637,8 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
+  NetworkBehaviours:
+  - {fileID: 6913077238299975573}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -647,7 +649,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: 0
+  _initializedTimestamp: -8584091433784901392
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
@@ -666,15 +668,15 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 65535
+  <PrefabId>k__BackingField: 43
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 8261740267878424133
   SceneId: 0
   SerializedTransformProperties:
     Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 0}
-    Scale: {x: 0, y: 0, z: 0}
-    IsValid: 0
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+    Scale: {x: 1, y: 1, z: 1}
+    IsValid: 1
 --- !u!114 &4454865807633269655
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -703,9 +705,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8407cbdce8edaf0449fa7aa87ba2c4c9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::InstrumentInteractable
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: 8616949006239623415}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 8616949006239623415}
   _promptLabel: Play
   _triggerClips:
   - {fileID: 8300000, guid: b6446132c76679e4288c580f181b7bb3, type: 3}
@@ -715,6 +717,27 @@ MonoBehaviour:
   - {fileID: 8300000, guid: 19b58cc57fe38844690c45bcf4bbbce9, type: 3}
   _volume: 1
   _pitchRange: 0.05
+--- !u!65 &5377494041143947808
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1785620586125087470}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1.8, y: 1.35, z: 0.5}
+  m_Center: {x: 0.100000024, y: 0.7, z: -0.1}
 --- !u!1 &2012883478792655395
 GameObject:
   m_ObjectHideFlags: 0

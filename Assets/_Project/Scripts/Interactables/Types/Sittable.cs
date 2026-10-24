@@ -126,7 +126,7 @@ public class Sittable : NetworkBehaviour, IInteractable
         }
 
         if (player.IsOwner && player.Camera != null)
-            player.Camera.SwitchTo(PlayerCamera.CameraMode.FirstPerson);
+            player.Camera.SwitchToLobbyWalkMode();
     }
 
     public void ForceStand(PlayerObject player)

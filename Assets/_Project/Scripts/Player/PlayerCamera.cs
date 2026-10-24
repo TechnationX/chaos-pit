@@ -8,7 +8,7 @@ using FishNet.Object.Synchronizing;
 
 public class PlayerCamera : NetworkBehaviour
 {
-    public enum CameraMode { FirstPerson, ThirdPerson, MiniGame }
+    public enum CameraMode { FirstPerson, ThirdPerson, MiniGame, ThirdPersonWalk }
 
     [Header("Camera Mode")]
     [SerializeField] private CameraMode _startingMode = CameraMode.FirstPerson;
@@ -16,6 +16,7 @@ public class PlayerCamera : NetworkBehaviour
     [Header("Virtual Cameras")]
     [SerializeField] private CinemachineCamera _vcamFirstPerson;
     [SerializeField] private CinemachineCamera _vcamThirdPerson;
+    [SerializeField] private CinemachineCamera _vcamThirdPersonWalk;
 
     [Header("First Person Settings")]
     [SerializeField] private Transform _firstPersonAnchor;
@@ -25,6 +26,14 @@ public class PlayerCamera : NetworkBehaviour
 
     [Header("Third Person Settings")]
     [SerializeField] private float _followDistance = 4f;
+
+    [Header("Third Person Walk Settings")]
+    // Child of CameraRoot at head height. Its yaw comes from the body (mouse X
+    // turns the player, same as first person); its pitch is set every frame in
+    // HandleFirstPersonLook. Third Person Follow places the camera behind it.
+    [SerializeField] private Transform _thirdPersonWalkTarget;
+    [SerializeField] private float _thirdPersonPitchMin = -40f;
+    [SerializeField] private float _thirdPersonPitchMax = 60f;
 
     [Header("Hand Socket")]
     [SerializeField] private Transform _handSocketPivot;
@@ -77,7 +86,24 @@ public class PlayerCamera : NetworkBehaviour
     private const int PRIORITY_INACTIVE = 0;
 
     public CameraMode CurrentMode => _currentMode;
+
+    // The mode the local player walks the lobby in, per their saved setting.
+    // Falls back to first person if the walk rig isn't wired up on the prefab,
+    // so a missing reference can't leave the player with no live vcam.
+    public CameraMode LobbyWalkMode =>
+        _vcamThirdPersonWalk != null && _thirdPersonWalkTarget != null &&
+        SettingsManager.Instance != null &&
+        SettingsManager.Instance.Current.lobbyViewMode == LobbyViewMode.ThirdPerson
+            ? CameraMode.ThirdPersonWalk
+            : CameraMode.FirstPerson;
+
+    public void SwitchToLobbyWalkMode() => SwitchTo(LobbyWalkMode);
     private bool _isPaused = false;
+
+    // Set while the in-lobby character creator is showing (CustomizationStation), so
+    // Escape can't open the lobby pause menu behind it.
+    private bool _pauseBlocked = false;
+    public void SetPauseBlocked(bool blocked) => _pauseBlocked = blocked;
     private bool _hasActivatedCameraOnce = false;
 
     // Runs for EVERY peer's copy of EVERY PlayerCamera, unlike Initialize()
@@ -132,6 +158,7 @@ public class PlayerCamera : NetworkBehaviour
 
         SetupFirstPersonCam();
         SetupThirdPersonCam();
+        SetupThirdPersonWalkCam();
 
         // The very first activation ever for this player would otherwise blend
         // from wherever the Main Camera's raw Transform sits in the scene (a
@@ -149,9 +176,13 @@ public class PlayerCamera : NetworkBehaviour
                 StartCoroutine(CutInitialActivation(brain));
         }
 
-        SwitchTo(_startingMode);
+        // FirstPerson as the starting mode means "the player's lobby walk view."
+        // Minigame entry still overrides this right after (RpcReinitializeCamera
+        // calls SwitchTo(MiniGame)), so only lobby spawn/return is affected.
+        CameraMode initialMode = _startingMode == CameraMode.FirstPerson ? LobbyWalkMode : _startingMode;
+        SwitchTo(initialMode);
 
-        Debug.Log($"[PlayerCamera] SwitchTo({_startingMode}) complete — Camera.main: {(Camera.main != null ? Camera.main.name : "NULL — no scene camera found")}, brain: {(Camera.main != null && Camera.main.GetComponent<CinemachineBrain>() != null ? "present" : "MISSING")}.");
+        Debug.Log($"[PlayerCamera] SwitchTo({initialMode}) complete — Camera.main: {(Camera.main != null ? Camera.main.name : "NULL — no scene camera found")}, brain: {(Camera.main != null && Camera.main.GetComponent<CinemachineBrain>() != null ? "present" : "MISSING")}.");
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
@@ -172,10 +203,12 @@ public class PlayerCamera : NetworkBehaviour
         SettingsManager.OnSensitivityChanged -= HandleSensitivityChanged;
         SettingsManager.OnInvertYChanged -= HandleInvertYChanged;
         SettingsManager.OnFOVChanged -= ApplyFOV;
+        SettingsManager.OnLobbyViewModeChanged -= HandleLobbyViewModeChanged;
 
         SettingsManager.OnSensitivityChanged += HandleSensitivityChanged;
         SettingsManager.OnInvertYChanged += HandleInvertYChanged;
         SettingsManager.OnFOVChanged += ApplyFOV;
+        SettingsManager.OnLobbyViewModeChanged += HandleLobbyViewModeChanged;
     }
 
     // Zeroes the brain's blend time for a couple frames so the very first vcam
@@ -201,10 +234,13 @@ public class PlayerCamera : NetworkBehaviour
         if (!IsOwner) return;
         // Debug.Log($"Camera mode: {_currentMode}, FP Priority: {_vcamFirstPerson.Priority}, TP Priority: {_vcamThirdPerson.Priority}");
 
-        if (Keyboard.current.escapeKey.wasPressedThisFrame)
+        if (!_pauseBlocked && Keyboard.current.escapeKey.wasPressedThisFrame)
             TogglePause();
 
-        if (_currentMode == CameraMode.FirstPerson)
+        // Third-person walk is strafe-locked: the mouse turns the body and
+        // pitches the follow target exactly like first person, so it reuses
+        // the same look handler.
+        if (_currentMode == CameraMode.FirstPerson || _currentMode == CameraMode.ThirdPersonWalk)
             HandleFirstPersonLook();
     }
 
@@ -226,8 +262,17 @@ public class PlayerCamera : NetworkBehaviour
         // Rotate vertical directly on the VCam
         float ySign = _invertY ? 1f : -1f;
         _verticalRotation += mouseY * ySign;
-        _verticalRotation = Mathf.Clamp(_verticalRotation, _verticalClampMin, _verticalClampMax);
+        // Tighter clamp in third person so the camera can't swing under the
+        // floor or straight overhead. Shares _verticalRotation with first
+        // person, so switching modes re-clamps on the next frame.
+        bool isThirdPersonWalk = _currentMode == CameraMode.ThirdPersonWalk;
+        float pitchMin = isThirdPersonWalk ? _thirdPersonPitchMin : _verticalClampMin;
+        float pitchMax = isThirdPersonWalk ? _thirdPersonPitchMax : _verticalClampMax;
+        _verticalRotation = Mathf.Clamp(_verticalRotation, pitchMin, pitchMax);
         _vcamFirstPerson.transform.localRotation = Quaternion.Euler(_verticalRotation, 0f, 0f);
+
+        if (_thirdPersonWalkTarget != null)
+            _thirdPersonWalkTarget.localRotation = Quaternion.Euler(_verticalRotation, 0f, 0f);
 
         if (_handSocketPivot != null)
             _handSocketPivot.localRotation = Quaternion.Euler(_verticalRotation, 0f, 0f);
@@ -265,6 +310,13 @@ public class PlayerCamera : NetworkBehaviour
             orbitalFollow.Radius = _followDistance;
             orbitalFollow.TargetOffset = new Vector3(0, 0.5f, 0);
         }
+    }
+
+    private void SetupThirdPersonWalkCam()
+    {
+        if (_vcamThirdPersonWalk == null || _thirdPersonWalkTarget == null) return;
+        _vcamThirdPersonWalk.Follow = _thirdPersonWalkTarget;
+        _thirdPersonWalkTarget.localRotation = Quaternion.Euler(_verticalRotation, 0f, 0f);
     }
 
     private void SetPriority(CinemachineCamera vcam, int value)
@@ -310,6 +362,7 @@ public class PlayerCamera : NetworkBehaviour
 
         SetPriority(_vcamFirstPerson, PRIORITY_INACTIVE);
         SetPriority(_vcamThirdPerson, PRIORITY_INACTIVE);
+        SetPriority(_vcamThirdPersonWalk, PRIORITY_INACTIVE);
 
         // Debug.Log($"After inactive — FP: {_vcamFirstPerson.Priority.Value}, TP: {_vcamThirdPerson.Priority.Value}");
 
@@ -326,6 +379,12 @@ public class PlayerCamera : NetworkBehaviour
 
             case CameraMode.ThirdPerson:
                 SetPriority(_vcamThirdPerson, PRIORITY_ACTIVE);
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+                break;
+
+            case CameraMode.ThirdPersonWalk:
+                SetPriority(_vcamThirdPersonWalk, PRIORITY_ACTIVE);
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
                 break;
@@ -373,7 +432,21 @@ public class PlayerCamera : NetworkBehaviour
     {
         _activeMiniGameCam = null;
         _activeMiniGameRenderCamera = null;
-        SwitchTo(CameraMode.FirstPerson);
+        SwitchToLobbyWalkMode();
+    }
+
+    // Applies live only while walking the lobby. Seated picks it up on stand
+    // (Sittable.ObserversStand), minigames on lobby return (Initialize).
+    private void HandleLobbyViewModeChanged(LobbyViewMode _)
+    {
+        if (_currentMode != CameraMode.FirstPerson && _currentMode != CameraMode.ThirdPersonWalk)
+            return;
+
+        SwitchToLobbyWalkMode();
+
+        // SwitchTo locks the cursor, but this usually fires from the Settings
+        // panel opened inside the pause menu, which needs it free.
+        if (_isPaused) ReleaseCursor();
     }
 
     private void TogglePause()
@@ -428,5 +501,6 @@ public class PlayerCamera : NetworkBehaviour
         SettingsManager.OnSensitivityChanged -= HandleSensitivityChanged;
         SettingsManager.OnInvertYChanged -= HandleInvertYChanged;
         SettingsManager.OnFOVChanged -= ApplyFOV;
+        SettingsManager.OnLobbyViewModeChanged -= HandleLobbyViewModeChanged;
     }
 }

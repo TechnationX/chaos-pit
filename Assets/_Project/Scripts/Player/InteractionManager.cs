@@ -148,7 +148,24 @@ public class InteractionManager : NetworkBehaviour
         //          $"forward: {cam?.transform.forward}, " +
         //          $"layerMask: {_interactableLayer.value}");
 
-        Ray ray = new Ray(_mainCamera.transform.position, _mainCamera.transform.forward);
+        Vector3 rayOrigin = _mainCamera.transform.position;
+        Vector3 rayDirection = _mainCamera.transform.forward;
+
+        // Third-person walk: the camera sits behind the player, so a ray from the
+        // camera would spend most of _maxInteractDistance behind the player's back.
+        // Slide the origin forward along the view ray to the player's head depth:
+        // the crosshair still picks the target, reach is measured from the player,
+        // and anything between the camera and the player is skipped.
+        if (_player.Camera != null &&
+            _player.Camera.CurrentMode == PlayerCamera.CameraMode.ThirdPersonWalk &&
+            _player.CameraRoot != null)
+        {
+            float depthToPlayer = Vector3.Dot(_player.CameraRoot.position - rayOrigin, rayDirection);
+            if (depthToPlayer > 0f)
+                rayOrigin += rayDirection * depthToPlayer;
+        }
+
+        Ray ray = new Ray(rayOrigin, rayDirection);
         RaycastHit hit;
 
         //Debug.Log($"[InteractionManager] Raycast — from: {ray.origin}, dir: {ray.direction}, " +

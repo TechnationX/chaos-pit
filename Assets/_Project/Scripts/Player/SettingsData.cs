@@ -10,6 +10,15 @@ public enum VoiceChatMode
     PushToTalk
 }
 
+// Which view the local player walks around the lobby in. Seated (always
+// third person) and minigame (scene camera) views ignore this. See
+// PlayerCamera.LobbyWalkMode.
+public enum LobbyViewMode
+{
+    FirstPerson,
+    ThirdPerson
+}
+
 [System.Serializable]
 public class SettingsData
 {
@@ -34,4 +43,5 @@ public class SettingsData
     // Controls
     public float mouseSensitivity = 1f;
     public bool invertYAxis = false;
+    public LobbyViewMode lobbyViewMode = LobbyViewMode.FirstPerson;
 }

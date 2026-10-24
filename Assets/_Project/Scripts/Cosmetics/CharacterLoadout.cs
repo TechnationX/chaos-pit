@@ -1,6 +1,9 @@
 // CharacterLoadout.cs
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 using Bozo.ModularCharacters;
@@ -96,6 +99,186 @@ public static class CharacterLoadout
         return result;
     }
 
+    // ---------------- Full-appearance format ----------------
+    //
+    // The registry pack above only carries outfit, swatch, and colors, so body/face
+    // sliders, body proportions, skin material, patterns, decals, and optional parts
+    // only ever showed on the player's own creator screen. The full format is BSMC's
+    // own save data (the same CharacterData it writes to disk), JSON + GZip, so
+    // whatever the creator shows is exactly what every client builds. ~2-3 KB per
+    // player; the transport's max payload is 32 KB.
+    //
+    // A 4-byte header tells the formats apart. The legacy pack starts with its slot
+    // count byte instead, so old saved/staged bytes still load through Apply below.
+    private static readonly byte[] FullAppearanceHeader = { (byte)'C', (byte)'P', (byte)'A', 1 };
+
+    public static bool IsFullAppearance(byte[] data)
+    {
+        if (data == null || data.Length < FullAppearanceHeader.Length) return false;
+        for (int i = 0; i < FullAppearanceHeader.Length; i++)
+            if (data[i] != FullAppearanceHeader[i]) return false;
+        return true;
+    }
+
+    public static byte[] PackFullAppearance(OutfitSystem system)
+    {
+        CharacterData data = BMAC_SaveSystem.GetCharacterData(system);
+        byte[] json = Encoding.UTF8.GetBytes(JsonUtility.ToJson(data));
+
+        using var ms = new MemoryStream();
+        ms.Write(FullAppearanceHeader, 0, FullAppearanceHeader.Length);
+        using (var gz = new GZipStream(ms, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
+            gz.Write(json, 0, json.Length);
+
+        return ms.ToArray();
+    }
+
+    public static CharacterData UnpackFullAppearance(byte[] data)
+    {
+        if (!IsFullAppearance(data)) return null;
+        try
+        {
+            using var ms = new MemoryStream(data, FullAppearanceHeader.Length, data.Length - FullAppearanceHeader.Length);
+            using var gz = new GZipStream(ms, CompressionMode.Decompress);
+            using var reader = new StreamReader(gz, Encoding.UTF8);
+            return JsonUtility.FromJson<CharacterData>(reader.ReadToEnd());
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[CharacterLoadout] Couldn't read full-appearance data ({data.Length} bytes). {e}");
+            return null;
+        }
+    }
+
+    // Single entry point for applying stored/received appearance bytes in either format.
+    public static async Task ApplyPacked(OutfitSystem system, byte[] packed, OutfitRegistry registry, bool keepHeadPiecesSeparate = false)
+    {
+        if (system == null || packed == null || packed.Length == 0) return;
+
+        if (IsFullAppearance(packed))
+        {
+            CharacterData data = UnpackFullAppearance(packed);
+            if (data != null) await ApplyFullAppearance(system, data, keepHeadPiecesSeparate);
+            return;
+        }
+
+        await Apply(system, Unpack(packed), registry, keepHeadPiecesSeparate);
+    }
+
+    // Mirrors BMAC_SaveSystem.LoadCharacter (the creator's own loader) step for step,
+    // with two differences: owner head pieces are marked mergeMesh = false before the
+    // merge (same as Apply below), and the merge uses the same timeout as Apply. It
+    // starts with RemoveAllOutfits, exactly like BSMC's loader, so a removed hat or
+    // swapped piece goes away instead of lingering.
+    public static async Task ApplyFullAppearance(OutfitSystem system, CharacterData source, bool keepHeadPiecesSeparate = false)
+    {
+        if (system.isloading)
+        {
+            Debug.LogWarning($"[CharacterLoadout] {system.name} is already loading an appearance — skipped.");
+            return;
+        }
+
+        CharacterData data = Bozo_SavePatcher.UpdateSave(source);
+        system.isloading = true;
+
+        try
+        {
+            if (!string.IsNullOrEmpty(data.material))
+            {
+                var mat = Resources.Load<MaterialPackage>(data.material);
+                if (mat != null) system.UpdateMaterial(mat);
+            }
+
+            // Head first, same order BSMC loads in.
+            List<OutfitData> outfitDatas = data.outfitDatas ?? new List<OutfitData>();
+            outfitDatas = outfitDatas.OrderByDescending(o => o.outfit != null && o.outfit.Contains("Head")).ToList();
+
+            var prefabs = new List<Outfit>(outfitDatas.Count);
+            foreach (var od in outfitDatas)
+                prefabs.Add(string.IsNullOrEmpty(od.outfit) ? null : Resources.Load<Outfit>(od.outfit));
+
+            system.RemoveAllOutfits();
+
+            for (int i = 0; i < outfitDatas.Count; i++)
+            {
+                OutfitData od = outfitDatas[i];
+                Outfit prefab = prefabs[i];
+                if (prefab == null)
+                {
+                    Debug.LogWarning($"[CharacterLoadout] Outfit path '{od.outfit}' didn't load — this piece will be missing.");
+                    continue;
+                }
+
+                try
+                {
+                    var inst = Object.Instantiate(prefab, system.transform);
+                    inst.Attach(system);
+
+                    if (keepHeadPiecesSeparate && inst.Type != null && System.Array.IndexOf(KeepSeparateWhenOwned, inst.Type.name) >= 0)
+                        inst.mergeMesh = false;
+
+                    if (od.decalDatas != null)
+                    {
+                        var decals = new List<DecalData>(od.decalDatas);
+                        for (int d = 0; d < decals.Count; d++)
+                        {
+                            DecalData decal = decals[d];
+                            decal.decalTexture = Resources.Load<Texture>("Decal/" + decal.decal);
+                            decals[d] = decal;
+                        }
+                        inst.decalDatas = decals;
+                    }
+
+                    for (int c = 0; c < 9; c++)
+                    {
+                        if (od.colors != null && od.colors.Count > c)
+                            inst.SetColor(od.colors[c], c + 1);
+
+                        if (c + 1 <= 3 && !string.IsNullOrEmpty(od.pattern) && od.patternColors != null && od.patternColors.Count > c)
+                            inst.SetPatternColor(od.patternColors[c], c + 1);
+                    }
+
+                    inst.SetPattern(string.IsNullOrEmpty(od.pattern) ? null : Resources.Load<Texture>(od.pattern));
+                    inst.SetPatternSize(od.patternScale);
+
+                    if (od.partVisibility != null && inst.optionalPieces != null)
+                    {
+                        for (int v = 0; v < od.partVisibility.Length && v < inst.optionalPieces.Length; v++)
+                        {
+                            if (inst.optionalPieces[v] == null) continue;
+                            inst.optionalPieces[v].SetActive(od.partVisibility[v]);
+                        }
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"[CharacterLoadout] Outfit '{od.outfit}' failed to apply fully. {e.Message}");
+                }
+            }
+        }
+        finally
+        {
+            system.isloading = false;
+        }
+
+        await MergeWithTimeout(system);
+
+        // Shapes and proportions go on after the merge, same as BSMC's loader.
+        system.ResetShapes();
+        if (data.bodyIDs != null && data.bodyShapes != null)
+            for (int i = 0; i < data.bodyIDs.Count && i < data.bodyShapes.Count; i++)
+                system.SetShape(data.bodyIDs[i], data.bodyShapes[i]);
+
+        if (data.faceIDs != null && data.faceShapes != null)
+            for (int i = 0; i < data.faceIDs.Count && i < data.faceShapes.Count; i++)
+                system.SetShape(data.faceIDs[i], data.faceShapes[i]);
+
+        if (data.bodyModsKeys != null && data.bodyMods != null)
+            BMAC_SaveSystem.LoadBodyMods(system, data);
+
+        system.SetStance(data.stance);
+    }
+
     // Outfit slot type names that get kept as their own unmerged, always-active
     // GameObjects for the local owner (see Apply's keepHeadPiecesSeparate below) —
     // anything worn on/around the head or face that would otherwise clip into the
@@ -182,18 +365,26 @@ public static class CharacterLoadout
         // timeout, its result is simply discarded — the outfit pieces it
         // would have combined are still there and still visible, just as
         // separate unmerged meshes instead of one combined one.
+        await MergeWithTimeout(system);
+    }
+
+    // The merge-with-timeout step Apply always used, moved into its own method
+    // unchanged so ApplyFullAppearance shares it. Returns false on timeout.
+    private static async Task<bool> MergeWithTimeout(OutfitSystem system)
+    {
         Task mergeTask = system.MergeCharacter();
         Task firstCompleted = await Task.WhenAny(mergeTask, Task.Delay(MergeCharacterTimeoutMs));
 
         if (firstCompleted != mergeTask)
         {
             Debug.LogWarning($"[CharacterLoadout] system.MergeCharacter() did not complete within {MergeCharacterTimeoutMs}ms — continuing without waiting for it (see technical-learnings.md's OutfitSystem main-thread-stall note). Character may render as unmerged/partial outfit pieces instead of one combined mesh.");
-            return;
+            return false;
         }
 
         // Already finished — await it (not .Wait()/.Result) purely to
         // observe/rethrow any exception it faulted with, without blocking.
         await mergeTask;
+        return true;
     }
 
     // Builds the fixed starting loadout, using each slot's registry-defined default item.

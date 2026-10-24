@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 5536092931155890430}
   - component: {fileID: 7723902581584028724}
   - component: {fileID: -4755078024689999346}
+  - component: {fileID: 9047999021049780951}
   m_Layer: 0
   m_Name: Speaker_Soundbar
   m_TagString: Untagged
@@ -105,3 +106,26 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::StageSpeaker
   _minDistance: 8
   _maxDistance: 40
+  _voiceCutoffDistance: 40
+--- !u!64 &9047999021049780951
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8084009751008396769}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 5
+  m_Convex: 0
+  m_CookingOptions: 30
+  m_Mesh: {fileID: 2821189323999842188, guid: f083908b56b563c489d01bfd48d866aa, type: 3}

@@ -1,7 +1,9 @@
 ﻿// SettingsPanelController.cs
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
+using Unity.Services.Vivox;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -27,17 +29,45 @@ public class SettingsPanelController : MonoBehaviour
     [SerializeField] private Slider _sensitivitySlider;
     [SerializeField] private TMP_Text _sensitivityValueLabel; // optional
     [SerializeField] private Toggle _invertYToggle;
+    [SerializeField] private TMP_Dropdown _lobbyViewModeDropdown; // optional, null-guarded
     [SerializeField] private Button _keybindMenuButton;
     [SerializeField] private ConfirmDialog _confirmDialog; // reused for "coming soon" message
 
     private List<Resolution> _availableResolutions;
     private List<string> _inputDeviceOptions;
-    private readonly List<string> _outputDeviceOptions = new List<string> { "Default" }; // TODO: VOICE - expand once output enumeration exists
+    private List<string> _outputDeviceOptions = new List<string> { "Default" }; // rebuilt from VivoxService.Instance.AvailableOutputDevices every time the panel opens — see BuildVoiceDeviceOptions
     private readonly int[] _frameRateCapOptions = { 30, 60, 90, 120, 144, 0 }; // 0 = Unlimited
+
+    // Vivox's native output-device enumeration always injects these three
+    // synthetic pseudo-devices ahead of real hardware — they're Vivox's own
+    // fixed (non-localized) labels, not something this project named, and
+    // they're meaningless to a player picking a physical output device:
+    // "Default System Device" / "Default Communication Device" mirror
+    // Windows' own default-device roles (which our own "Default" entry
+    // above already covers conceptually), and "No Device" silences output
+    // entirely, which push-to-talk/mute already covers. Filtered out below
+    // rather than shown and selectable.
+    private static readonly HashSet<string> _excludedOutputDeviceNames = new HashSet<string>
+    {
+        "Default System Device",
+        "Default Communication Device",
+        "No Device",
+    };
     private bool _isInitializing;
 
     private void OnEnable()
     {
+        // Rebuild the voice device lists (not just once in Awake) because
+        // Vivox's own device list (VivoxService.Instance.AvailableOutputDevices)
+        // may not be populated yet at scene load. By the time the player
+        // actually opens Settings, login has usually had time to finish, so
+        // re-querying on every open keeps the list current without needing to
+        // hook AvailableOutputDevicesChanged. _isInitializing is set first so
+        // the ClearOptions/AddOptions calls inside can't fire a spurious
+        // SetVoiceOutputDevice/SetVoiceInputDevice call before the real saved
+        // value is restored below.
+        _isInitializing = true;
+        BuildVoiceDeviceOptions();
         RefreshFromCurrentSettings();
     }
 
@@ -48,6 +78,7 @@ public class SettingsPanelController : MonoBehaviour
         BuildQualityOptions();
         BuildFrameRateCapOptions();
         BuildVoiceDeviceOptions();
+        BuildLobbyViewModeOptions();
 
         _masterVolumeSlider.onValueChanged.AddListener(HandleMasterVolumeChanged);
         _musicVolumeSlider.onValueChanged.AddListener(HandleMusicVolumeChanged);
@@ -64,6 +95,8 @@ public class SettingsPanelController : MonoBehaviour
 
         _sensitivitySlider.onValueChanged.AddListener(HandleSensitivityChanged);
         _invertYToggle.onValueChanged.AddListener(HandleInvertYChanged);
+        if (_lobbyViewModeDropdown != null)
+            _lobbyViewModeDropdown.onValueChanged.AddListener(HandleLobbyViewModeChanged);
         _keybindMenuButton.onClick.AddListener(HandleKeybindMenuClicked);
     }
 
@@ -101,21 +134,60 @@ public class SettingsPanelController : MonoBehaviour
             _frameRateCapOptions.Select(f => f == 0 ? "Unlimited" : f.ToString()).ToList());
     }
 
+    // Option order must match the LobbyViewMode enum, since the dropdown index
+    // is cast straight to it in HandleLobbyViewModeChanged.
+    private void BuildLobbyViewModeOptions()
+    {
+        if (_lobbyViewModeDropdown == null) return;
+        _lobbyViewModeDropdown.ClearOptions();
+        _lobbyViewModeDropdown.AddOptions(new List<string> { "First Person", "Third Person" });
+    }
+
     private void BuildVoiceDeviceOptions()
     {
-        // "Default" lets Vivox pick the OS default mic — same sentinel
-        // _outputDeviceOptions already uses below. Muting/push-to-talk are
-        // the actual way to go silent now (see VoiceChatManager), so there's
-        // no separate "Disabled" device entry anymore.
+        // "Default" lets Vivox pick the OS default mic/output — same sentinel
+        // for both lists below. Muting/push-to-talk are the actual way to go
+        // silent now (see VoiceChatManager), so there's no separate "Disabled"
+        // device entry anymore.
         _inputDeviceOptions = new List<string> { "Default" };
         _inputDeviceOptions.AddRange(Microphone.devices);
 
         _voiceInputDeviceDropdown.ClearOptions();
         _voiceInputDeviceDropdown.AddOptions(_inputDeviceOptions);
 
+        // Mirrors VoiceChatManager.SetOutputDevice's own lookup — pulling from
+        // the same VivoxService.Instance.AvailableOutputDevices list it
+        // already matches against by DeviceName, instead of the old hardcoded
+        // single-"Default"-entry stub that left this dropdown permanently
+        // disabled. VoiceChatManager.EnsureVivoxInitializedAsync now kicks
+        // off Vivox SDK init from its own Awake() at game boot (not gated on
+        // a player ever spawning), specifically so this list is already
+        // populated the first time the player opens Settings from the Main
+        // Menu. The try/catch below only matters for the brief window right
+        // at launch before that init has actually finished — falls back to
+        // just "Default" rather than throwing; OnEnable re-runs this every
+        // time the panel opens, so reopening Settings a moment later picks
+        // up the real list.
+        _outputDeviceOptions = new List<string> { "Default" };
+        try
+        {
+            if (VivoxService.Instance != null)
+            {
+                foreach (var device in VivoxService.Instance.AvailableOutputDevices)
+                {
+                    if (!_excludedOutputDeviceNames.Contains(device.DeviceName))
+                        _outputDeviceOptions.Add(device.DeviceName);
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Not yet initialized — "Default" only, until the next reopen.
+        }
+
         _voiceOutputDeviceDropdown.ClearOptions();
         _voiceOutputDeviceDropdown.AddOptions(_outputDeviceOptions);
-        _voiceOutputDeviceDropdown.interactable = false; // TODO: VOICE - re-enable once output device enumeration is supported
+        _voiceOutputDeviceDropdown.interactable = true;
     }
 
     // ---------- Sync UI to current settings (on open) ----------
@@ -156,6 +228,8 @@ public class SettingsPanelController : MonoBehaviour
         _sensitivitySlider.value = s.mouseSensitivity;
         if (_sensitivityValueLabel != null) _sensitivityValueLabel.text = s.mouseSensitivity.ToString("F2");
         _invertYToggle.isOn = s.invertYAxis;
+        if (_lobbyViewModeDropdown != null)
+            _lobbyViewModeDropdown.value = (int)s.lobbyViewMode;
 
         _isInitializing = false;
     }
@@ -253,6 +327,11 @@ public class SettingsPanelController : MonoBehaviour
     private void HandleInvertYChanged(bool value)
     {
         if (!_isInitializing) SettingsManager.Instance.SetInvertY(value);
+    }
+
+    private void HandleLobbyViewModeChanged(int index)
+    {
+        if (!_isInitializing) SettingsManager.Instance.SetLobbyViewMode((LobbyViewMode)index);
     }
 
     private void HandleKeybindMenuClicked()

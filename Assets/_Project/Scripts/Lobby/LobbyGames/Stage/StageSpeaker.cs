@@ -1,4 +1,5 @@
 // StageSpeaker.cs
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -26,7 +27,21 @@ public class StageSpeaker : MonoBehaviour
     [SerializeField] private float _minDistance = 8f;
     [SerializeField] private float _maxDistance = 40f;
 
+    [Tooltip("Hard cutoff distance for the Vivox 'stage-broadcast' voice channel (mic audio). A player this far or farther from every StageSpeaker is taken out of the channel entirely (true silence — PlayerObject leaves the channel outright rather than just turning the volume down) and put back in once they cross back inside it. Kept separate from MinDistance/MaxDistance above so instrument SFX falloff and voice range can be tuned independently.")]
+    [SerializeField] private float _voiceCutoffDistance = 40f;
+
     public Vector3 Position => transform.position;
     public float MinDistance => _minDistance;
     public float MaxDistance => _maxDistance;
+    public float VoiceCutoffDistance => _voiceCutoffDistance;
+
+    // Every enabled StageSpeaker in the scene, across every stage — lets
+    // PlayerObject find the nearest one each frame for the stage-broadcast
+    // hard-cutoff check (see VoiceChatManager.SetStageBroadcastRange)
+    // without needing a reference threaded in from LobbySpawner's per-stage
+    // SpeakerAnchors list, which only exists for instrument SFX routing.
+    public static readonly List<StageSpeaker> Active = new List<StageSpeaker>();
+
+    private void OnEnable() => Active.Add(this);
+    private void OnDisable() => Active.Remove(this);
 }

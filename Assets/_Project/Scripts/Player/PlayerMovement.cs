@@ -14,7 +14,7 @@ public class PlayerMovement : NetworkBehaviour
     [SerializeField] private float _gravity = -19.62f;
 
     // How fast the body rotates to face its movement direction while in
-    // PlayerCamera.CameraMode.ThirdPerson (minigames) — see HandleMovement.
+    // PlayerCamera.CameraMode.MiniGame (fixed top-down cameras) — see HandleMovement.
     // 720 = a full turn in half a second; tune in Inspector once this is
     // actually visible in Editor.
     [SerializeField] private float _autoTurnSpeed = 720f;

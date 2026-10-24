@@ -72,6 +72,23 @@ public class PlayerObject : NetworkBehaviour
 
     private Vector3 _lastPosition;
 
+    // Whether the local player currently wants to LISTEN to stage-broadcast
+    // (within a StageSpeaker's VoiceCutoffDistance) and whether they want
+    // to TRANSMIT into it (within a StageMic's PickupRange — the mic picks
+    // up nearby voices passively, there's no pickup/hold interaction).
+    // Tracked separately since they drive different Vivox calls — channel
+    // membership vs transmission mode — but either one alone is enough to
+    // need stage-broadcast channel membership; see UpdateStageBroadcastRange.
+    private bool _inSpeakerRange;
+    private bool _inMicPickupRange;
+
+    // Extra distance a player has to move past a cutoff/pickup range
+    // before UpdateStageBroadcastRange actually requests the opposite
+    // state (applied symmetrically to both checks above) — without this,
+    // standing exactly on the line would trigger a Vivox call most frames
+    // instead of a free local toggle.
+    private const float _stageBroadcastHysteresis = 2f;
+
     private void Update()
     {
         if (transform.position != _lastPosition)
@@ -80,18 +97,97 @@ public class PlayerObject : NetworkBehaviour
             _lastPosition = transform.position;
         }
 
-        // Reports this player's position into both persistent Vivox
-        // channels every frame so positional audio falloff/panning tracks
-        // movement — mirrors how _lastPosition above is already a
+        // Reports this player's position into the persistent lobby-proximity
+        // Vivox channel every frame so positional audio falloff/panning
+        // tracks movement — mirrors how _lastPosition above is already a
         // per-frame local check. Only the owner's own client needs to
         // report its own position (Vivox handles broadcasting it to
         // everyone else listening in-channel), so this is gated the same
         // way _playerMovement/_playerCamera are elsewhere in this class.
+        // stage-broadcast isn't positional (see VoiceChatManager header
+        // comment) so it doesn't get a Set3DPosition call — instead
+        // UpdateStageBroadcastRange below joins/leaves that channel
+        // outright based on distance to the nearest StageSpeaker.
         if (IsOwner && VoiceChatManager.Instance != null && VoiceChatManager.Instance.IsLoggedIn)
         {
             VivoxService.Instance.Set3DPosition(gameObject, VoiceChatManager.LobbyProximityChannel);
-            VivoxService.Instance.Set3DPosition(gameObject, VoiceChatManager.StageBroadcastChannel);
+            UpdateStageBroadcastRange();
         }
+    }
+
+    // Re-evaluates both stage-broadcast ranges every frame and tells
+    // VoiceChatManager about whichever one actually changed. Channel
+    // membership (SetStageBroadcastRange) is requested whenever EITHER
+    // range is true — being able to hear the broadcast and being picked
+    // up BY it are two independent reasons to need to be joined, and
+    // either one alone is enough. Transmission mode (SetMicPickupRange) is
+    // driven by mic range alone, since that's the one that decides whether
+    // our own voice goes out, not whether we can hear others'.
+    private void UpdateStageBroadcastRange()
+    {
+        bool wasJoinRange = _inSpeakerRange || _inMicPickupRange;
+        bool wasMicRange = _inMicPickupRange;
+
+        _inSpeakerRange = ComputeSpeakerRange();
+        _inMicPickupRange = ComputeMicPickupRange();
+
+        bool shouldBeJoined = _inSpeakerRange || _inMicPickupRange;
+        if (shouldBeJoined != wasJoinRange)
+            VoiceChatManager.Instance.SetStageBroadcastRange(shouldBeJoined);
+
+        if (_inMicPickupRange != wasMicRange)
+            VoiceChatManager.Instance.SetMicPickupRange(_inMicPickupRange);
+    }
+
+    // Distance to the nearest active StageSpeaker vs its own configured
+    // VoiceCutoffDistance (widened by _stageBroadcastHysteresis once
+    // already in range, same reasoning as the mic check below). False if
+    // no StageSpeaker exists yet in the scene.
+    private bool ComputeSpeakerRange()
+    {
+        if (StageSpeaker.Active.Count == 0) return false;
+
+        float nearestDistance = float.MaxValue;
+        float cutoff = 0f;
+
+        foreach (StageSpeaker speaker in StageSpeaker.Active)
+        {
+            float distance = Vector3.Distance(transform.position, speaker.Position);
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                cutoff = speaker.VoiceCutoffDistance;
+            }
+        }
+
+        float effectiveCutoff = _inSpeakerRange ? cutoff + _stageBroadcastHysteresis : cutoff;
+        return nearestDistance <= effectiveCutoff;
+    }
+
+    // Distance to the nearest active StageMic vs its own configured
+    // PickupRange (same hysteresis treatment as speaker range above, so
+    // standing right at the edge of being picked up doesn't flip the
+    // transmission mode every frame). False if no StageMic is currently
+    // spawned (e.g. the brief window during an act switch).
+    private bool ComputeMicPickupRange()
+    {
+        if (StageMic.Active.Count == 0) return false;
+
+        float nearestDistance = float.MaxValue;
+        float pickupRange = 0f;
+
+        foreach (StageMic mic in StageMic.Active)
+        {
+            float distance = Vector3.Distance(transform.position, mic.Position);
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                pickupRange = mic.PickupRange;
+            }
+        }
+
+        float effectiveRange = _inMicPickupRange ? pickupRange + _stageBroadcastHysteresis : pickupRange;
+        return nearestDistance <= effectiveRange;
     }
 
     public override void OnStartClient()

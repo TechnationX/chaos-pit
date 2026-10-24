@@ -1167,6 +1167,31 @@ public class LobbySpawner : MonoBehaviour
     }
 
     // Does the actual spawn work for a single act — shared by both the
+    // Transform.Find(name) only ever checks DIRECT children — it does not
+    // search grandchildren or deeper, unless you pass a full "/"-separated
+    // path. Mic stand prefabs (vendor pack) nest their mic-attach point
+    // several levels deep (e.g. Base/Pole/MicHolder_Base/MicHolder/MicPlace),
+    // so a plain Find(act.MicAnchorName) silently failed for any anchor not
+    // sitting directly under the stand's root. This walks the WHOLE
+    // hierarchy under parent (breadth-first-ish: checks each node's direct
+    // children before recursing deeper) and returns the first Transform
+    // whose name matches exactly (still case-sensitive, same as Find) —
+    // MicAnchorName only ever needs to be the anchor's own name, never a
+    // full path, regardless of how deep the vendor prefab buries it.
+    private static Transform FindDeepChild(Transform parent, string name)
+    {
+        foreach (Transform child in parent)
+        {
+            if (child.name == name) return child;
+        }
+        foreach (Transform child in parent)
+        {
+            Transform found = FindDeepChild(child, name);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
     // initial Lobby-load spawn above and SwitchStageActRoutine below, unlike
     // SpawnPoolSetupsRoutine/SwitchPoolPatternRoutine (which duplicate their
     // ball-spawn loop rather than share it) since a stage spawn is only ever
@@ -1213,10 +1238,10 @@ public class LobbySpawner : MonoBehaviour
                 }
                 else
                 {
-                    Transform micAnchor = micStand.transform.Find(act.MicAnchorName);
+                    Transform micAnchor = FindDeepChild(micStand.transform, act.MicAnchorName);
                     if (micAnchor == null)
                     {
-                        Debug.LogWarning($"[LobbySpawner] Stage setup '{setup.SetupLabel}' act '{act.ActName}' — couldn't find a child named '{act.MicAnchorName}' on the spawned mic stand. Check spelling/casing against MicStandPrefab's Hierarchy.");
+                        Debug.LogWarning($"[LobbySpawner] Stage setup '{setup.SetupLabel}' act '{act.ActName}' — couldn't find a descendant named '{act.MicAnchorName}' anywhere under the spawned mic stand (searches the full hierarchy, not just direct children). Check spelling/casing against MicStandPrefab's Hierarchy.");
                     }
                     else
                     {
@@ -1331,6 +1356,18 @@ public class LobbySpawner : MonoBehaviour
 
     private IEnumerator SwitchStageActRoutine(StageSetupInstance instance, StageSetupConfig setup, int actIndex, int variantIndex)
     {
+        // Each block below destroys the PREVIOUS act's leftover prop before
+        // the new act spawns. The NetworkObject.Despawn path only runs when
+        // the object actually has a spawned NetworkObject — any prop that
+        // was instantiated without one (SpawnStageActRoutine already warns
+        // about this for instrument variants with no NetworkObject: "it will
+        // only appear on host/server") was never network-spawned, so
+        // IsSpawned is false and Despawn() was being skipped entirely. The
+        // old code then still blanked the SpawnedX reference to null right
+        // after, which forgot about that leftover GameObject without ever
+        // destroying it — it just sat there forever, and the next act's
+        // prop spawned in on top of it. The else-branch Destroy() call below
+        // is what actually clears it in that case.
         if (instance.SpawnedInstrument != null)
         {
             NetworkObject instrumentNetObj = instance.SpawnedInstrument.GetComponent<NetworkObject>();
@@ -1338,6 +1375,10 @@ public class LobbySpawner : MonoBehaviour
             {
                 _manualRevealObjects.Remove(instrumentNetObj);
                 InstanceFinder.ServerManager.Despawn(instrumentNetObj);
+            }
+            else
+            {
+                Destroy(instance.SpawnedInstrument);
             }
             instance.SpawnedInstrument = null;
             yield return null;
@@ -1351,6 +1392,10 @@ public class LobbySpawner : MonoBehaviour
                 _manualRevealObjects.Remove(micNetObj);
                 InstanceFinder.ServerManager.Despawn(micNetObj);
             }
+            else
+            {
+                Destroy(instance.SpawnedMic);
+            }
             instance.SpawnedMic = null;
             yield return null;
         }
@@ -1362,6 +1407,10 @@ public class LobbySpawner : MonoBehaviour
             {
                 _manualRevealObjects.Remove(micStandNetObj);
                 InstanceFinder.ServerManager.Despawn(micStandNetObj);
+            }
+            else
+            {
+                Destroy(instance.SpawnedMicStand);
             }
             instance.SpawnedMicStand = null;
             yield return null;

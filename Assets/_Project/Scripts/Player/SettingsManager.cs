@@ -24,6 +24,7 @@ public class SettingsManager : MonoBehaviour
     public static event Action<bool> OnVoiceChatMutedChanged;
     public static event Action<float> OnVoiceChatVolumeChanged;
     public static event Action<VoiceChatMode> OnVoiceChatModeChanged;
+    public static event Action<LobbyViewMode> OnLobbyViewModeChanged;
 
     private const string KeyMaster = "Settings_MasterVolume";
     private const string KeyMusic = "Settings_MusicVolume";
@@ -41,6 +42,7 @@ public class SettingsManager : MonoBehaviour
     private const string KeyFOV = "Settings_FOV";
     private const string KeySensitivity = "Settings_MouseSensitivity";
     private const string KeyInvertY = "Settings_InvertY";
+    private const string KeyLobbyViewMode = "Settings_LobbyViewMode";
 
     private void Awake()
     {
@@ -76,6 +78,7 @@ public class SettingsManager : MonoBehaviour
 
         Current.mouseSensitivity = PlayerPrefs.GetFloat(KeySensitivity, 1f);
         Current.invertYAxis = PlayerPrefs.GetInt(KeyInvertY, 0) == 1;
+        Current.lobbyViewMode = (LobbyViewMode)PlayerPrefs.GetInt(KeyLobbyViewMode, (int)LobbyViewMode.FirstPerson);
     }
 
     private void Save()
@@ -98,6 +101,7 @@ public class SettingsManager : MonoBehaviour
 
         PlayerPrefs.SetFloat(KeySensitivity, Current.mouseSensitivity);
         PlayerPrefs.SetInt(KeyInvertY, Current.invertYAxis ? 1 : 0);
+        PlayerPrefs.SetInt(KeyLobbyViewMode, (int)Current.lobbyViewMode);
 
         PlayerPrefs.Save();
     }
@@ -276,4 +280,13 @@ public class SettingsManager : MonoBehaviour
     }
 
     private void ApplyInvertY(bool inverted) => OnInvertYChanged?.Invoke(inverted);
+
+    // No Apply step at boot: PlayerCamera reads Current.lobbyViewMode itself in
+    // Initialize(), and no player exists yet when SettingsManager wakes up.
+    public void SetLobbyViewMode(LobbyViewMode mode)
+    {
+        Current.lobbyViewMode = mode;
+        OnLobbyViewModeChanged?.Invoke(mode);
+        Save();
+    }
 }

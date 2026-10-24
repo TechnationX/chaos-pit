@@ -52,11 +52,11 @@ public class MainMenuCharacterPreview : MonoBehaviour
         // (e.g. player already visited the Character Creator and hit Continue)
         if (LocalPlayerLoadout.Instance.PendingLoadoutData != null) return;
 
-        var slots = CharacterLoadout.BuildFromOutfitSystem(outfitSystem, registry);
-        var packed = CharacterLoadout.Pack(slots);
+        // Full appearance, so the lobby (yours and everyone else's view) matches the saved character exactly.
+        var packed = CharacterLoadout.PackFullAppearance(outfitSystem);
         LocalPlayerLoadout.Instance.SetLoadout(packed);
 
-        Debug.Log($"[MainMenuCharacterPreview] Backfilled LocalPlayerLoadout from saved character — {slots.Count} slots.");
+        Debug.Log($"[MainMenuCharacterPreview] Backfilled LocalPlayerLoadout from saved character — {packed.Length} bytes.");
     }
 
     private void ApplyDefaultIfNeeded()

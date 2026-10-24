@@ -50,13 +50,14 @@ public class CharacterCreatorContinueHandler : MonoBehaviour
 
         // Prefer whatever's already staged (e.g. the default Main Menu just applied),
         // so appearance stays consistent rather than rolling a second independent random result.
+        // Staged bytes may be either format now (see CharacterLoadout.ApplyPacked).
         var pending = LocalPlayerLoadout.Instance?.PendingLoadoutData;
-        var slots = (pending != null && pending.Length > 0)
-            ? CharacterLoadout.Unpack(pending)
-            : CharacterLoadout.BuildDefaultLoadout(registry);
+        if (pending != null && pending.Length > 0)
+            _ = CharacterLoadout.ApplyPacked(outfitSystem, pending, registry);
+        else
+            _ = CharacterLoadout.Apply(outfitSystem, CharacterLoadout.BuildDefaultLoadout(registry), registry);
 
-        CharacterLoadout.Apply(outfitSystem, slots, registry);
-        Debug.Log($"[CharacterCreatorContinueHandler] No saved character found — applied {(pending != null ? "staged" : "random default")} loadout ({slots.Count} slots).");
+        Debug.Log($"[CharacterCreatorContinueHandler] No saved character found — applied {(pending != null ? "staged" : "random default")} loadout.");
     }
 
     // Hook this to the Continue button's OnClick
@@ -64,10 +65,19 @@ public class CharacterCreatorContinueHandler : MonoBehaviour
     {
         SafeSaveById(LocalTestPlayerId.GetOrClaim());
 
-        var slots = CharacterLoadout.BuildFromOutfitSystem(outfitSystem, registry);
-        var packed = CharacterLoadout.Pack(slots);
+        // Full appearance (sliders, proportions, patterns, decals...), not just the
+        // registry outfit pack, so other players see exactly what this screen shows.
+        var packed = CharacterLoadout.PackFullAppearance(outfitSystem);
 
         LocalPlayerLoadout.Instance.SetLoadout(packed);
+
+        // Opened from the lobby's CustomizationStation (loaded on top of the Lobby):
+        // hand the result back instead of leaving for the Main Menu.
+        if (LobbyCustomizationSession.IsActive)
+        {
+            LobbyCustomizationSession.Complete(packed);
+            return;
+        }
 
         SceneManager.LoadScene(mainMenuSceneName);
     }
