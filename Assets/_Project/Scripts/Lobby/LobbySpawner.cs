@@ -261,7 +261,7 @@ public class LobbySpawner : MonoBehaviour
     {
         if (_propSetups == null) return;
 
-        var bakedMeshIds = new HashSet<int>();
+        var bakedMeshIds = new HashSet<EntityId>();
 
         foreach (var instance in _propSetups)
         {
@@ -280,7 +280,7 @@ public class LobbySpawner : MonoBehaviour
                     {
                         if (!col.convex || col.sharedMesh == null) continue;
 
-                        int meshId = col.sharedMesh.GetInstanceID();
+                        EntityId meshId = col.sharedMesh.GetEntityId();
                         if (bakedMeshIds.Contains(meshId)) continue;
 
                         Physics.BakeMesh(meshId, true, col.cookingOptions);

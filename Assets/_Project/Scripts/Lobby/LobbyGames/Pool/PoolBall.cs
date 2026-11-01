@@ -183,7 +183,7 @@ public class PoolBall : NetworkBehaviour
         GameObject other = ResolveOtherBall(collision.collider);
         if (other == null) return; // rail/table felt — no dedicated sound for that
 
-        if (gameObject.GetInstanceID() > other.GetInstanceID()) return;
+        if (gameObject.GetEntityId() > other.GetEntityId()) return;
 
         if (Time.time - _lastBallImpactTime < _ballImpactCooldown) return;
         float impactSpeed = collision.relativeVelocity.magnitude;

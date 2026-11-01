@@ -77,7 +77,7 @@ public class GameRoomManager : NetworkBehaviour
     // physically blocking light with added geometry — offsetting on Y is
     // what separates the arenas spatially; this is what stops their
     // duplicate lights from fighting over the same world.
-    private readonly HashSet<int> _offsetScenesByHandle = new HashSet<int>(); // Scene.handle already shifted, this process
+    private readonly HashSet<UnityEngine.SceneManagement.SceneHandle> _offsetScenesByHandle = new HashSet<UnityEngine.SceneManagement.SceneHandle>(); // Scene.handle already shifted, this process
     private readonly Dictionary<int, Light> _stationSuns = new Dictionary<int, Light>(); // this process's loaded stations' own Directional Lights, by stationIndex
 
     private void Awake()

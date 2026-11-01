@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Chaos Pit — a Unity multiplayer party game (collaborative build). Players roam a shared lobby, walk up to game-room "stations," queue for a minigame, get teleported into it, and return to the lobby afterward with points recorded on a leaderboard.
 
-- Unity 6000.3.8f1, Universal Render Pipeline.
+- Unity 6.5 (6000.5), Universal Render Pipeline.
 - Networking: FishNet (`Assets/FishNet`) over Unity Relay/Unity Services Multiplayer (`Assets/_Project/Scripts/Session/RelayManager.cs`), not Netcode for GameObjects or Mirror.
 - All first-party code lives under `Assets/_Project/`; it compiles into the default `Assembly-CSharp` assembly (no custom `.asmdef` for project scripts — the `.asmdef` files present belong to FishNet/vendor packages).
 
